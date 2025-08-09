@@ -1,7 +1,6 @@
 version: '3.8'
 
 services:
-  # Frontend - Next.js
   frontend:
     build:
       context: ./frontend
@@ -10,160 +9,113 @@ services:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://api-gateway:3001
-      - NEXT_PUBLIC_SOCKET_URL=http://localhost:3002
+      - NEXT_PUBLIC_WEBSOCKET_URL=ws://quiz-service:4001
     depends_on:
       - api-gateway
+      - quiz-service
     networks:
       - app-network
 
-  # API Gateway
   api-gateway:
     build:
-      context: ./backend/api-gateway
+      context: ./api-gateway
       dockerfile: Dockerfile
     ports:
       - "3001:3001"
     environment:
-      - AUTH_SERVICE_URL=http://auth-service:3010
-      - USER_SERVICE_URL=http://user-service:3011
-      - MODULE_SERVICE_URL=http://module-service:3012
-      - QUIZ_SERVICE_URL=http://quiz-service:3013
-      - FILE_SERVICE_URL=http://file-service:3014
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/elearning
       - REDIS_URL=redis://redis:6379
+      - AZURE_BLOB_CONNECTION_STRING=your-azure-blob-connection-string
     depends_on:
-      - auth-service
-      - user-service
-      - module-service
-      - quiz-service
-      - file-service
+      - postgres
       - redis
     networks:
       - app-network
 
-  # Authentication Service
-  auth-service:
-    build:
-      context: ./backend/auth-service
-      dockerfile: Dockerfile
-    ports:
-      - "3010:3010"
-    environment:
-      - DATABASE_URL=Server=sqlserver;Database=LMSAuth;User Id=sa;Password=YourPassword123;TrustServerCertificate=true
-      - JWT_SECRET=your-super-secret-jwt-key-here
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - sqlserver
-      - redis
-    networks:
-      - app-network
-
-  # User Management Service
   user-service:
     build:
-      context: ./backend/user-service
+      context: ./user-service
       dockerfile: Dockerfile
-    ports:
-      - "3011:3011"
     environment:
-      - DATABASE_URL=Server=sqlserver;Database=LMSUsers;User Id=sa;Password=YourPassword123;TrustServerCertificate=true
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/elearning
       - REDIS_URL=redis://redis:6379
     depends_on:
-      - sqlserver
+      - postgres
       - redis
     networks:
       - app-network
 
-  # Module Management Service
   module-service:
     build:
-      context: ./backend/module-service
+      context: ./module-service
       dockerfile: Dockerfile
-    ports:
-      - "3012:3012"
     environment:
-      - DATABASE_URL=Server=sqlserver;Database=LMSModules;User Id=sa;Password=YourPassword123;TrustServerCertificate=true
-      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/elearning
+      - AZURE_BLOB_CONNECTION_STRING=your-azure-blob-connection-string
     depends_on:
-      - sqlserver
-      - redis
+      - postgres
     networks:
       - app-network
 
-  # Quiz Service with Real-time capabilities
   quiz-service:
     build:
-      context: ./backend/quiz-service
+      context: ./quiz-service
       dockerfile: Dockerfile
     ports:
-      - "3013:3013"
-      - "3002:3002"  # Socket.IO port
+      - "4001:4001"  # WebSocket port
     environment:
-      - DATABASE_URL=Server=sqlserver;Database=LMSQuiz;User Id=sa;Password=YourPassword123;TrustServerCertificate=true
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/elearning
       - REDIS_URL=redis://redis:6379
     depends_on:
-      - sqlserver
+      - postgres
       - redis
     networks:
       - app-network
 
-  # File Upload Service
-  file-service:
+  proctor-service:
     build:
-      context: ./backend/file-service
+      context: ./proctor-service
       dockerfile: Dockerfile
-    ports:
-      - "3014:3014"
     environment:
-      - DATABASE_URL=Server=sqlserver;Database=LMSFiles;User Id=sa;Password=YourPassword123;TrustServerCertificate=true
-      - AZURE_STORAGE_CONNECTION_STRING=your-azure-storage-connection-string
-    depends_on:
-      - sqlserver
-    networks:
-      - app-network
-
-  # Proctoring Service
-  proctoring-service:
-    build:
-      context: ./backend/proctoring-service
-      dockerfile: Dockerfile
-    ports:
-      - "3015:3015"
-    environment:
-      - DATABASE_URL=Server=sqlserver;Database=LMSProctoring;User Id=sa;Password=YourPassword123;TrustServerCertificate=true
       - REDIS_URL=redis://redis:6379
+      - AZURE_BLOB_CONNECTION_STRING=your-azure-blob-connection-string
     depends_on:
-      - sqlserver
       - redis
     networks:
       - app-network
 
-  # SQL Server Database
-  sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    ports:
-      - "1433:1433"
+  postgres:
+    image: postgres:15
+    restart: always
     environment:
-      - ACCEPT_EULA=Y
-      - SA_PASSWORD=YourPassword123
-      - MSSQL_PID=Express
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: elearning
+    ports:
+      - "5432:5432"
     volumes:
-      - sqlserver_data:/var/opt/mssql
+      - pgdata:/var/lib/postgresql/data
     networks:
       - app-network
 
-  # Redis for caching and real-time features
   redis:
-    image: redis:7-alpine
+    image: redis:7
+    restart: always
     ports:
       - "6379:6379"
-    volumes:
-      - redis_data:/data
     networks:
       - app-network
 
+  # Optional: For local Azure Blob Storage emulation (Azurite)
+  # azure-blob-emulator:
+  #   image: mcr.microsoft.com/azure-storage/azurite
+  #   ports:
+  #     - "10000:10000"
+  #   networks:
+  #     - app-network
+
 volumes:
-  sqlserver_data:
-  redis_data:
+  pgdata:
 
 networks:
   app-network:
