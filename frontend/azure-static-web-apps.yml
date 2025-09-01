@@ -1,0 +1,6 @@
+app_location: "/"
+output_location: "build"
+
+platform:
+  apiRuntime: "node:22"
+  appNodeVersion: "22"
