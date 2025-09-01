@@ -1,11 +1,11 @@
 "use client";
-import React, { useState } from 'react';
-import ComponentCard from '../../common/ComponentCard';
-import Label from '../Label';
-import Input from '../input/InputField';
-import Select from '../Select';
-import { ChevronDownIcon, EyeCloseIcon, EyeIcon, TimeIcon } from '../../../icons';
-import DatePicker from '@/components/form/date-picker';
+import React, { useState } from "react";
+import ComponentCard from "../../common/ComponentCard";
+import Label from "../Label";
+import Input from "../input/InputField";
+import Select from "../Select";
+import { EyeCloseIcon, EyeIcon, TimeIcon } from "../../../icons";
+import DatePicker from "@/components/form/date-picker";
 
 export default function DefaultInputs() {
   const [showPassword, setShowPassword] = useState(false);
@@ -17,12 +17,13 @@ export default function DefaultInputs() {
   const handleSelectChange = (value: string) => {
     console.log("Selected value:", value);
   };
+
   return (
     <ComponentCard title="Default Inputs">
       <div className="space-y-6">
         <div>
-          <Label>Input</Label>
-          <Input type="text" />
+          <Label htmlFor="test">Input</Label>
+          <Input type="text" id="test" />
         </div>
         <div>
           <Label>Input with Placeholder</Label>
@@ -30,22 +31,18 @@ export default function DefaultInputs() {
         </div>
         <div>
           <Label>Select Input</Label>
-          <div className="relative">
-            <Select
+          <Select
             options={options}
             placeholder="Select an option"
             onChange={handleSelectChange}
             className="dark:bg-dark-900"
           />
-             <span className="absolute text-gray-500 -translate-y-1/2 pointer-events-none right-3 top-1/2 dark:text-gray-400">
-              <ChevronDownIcon/>
-            </span>
-          </div>
         </div>
         <div>
-          <Label>Password Input</Label>
+          <Label htmlFor="pass">Password Input</Label>
           <div className="relative">
             <Input
+              id="pass"
               type={showPassword ? "text" : "password"}
               placeholder="Enter your password"
             />
