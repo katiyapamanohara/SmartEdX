@@ -1,10 +1,8 @@
-"use client";
-
-import { useEffect } from "react";
-import flatpickr from "flatpickr";
-import "flatpickr/dist/flatpickr.css";
-import Label from "./Label";
-import { CalenderIcon } from "../../icons";
+import { useEffect } from 'react';
+import flatpickr from 'flatpickr';
+import 'flatpickr/dist/flatpickr.css';
+import Label from './Label';
+import { CalenderIcon } from '../../icons';
 import Hook = flatpickr.Options.Hook;
 import DateOption = flatpickr.Options.DateOption;
 
