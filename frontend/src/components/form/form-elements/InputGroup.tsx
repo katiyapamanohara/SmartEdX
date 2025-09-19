@@ -5,8 +5,6 @@ import Label from "../Label";
 import Input from "../input/InputField";
 import { EnvelopeIcon } from "../../../icons";
 import PhoneInput from "../group-input/PhoneInput";
-import CopyInput from "./CopyInput";
-import UrlPrefixInput from "./UrlPrefixInput";
 
 export default function InputGroup() {
   const countries = [
@@ -22,10 +20,9 @@ export default function InputGroup() {
     <ComponentCard title="Input Group">
       <div className="space-y-6">
         <div>
-          <Label htmlFor="email">Email</Label>
+          <Label>Email</Label>
           <div className="relative">
             <Input
-              id="email"
               placeholder="info@gmail.com"
               type="text"
               className="pl-[62px]"
@@ -36,7 +33,7 @@ export default function InputGroup() {
           </div>
         </div>
         <div>
-          <Label htmlFor="phone">Phone</Label>
+          <Label>Phone</Label>
           <PhoneInput
             selectPosition="start"
             countries={countries}
@@ -45,21 +42,13 @@ export default function InputGroup() {
           />
         </div>{" "}
         <div>
-          <Label>Website</Label>
+          <Label>Phone</Label>
           <PhoneInput
             selectPosition="end"
             countries={countries}
             placeholder="+1 (555) 000-0000"
             onChange={handlePhoneNumberChange}
           />
-        </div>
-        <div>
-          <Label>URL</Label>
-          <UrlPrefixInput />
-        </div>
-        <div>
-          <Label>Website</Label>
-          <CopyInput />
         </div>
       </div>
     </ComponentCard>
