@@ -1,0 +1,109 @@
+# Microservices Architecture - Docker Compose
+# This extends the base docker-compose.yaml with mock microservices for testing
+
+services:
+  # Inherit base services from docker-compose.yaml
+  postgres:
+    image: postgres:17.6-alpine
+    ports:
+      - ${DATABASE_PORT:-5432}:5432
+    volumes:
+      - boilerplate-db:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: ${DATABASE_USERNAME:-root}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-secret}
+      POSTGRES_DB: ${DATABASE_NAME:-api}
+    networks:
+      - microservices-network
+
+  maildev:
+    build:
+      context: .
+      dockerfile: maildev.Dockerfile
+    ports:
+      - ${MAIL_CLIENT_PORT:-1080}:1080
+      - ${MAIL_PORT:-1025}:1025
+    networks:
+      - microservices-network
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+    networks:
+      - microservices-network
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - ${APP_PORT:-3000}:${APP_PORT:-3000}
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - APP_PORT=${APP_PORT:-3000}
+      - DATABASE_HOST=postgres
+      - QUIZ_SERVICE_URL=http://quiz-service:4001
+      - USER_SERVICE_URL=http://user-service:4002
+      - ANALYTICS_SERVICE_URL=http://analytics-service:4003
+    depends_on:
+      - postgres
+      - maildev
+      - quiz-service
+    networks:
+      - microservices-network
+    restart: unless-stopped
+
+  # Mock Quiz Microservice
+  quiz-service:
+    image: node:22-alpine
+    working_dir: /app
+    command: node mock-quiz-service.js
+    ports:
+      - "4001:4001"
+    volumes:
+      - ./mock-quiz-service.js:/app/mock-quiz-service.js
+    environment:
+      - PORT=4001
+    networks:
+      - microservices-network
+    restart: unless-stopped
+
+  # Mock User Microservice (placeholder - you can create this)
+  # user-service:
+  #   image: node:22-alpine
+  #   working_dir: /app
+  #   command: node mock-user-service.js
+  #   ports:
+  #     - "4002:4002"
+  #   volumes:
+  #     - ./mock-user-service.js:/app/mock-user-service.js
+  #   environment:
+  #     - PORT=4002
+  #   networks:
+  #     - microservices-network
+  #   restart: unless-stopped
+
+  # Mock Analytics Microservice (placeholder - you can create this)
+  # analytics-service:
+  #   image: node:22-alpine
+  #   working_dir: /app
+  #   command: node mock-analytics-service.js
+  #   ports:
+  #     - "4003:4003"
+  #   volumes:
+  #     - ./mock-analytics-service.js:/app/mock-analytics-service.js
+  #   environment:
+  #     - PORT=4003
+  #   networks:
+  #     - microservices-network
+  #   restart: unless-stopped
+
+volumes:
+  boilerplate-db:
+
+networks:
+  microservices-network:
+    driver: bridge
