@@ -11,19 +11,19 @@ This API Gateway implements a robust microservices architecture pattern for rout
        │
        ▼
 ┌─────────────────────────────────────────┐
-│          API Gateway (NestJS)            │
-│                                          │
+│          API Gateway (NestJS)           │
+│                                         │
 │  ┌────────────────────────────────────┐ │
-│  │   Authentication & Authorization    │ │
+│  │   Authentication & Authorization   │ │
 │  └────────────────────────────────────┘ │
-│                                          │
+│                                         │
 │  ┌────────────────────────────────────┐ │
 │  │   Service Registry & Discovery     │ │
 │  │   - Health Checks                  │ │
 │  │   - Circuit Breaker                │ │
 │  │   - Load Balancing (future)        │ │
 │  └────────────────────────────────────┘ │
-│                                          │
+│                                         │
 │  ┌────────────────────────────────────┐ │
 │  │   Request Routing & Forwarding     │ │
 │  │   - Correlation ID                 │ │
@@ -41,6 +41,8 @@ This API Gateway implements a robust microservices architecture pattern for rout
 
 ## Features
 
+
+
 ### 🔀 Service Registry & Discovery
 - Automatic registration of microservices from configuration
 - Dynamic service discovery
@@ -53,16 +55,19 @@ This API Gateway implements a robust microservices architecture pattern for rout
 - Self-healing with half-open state
 - 60-second timeout before retry attempts
 
+
 ### 📊 Request Routing
 - Dynamic route mapping to downstream services
 - Preserves HTTP method, headers, query params, and body
 - Correlation ID for distributed tracing
 - Request/response logging with timing metrics
 
+
 ### 🏥 Health Monitoring
 - Gateway health endpoint: `GET /gateway/health`
 - Service registry endpoint: `GET /gateway/services`
 - Aggregate health status: `GET /gateway/services/health`
+
 
 ### 🛡️ Error Handling
 - Graceful degradation
@@ -70,11 +75,15 @@ This API Gateway implements a robust microservices architecture pattern for rout
 - Timeout handling (504 Gateway Timeout)
 - Connection failure handling (503 Service Unavailable)
 
+
 ## Configuration
+
 
 ### Environment Variables
 
+
 Add these to your `.env` file:
+
 
 ```env
 # Quiz Service
@@ -82,19 +91,24 @@ QUIZ_SERVICE_URL=http://localhost:4001
 QUIZ_SERVICE_TIMEOUT=10000
 QUIZ_SERVICE_RETRIES=3
 
+
 # User Service
 USER_SERVICE_URL=http://localhost:4002
 USER_SERVICE_TIMEOUT=10000
 USER_SERVICE_RETRIES=3
+
 
 # Analytics Service
 ANALYTICS_SERVICE_URL=http://localhost:4003
 ANALYTICS_SERVICE_TIMEOUT=10000
 ANALYTICS_SERVICE_RETRIES=3
 
+
 # Defaults
 DEFAULT_SERVICE_TIMEOUT=10000
 DEFAULT_SERVICE_RETRIES=3
+
+
 ```
 
 ### Adding New Services
