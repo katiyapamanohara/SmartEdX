@@ -20,7 +20,7 @@ This API Gateway implements a robust microservices architecture pattern for rout
 │  ┌────────────────────────────────────┐ │
 │  │   Service Registry & Discovery     │ │
 │  │   - Health Checks                  │ │
-│  │   - Circuit Breaker                │ │
+│  │   - Circuit Breaker                │ │ 
 │  │   - Load Balancing (future)        │ │
 │  └────────────────────────────────────┘ │
 │                                         │
