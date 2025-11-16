@@ -69,7 +69,7 @@ async function bootstrap() {
   await app.listen(port);
 
   logger.log(`🚀 API Gateway is running on: http://localhost:${port}`);
-  logger.log(`📚 Swagger documentation: http://localhost:${port}/api-docs`);
+  logger.log(`📚 Swagger documentation: http://localhost:${port}/docs`);
   logger.log(`📡 Proxying to:`);
   logger.log(
     `   - User Service: ${process.env.USER_SERVICE_URL || 'http://localhost:3001'}`,
@@ -80,5 +80,9 @@ async function bootstrap() {
   logger.log(
     `   - Quiz Service: ${process.env.QUIZ_SERVICE_URL || 'http://localhost:3003'}`,
   );
+  logger.log(`\n🔐 Default Credentials:`);
+  logger.log(`   Admin:      admin@example.com / Admin@123`);
+  logger.log(`   Instructor: instructor@example.com / Instructor@123`);
+  logger.log(`   Student:    student@example.com / Student@123`);
 }
 bootstrap();
