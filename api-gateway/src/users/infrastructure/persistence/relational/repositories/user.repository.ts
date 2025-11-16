@@ -37,7 +37,7 @@ export class UsersRelationalRepository implements UserRepository {
     const where: FindOptionsWhere<UserEntity> = {};
     if (filterOptions?.roles?.length) {
       where.role = filterOptions.roles.map((role) => ({
-        id: String(role.id),
+        roleId: String(role.id),
       }));
     }
 

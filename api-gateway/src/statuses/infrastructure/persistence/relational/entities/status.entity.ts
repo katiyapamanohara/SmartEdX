@@ -1,4 +1,4 @@
-import { Column, Entity, PrimaryColumn } from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 import { EntityRelationalHelper } from '../../../../../utils/relational-entity-helper';
 
@@ -6,7 +6,7 @@ import { EntityRelationalHelper } from '../../../../../utils/relational-entity-h
   name: 'status',
 })
 export class StatusEntity extends EntityRelationalHelper {
-  @PrimaryColumn()
+  @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column()

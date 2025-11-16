@@ -139,7 +139,7 @@ export class AuthService {
         id: RoleEnum.user,
       };
       const status = {
-        id: StatusEnum.active,
+        name: StatusEnum.active,
       };
 
       user = await this.usersService.create({
@@ -201,7 +201,7 @@ export class AuthService {
         id: RoleEnum.user,
       },
       status: {
-        id: StatusEnum.inactive,
+        name: StatusEnum.inactive,
       },
     });
 
@@ -253,7 +253,7 @@ export class AuthService {
 
     if (
       !user ||
-      user?.status?.id?.toString() !== StatusEnum.inactive.toString()
+      user?.status?.name?.toString() !== StatusEnum.inactive.toString()
     ) {
       throw new NotFoundException({
         status: HttpStatus.NOT_FOUND,
@@ -261,11 +261,11 @@ export class AuthService {
       });
     }
 
-    user.status = {
-      id: StatusEnum.active,
-    };
-
-    await this.usersService.update(user.id, user);
+    await this.usersService.update(user.id, {
+      status: {
+        name: StatusEnum.active,
+      },
+    });
   }
 
   async confirmNewEmail(hash: string): Promise<void> {
@@ -302,12 +302,12 @@ export class AuthService {
       });
     }
 
-    user.email = newEmail;
-    user.status = {
-      id: StatusEnum.active,
-    };
-
-    await this.usersService.update(user.id, user);
+    await this.usersService.update(user.id, {
+      email: newEmail,
+      status: {
+        name: StatusEnum.active,
+      },
+    });
   }
 
   async forgotPassword(email: string): Promise<void> {

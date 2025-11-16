@@ -102,7 +102,7 @@ describe('Users Module', () => {
               id: RoleEnum.user,
             },
             status: {
-              id: StatusEnum.active,
+              name: StatusEnum.active,
             },
           })
           .expect(201);

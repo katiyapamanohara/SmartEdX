@@ -3,6 +3,8 @@ import {
   Injectable,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
 import { NullableType } from '../utils/types/nullable.type';
 import { FilterUserDto, SortUserDto } from './dto/query-user.dto';
@@ -18,12 +20,15 @@ import { FileType } from '../files/domain/file';
 import { Role } from '../roles/domain/role';
 import { Status } from '../statuses/domain/status';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { StatusEntity } from '../statuses/infrastructure/persistence/relational/entities/status.entity';
 
 @Injectable()
 export class UsersService {
   constructor(
     private readonly usersRepository: UserRepository,
     private readonly filesService: FilesService,
+    @InjectRepository(StatusEntity)
+    private readonly statusRepository: Repository<StatusEntity>,
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
@@ -95,10 +100,10 @@ export class UsersService {
 
     let status: Status | undefined = undefined;
 
-    if (createUserDto.status?.id) {
+    if (createUserDto.status?.name) {
       const statusObject = Object.values(StatusEnum)
         .map(String)
-        .includes(String(createUserDto.status.id));
+        .includes(String(createUserDto.status.name));
       if (!statusObject) {
         throw new UnprocessableEntityException({
           status: HttpStatus.UNPROCESSABLE_ENTITY,
@@ -108,8 +113,22 @@ export class UsersService {
         });
       }
 
+      const statusEntity = await this.statusRepository.findOne({
+        where: { name: createUserDto.status.name },
+      });
+
+      if (!statusEntity) {
+        throw new UnprocessableEntityException({
+          status: HttpStatus.UNPROCESSABLE_ENTITY,
+          errors: {
+            status: 'statusNotExists',
+          },
+        });
+      }
+
       status = {
-        id: createUserDto.status.id,
+        id: statusEntity.id,
+        name: statusEntity.name,
       };
     }
 
@@ -249,10 +268,10 @@ export class UsersService {
 
     let status: Status | undefined = undefined;
 
-    if (updateUserDto.status?.id) {
+    if (updateUserDto.status?.name) {
       const statusObject = Object.values(StatusEnum)
         .map(String)
-        .includes(String(updateUserDto.status.id));
+        .includes(String(updateUserDto.status.name));
       if (!statusObject) {
         throw new UnprocessableEntityException({
           status: HttpStatus.UNPROCESSABLE_ENTITY,
@@ -262,8 +281,22 @@ export class UsersService {
         });
       }
 
+      const statusEntity = await this.statusRepository.findOne({
+        where: { name: updateUserDto.status.name },
+      });
+
+      if (!statusEntity) {
+        throw new UnprocessableEntityException({
+          status: HttpStatus.UNPROCESSABLE_ENTITY,
+          errors: {
+            status: 'statusNotExists',
+          },
+        });
+      }
+
       status = {
-        id: updateUserDto.status.id,
+        id: statusEntity.id,
+        name: statusEntity.name,
       };
     }
 

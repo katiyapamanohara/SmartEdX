@@ -3,11 +3,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 import { Repository } from 'typeorm';
 import bcrypt from 'bcryptjs';
-import { RoleEnum } from '../../../../roles/roles.enum';
 import { StatusEnum } from '../../../../statuses/statuses.enum';
 import { UserEntity } from '../../../../users/infrastructure/persistence/relational/entities/user.entity';
+import { StatusEntity } from '../../../../statuses/infrastructure/persistence/relational/entities/status.entity';
 
-// Predefined UUIDs for consistent role mapping
+
 const ROLE_UUIDS = {
   admin: '550e8400-e29b-41d4-a716-446655440001',
   user: '550e8400-e29b-41d4-a716-446655440002',
@@ -18,6 +18,8 @@ export class UserSeedService {
   constructor(
     @InjectRepository(UserEntity)
     private repository: Repository<UserEntity>,
+    @InjectRepository(StatusEntity)
+    private statusRepository: Repository<StatusEntity>,
   ) {}
 
   async run() {
@@ -45,6 +47,14 @@ export class UserSeedService {
     const salt = await bcrypt.genSalt();
     const password = await bcrypt.hash('admini', salt);
 
+    const activeStatus = await this.statusRepository.findOne({
+      where: { name: StatusEnum.active },
+    });
+
+    if (!activeStatus) {
+      throw new Error('Active status not found. Please run status seed first.');
+    }
+
     if (existingAdmin) {
       // Update existing admin user
       await this.repository.update(
@@ -54,13 +64,10 @@ export class UserSeedService {
           lastName: 'User',
           password,
           role: {
-            id: ROLE_UUIDS.admin,
+            roleId: ROLE_UUIDS.admin,
             name: 'Admin',
           },
-          status: {
-            id: StatusEnum.active,
-            name: 'Active',
-          },
+          status: activeStatus,
         }
       );
     } else {
@@ -72,14 +79,12 @@ export class UserSeedService {
           email: 'admin@gmail.com',
           password,
           role: {
-            id: ROLE_UUIDS.admin,
+            roleId: ROLE_UUIDS.admin,
             name: 'Admin',
           },
-          status: {
-            id: StatusEnum.active,
-            name: 'Active',
-          },
+          status: activeStatus,
         }),
+
       );
     }
   }
