@@ -15,12 +15,13 @@ export class QuizProxyService {
       query?: any;
       body?: any;
       headers?: any;
+      user?: any;
     } = {},
   ) {
     const url = `${this.serviceUrl}${servicesConfig.quizService.prefix}${path}`;
     const config = {
       params: options.query,
-      headers: this.sanitizeHeaders(options.headers),
+      headers: this.prepareHeaders(options.headers, options.user),
     };
 
     switch (method.toUpperCase()) {
@@ -39,11 +40,29 @@ export class QuizProxyService {
     }
   }
 
-  private sanitizeHeaders(headers: any): any {
-    if (!headers) return {};
-    const sanitized = { ...headers };
-    delete sanitized['host'];
-    delete sanitized['content-length'];
+  private prepareHeaders(headers: any, user?: any): any {
+    const sanitized: any = {};
+
+    // Forward Authorization header (JWT token)
+    if (headers?.authorization) {
+      sanitized['authorization'] = headers.authorization;
+    }
+
+    // Add user context as custom headers for microservices
+    if (user) {
+      sanitized['x-user-id'] = user.userId || user.id;
+      sanitized['x-user-email'] = user.email;
+      sanitized['x-user-role'] = user.role;
+    }
+
+    // Forward other important headers
+    if (headers?.['content-type']) {
+      sanitized['content-type'] = headers['content-type'];
+    }
+    if (headers?.['accept']) {
+      sanitized['accept'] = headers['accept'];
+    }
+
     return sanitized;
   }
 }

@@ -35,7 +35,7 @@ async function bootstrap() {
   const config = new DocumentBuilder()
     .setTitle('AI Quiz System API Gateway')
     .setDescription(
-      'API Gateway for AI Quiz System - Routes requests to microservices and handles authentication',
+      'API Gateway for AI Quiz System with built-in user management - Routes requests to microservices and handles authentication',
     )
     .setVersion('1.0')
     .addBearerAuth(
@@ -50,7 +50,6 @@ async function bootstrap() {
       'JWT-auth',
     )
     .addTag('Authentication', 'User authentication and authorization endpoints')
-    .addTag('Users', 'User management endpoints (proxied to user-service)')
     .addTag('Courses', 'Course management endpoints (proxied to course-service)')
     .addTag('Quizzes', 'Quiz management endpoints (proxied to quiz-service)')
     .addTag('Health', 'Health check and system status endpoints')
@@ -71,9 +70,6 @@ async function bootstrap() {
   logger.log(`🚀 API Gateway is running on: http://localhost:${port}`);
   logger.log(`📚 Swagger documentation: http://localhost:${port}/docs`);
   logger.log(`📡 Proxying to:`);
-  logger.log(
-    `   - User Service: ${process.env.USER_SERVICE_URL || 'http://localhost:3001'}`,
-  );
   logger.log(
     `   - Course Service: ${process.env.COURSE_SERVICE_URL || 'http://localhost:3002'}`,
   );

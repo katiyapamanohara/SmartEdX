@@ -19,6 +19,7 @@ import {
 import { QuizProxyService } from './quiz-proxy.service';
 import { Roles } from '../../core/decorators/roles.decorator';
 import { Role } from '../../core/enums/role.enum';
+import { CurrentUser } from '../../core/decorators/current-user.decorator';
 
 @ApiTags('Quizzes')
 @ApiBearerAuth('JWT-auth')
@@ -30,8 +31,8 @@ export class QuizProxyController {
   @ApiOperation({ summary: 'Get all quizzes (Authenticated users)' })
   @ApiResponse({ status: 200, description: 'Returns list of all quizzes' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async findAll(@Query() query: any, @Headers() headers: any) {
-    return this.quizProxyService.proxyRequest('GET', '', { query, headers });
+  async findAll(@Query() query: any, @Headers() headers: any, @CurrentUser() user: any) {
+    return this.quizProxyService.proxyRequest('GET', '', { query, headers, user });
   }
 
   @Get(':id')
@@ -44,10 +45,12 @@ export class QuizProxyController {
     @Param('id') id: string,
     @Query() query: any,
     @Headers() headers: any,
+    @CurrentUser() user: any,
   ) {
     return this.quizProxyService.proxyRequest('GET', `/${id}`, {
       query,
       headers,
+      user,
     });
   }
 
@@ -59,8 +62,8 @@ export class QuizProxyController {
     status: 403,
     description: 'Forbidden - Admin/Instructor role required',
   })
-  async create(@Body() body: any, @Headers() headers: any) {
-    return this.quizProxyService.proxyRequest('POST', '', { body, headers });
+  async create(@Body() body: any, @Headers() headers: any, @CurrentUser() user: any) {
+    return this.quizProxyService.proxyRequest('POST', '', { body, headers, user });
   }
 
   @Roles(Role.ADMIN, Role.INSTRUCTOR)
@@ -77,10 +80,12 @@ export class QuizProxyController {
     @Param('id') id: string,
     @Body() body: any,
     @Headers() headers: any,
+    @CurrentUser() user: any,
   ) {
     return this.quizProxyService.proxyRequest('PUT', `/${id}`, {
       body,
       headers,
+      user,
     });
   }
 
@@ -91,7 +96,7 @@ export class QuizProxyController {
   @ApiResponse({ status: 200, description: 'Quiz deleted successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden - Admin role required' })
   @ApiResponse({ status: 404, description: 'Quiz not found' })
-  async remove(@Param('id') id: string, @Headers() headers: any) {
-    return this.quizProxyService.proxyRequest('DELETE', `/${id}`, { headers });
+  async remove(@Param('id') id: string, @Headers() headers: any, @CurrentUser() user: any) {
+    return this.quizProxyService.proxyRequest('DELETE', `/${id}`, { headers, user });
   }
 }

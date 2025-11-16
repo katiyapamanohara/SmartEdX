@@ -20,6 +20,7 @@ import { CourseProxyService } from './course-proxy.service';
 import { Roles } from '../../core/decorators/roles.decorator';
 import { Role } from '../../core/enums/role.enum';
 import { Public } from '../../core/decorators/public.decorator';
+import { CurrentUser } from '../../core/decorators/current-user.decorator';
 
 @ApiTags('Courses')
 @Controller('api/courses')
@@ -60,8 +61,8 @@ export class CourseProxyController {
     status: 403,
     description: 'Forbidden - Admin/Instructor role required',
   })
-  async create(@Body() body: any, @Headers() headers: any) {
-    return this.courseProxyService.proxyRequest('POST', '', { body, headers });
+  async create(@Body() body: any, @Headers() headers: any, @CurrentUser() user: any) {
+    return this.courseProxyService.proxyRequest('POST', '', { body, headers, user });
   }
 
   @Roles(Role.ADMIN, Role.INSTRUCTOR)
@@ -79,10 +80,12 @@ export class CourseProxyController {
     @Param('id') id: string,
     @Body() body: any,
     @Headers() headers: any,
+    @CurrentUser() user: any,
   ) {
     return this.courseProxyService.proxyRequest('PUT', `/${id}`, {
       body,
       headers,
+      user,
     });
   }
 
@@ -94,9 +97,10 @@ export class CourseProxyController {
   @ApiResponse({ status: 200, description: 'Course deleted successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden - Admin role required' })
   @ApiResponse({ status: 404, description: 'Course not found' })
-  async remove(@Param('id') id: string, @Headers() headers: any) {
+  async remove(@Param('id') id: string, @Headers() headers: any, @CurrentUser() user: any) {
     return this.courseProxyService.proxyRequest('DELETE', `/${id}`, {
       headers,
+      user,
     });
   }
 }
