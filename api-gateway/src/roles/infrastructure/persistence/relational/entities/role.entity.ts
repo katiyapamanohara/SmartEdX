@@ -6,7 +6,7 @@ import { EntityRelationalHelper } from '../../../../../utils/relational-entity-h
 })
 export class RoleEntity extends EntityRelationalHelper {
   @PrimaryColumn()
-  id: number;
+  id: string;
 
   @Column()
   name?: string;

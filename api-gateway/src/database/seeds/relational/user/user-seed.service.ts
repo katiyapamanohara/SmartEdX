@@ -15,23 +15,37 @@ export class UserSeedService {
   ) {}
 
   async run() {
-    const countAdmin = await this.repository.count({
+    // Remove unwanted existing users
+    await this.repository.delete({
+      email: 'admin@example.com',
+    });
+    
+    await this.repository.delete({
+      email: 'john.doe@example.com',
+    });
+
+    // Remove existing admin user (old one with just 'admin' email)
+    await this.repository.delete({
+      email: 'admin',
+    });
+
+    // Check if admin@gmail.com user exists
+    const existingAdmin = await this.repository.findOne({
       where: {
-        role: {
-          id: RoleEnum.admin,
-        },
+        email: 'admin@gmail.com',
       },
     });
 
-    if (!countAdmin) {
-      const salt = await bcrypt.genSalt();
-      const password = await bcrypt.hash('secret', salt);
+    const salt = await bcrypt.genSalt();
+    const password = await bcrypt.hash('admini', salt);
 
-      await this.repository.save(
-        this.repository.create({
-          firstName: 'Super',
-          lastName: 'Admin',
-          email: 'admin@example.com',
+    if (existingAdmin) {
+      // Update existing admin user
+      await this.repository.update(
+        { email: 'admin@gmail.com' },
+        {
+          firstName: 'Admin',
+          lastName: 'User',
           password,
           role: {
             id: RoleEnum.admin,
@@ -41,30 +55,18 @@ export class UserSeedService {
             id: StatusEnum.active,
             name: 'Active',
           },
-        }),
+        }
       );
-    }
-
-    const countUser = await this.repository.count({
-      where: {
-        role: {
-          id: RoleEnum.user,
-        },
-      },
-    });
-
-    if (!countUser) {
-      const salt = await bcrypt.genSalt();
-      const password = await bcrypt.hash('secret', salt);
-
+    } else {
+      // Create new admin user
       await this.repository.save(
         this.repository.create({
-          firstName: 'John',
-          lastName: 'Doe',
-          email: 'john.doe@example.com',
+          firstName: 'Admin',
+          lastName: 'User',
+          email: 'admin@gmail.com',
           password,
           role: {
-            id: RoleEnum.user,
+            id: RoleEnum.admin,
             name: 'Admin',
           },
           status: {

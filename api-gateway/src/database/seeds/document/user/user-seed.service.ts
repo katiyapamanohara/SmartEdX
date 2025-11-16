@@ -14,50 +14,49 @@ export class UserSeedService {
   ) {}
 
   async run() {
-    const admin = await this.model.findOne({
-      email: 'admin@example.com',
+    // Remove unwanted existing users
+    await this.model.deleteMany({
+      email: { $in: ['admin@example.com', 'john.doe@example.com', 'admin'] }
     });
 
-    if (!admin) {
-      const salt = await bcrypt.genSalt();
-      const password = await bcrypt.hash('secret', salt);
-
-      const data = new this.model({
-        email: 'admin@example.com',
-        password: password,
-        firstName: 'Super',
-        lastName: 'Admin',
-        role: {
-          _id: RoleEnum.admin.toString(),
-        },
-        status: {
-          _id: StatusEnum.active.toString(),
-        },
-      });
-      await data.save();
-    }
-
-    const user = await this.model.findOne({
-      email: 'john.doe@example.com',
+    // Check if admin@gmail.com user exists
+    const existingAdmin = await this.model.findOne({
+      email: 'admin@gmail.com'
     });
 
-    if (!user) {
-      const salt = await bcrypt.genSalt();
-      const password = await bcrypt.hash('secret', salt);
+    const salt = await bcrypt.genSalt();
+    const password = await bcrypt.hash('admini', salt);
 
+    if (existingAdmin) {
+      // Update existing admin user
+      await this.model.updateOne(
+        { email: 'admin@gmail.com' },
+        {
+          password: password,
+          firstName: 'Admin',
+          lastName: 'User',
+          role: {
+            _id: RoleEnum.admin,
+          },
+          status: {
+            _id: StatusEnum.active,
+          },
+        }
+      );
+    } else {
+      // Create new admin user
       const data = new this.model({
-        email: 'john.doe@example.com',
+        email: 'admin@gmail.com',
         password: password,
-        firstName: 'John',
-        lastName: 'Doe',
+        firstName: 'Admin',
+        lastName: 'User',
         role: {
-          _id: RoleEnum.user.toString(),
+          _id: RoleEnum.admin,
         },
         status: {
-          _id: StatusEnum.active.toString(),
+          _id: StatusEnum.active,
         },
       });
-
       await data.save();
     }
   }
