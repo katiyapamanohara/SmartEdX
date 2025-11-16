@@ -10,6 +10,7 @@ export class HomeController {
 
   @Get()
   appInfo() {
-    return this.service.appInfo();
+    return { message: `API Gateway is running on port ${process.env.APP_PORT}` };
   }
+
 }
