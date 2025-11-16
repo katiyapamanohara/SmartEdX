@@ -31,7 +31,7 @@ export class UserMapper {
 
     if (domainEntity.role) {
       role = new RoleEntity();
-      role.id = Number(domainEntity.role.id);
+      role.id = domainEntity.role.id.toString();
     }
 
     let photo: FileEntity | undefined | null = undefined;
@@ -48,12 +48,12 @@ export class UserMapper {
 
     if (domainEntity.status) {
       status = new StatusEntity();
-      status.id = Number(domainEntity.status.id);
+      status.id = domainEntity.status.id.toString();
     }
 
     const persistenceEntity = new UserEntity();
-    if (domainEntity.id && typeof domainEntity.id === 'number') {
-      persistenceEntity.id = domainEntity.id;
+    if (domainEntity.id) {
+      persistenceEntity.id = String(domainEntity.id);
     }
     persistenceEntity.email = domainEntity.email;
     persistenceEntity.password = domainEntity.password;

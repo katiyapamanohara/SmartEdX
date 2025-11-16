@@ -6,7 +6,7 @@ import { DatabaseConfig } from '../../database/config/database-config.type';
 // <database-block>
 const idType = (databaseConfig() as DatabaseConfig).isDocumentDatabase
   ? String
-  : Number;
+  : String;
 // </database-block>
 
 export class Role {

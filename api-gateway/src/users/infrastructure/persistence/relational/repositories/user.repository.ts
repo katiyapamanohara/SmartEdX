@@ -37,7 +37,7 @@ export class UsersRelationalRepository implements UserRepository {
     const where: FindOptionsWhere<UserEntity> = {};
     if (filterOptions?.roles?.length) {
       where.role = filterOptions.roles.map((role) => ({
-        id: Number(role.id),
+        id: String(role.id),
       }));
     }
 
@@ -59,7 +59,7 @@ export class UsersRelationalRepository implements UserRepository {
 
   async findById(id: User['id']): Promise<NullableType<User>> {
     const entity = await this.usersRepository.findOne({
-      where: { id: Number(id) },
+      where: { id: String(id) },
     });
 
     return entity ? UserMapper.toDomain(entity) : null;
@@ -67,7 +67,7 @@ export class UsersRelationalRepository implements UserRepository {
 
   async findByIds(ids: User['id'][]): Promise<User[]> {
     const entities = await this.usersRepository.find({
-      where: { id: In(ids) },
+      where: { id: In(ids.map(id => String(id))) },
     });
 
     return entities.map((user) => UserMapper.toDomain(user));
@@ -101,7 +101,7 @@ export class UsersRelationalRepository implements UserRepository {
 
   async update(id: User['id'], payload: Partial<User>): Promise<User> {
     const entity = await this.usersRepository.findOne({
-      where: { id: Number(id) },
+      where: { id: String(id) },
     });
 
     if (!entity) {

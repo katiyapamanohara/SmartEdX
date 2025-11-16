@@ -7,6 +7,12 @@ import { RoleEnum } from '../../../../roles/roles.enum';
 import { StatusEnum } from '../../../../statuses/statuses.enum';
 import { UserEntity } from '../../../../users/infrastructure/persistence/relational/entities/user.entity';
 
+// Predefined UUIDs for consistent role mapping
+const ROLE_UUIDS = {
+  admin: '550e8400-e29b-41d4-a716-446655440001',
+  user: '550e8400-e29b-41d4-a716-446655440002',
+};
+
 @Injectable()
 export class UserSeedService {
   constructor(
@@ -48,7 +54,7 @@ export class UserSeedService {
           lastName: 'User',
           password,
           role: {
-            id: RoleEnum.admin,
+            id: ROLE_UUIDS.admin,
             name: 'Admin',
           },
           status: {
@@ -66,7 +72,7 @@ export class UserSeedService {
           email: 'admin@gmail.com',
           password,
           role: {
-            id: RoleEnum.admin,
+            id: ROLE_UUIDS.admin,
             name: 'Admin',
           },
           status: {
