@@ -31,7 +31,7 @@ export class UserMapper {
 
     if (domainEntity.role) {
       role = new RoleEntity();
-      role.id = domainEntity.role.id.toString();
+      role.roleId = domainEntity.role.id.toString();
     }
 
     let photo: FileEntity | undefined | null = undefined;
