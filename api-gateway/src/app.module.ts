@@ -4,6 +4,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DatabaseModule } from './infra/database/database.module';
+import { FirebaseModule } from './infra/firebase/firebase.module';
 import { HttpModule } from './infra/http/http.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CourseProxyModule } from './modules/course-proxy/course-proxy.module';
@@ -18,6 +19,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
       envFilePath: '.env',
     }),
     DatabaseModule,
+    FirebaseModule,
     HttpModule,
     AuthModule,
     CourseProxyModule,

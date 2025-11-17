@@ -10,6 +10,7 @@ import {
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { FirebaseLoginDto, FirebaseRegisterDto } from './dto/firebase-auth.dto';
 import { CreateAdminDto } from './dto/create-admin.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { Public } from '../../core/decorators/public.decorator';
@@ -74,6 +75,58 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
+  }
+
+  // Firebase Authentication Endpoints
+  @Public()
+  @Post('firebase/register')
+  @ApiOperation({ summary: 'Register a new user with Firebase' })
+  @ApiBody({ type: FirebaseRegisterDto })
+  @ApiResponse({
+    status: 201,
+    description: 'User successfully registered with Firebase',
+    schema: {
+      example: {
+        access_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        user: {
+          id: '123e4567-e89b-12d3-a456-426614174000',
+          email: 'user@example.com',
+          firstName: 'John',
+          lastName: 'Doe',
+          role: 'student',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 409, description: 'User already exists' })
+  @ApiResponse({ status: 401, description: 'Invalid Firebase token' })
+  async firebaseRegister(@Body() firebaseRegisterDto: FirebaseRegisterDto) {
+    return this.authService.firebaseRegister(firebaseRegisterDto);
+  }
+
+  @Public()
+  @Post('firebase/login')
+  @ApiOperation({ summary: 'Login user with Firebase' })
+  @ApiBody({ type: FirebaseLoginDto })
+  @ApiResponse({
+    status: 200,
+    description: 'User successfully logged in with Firebase',
+    schema: {
+      example: {
+        access_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        user: {
+          id: '123e4567-e89b-12d3-a456-426614174000',
+          email: 'user@example.com',
+          firstName: 'John',
+          lastName: 'Doe',
+          role: 'student',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Invalid credentials or Firebase token' })
+  async firebaseLogin(@Body() firebaseLoginDto: FirebaseLoginDto) {
+    return this.authService.firebaseLogin(firebaseLoginDto);
   }
 
   @UseGuards(JwtAuthGuard)

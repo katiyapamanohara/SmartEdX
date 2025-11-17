@@ -5,14 +5,18 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { FirebaseAuthStrategy } from './strategies/firebase.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { FirebaseAuthGuard } from './guards/firebase-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { SeedService } from './services/seed.service';
 import { RepositoriesModule } from '../../infra/database/repositories';
+import { FirebaseModule } from '../../infra/firebase/firebase.module';
 
 @Module({
   imports: [
     RepositoriesModule,
+    FirebaseModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -26,8 +30,22 @@ import { RepositoriesModule } from '../../infra/database/repositories';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, JwtAuthGuard, RolesGuard, SeedService],
-  exports: [AuthService, JwtAuthGuard, RolesGuard, SeedService],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    FirebaseAuthStrategy,
+    JwtAuthGuard,
+    FirebaseAuthGuard,
+    RolesGuard,
+    SeedService,
+  ],
+  exports: [
+    AuthService,
+    JwtAuthGuard,
+    FirebaseAuthGuard,
+    RolesGuard,
+    SeedService,
+  ],
 })
 export class AuthModule implements OnModuleInit {
   constructor(private readonly seedService: SeedService) {}

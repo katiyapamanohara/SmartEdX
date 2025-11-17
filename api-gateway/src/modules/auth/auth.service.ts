@@ -3,12 +3,15 @@ import {
   UnauthorizedException,
   ConflictException,
   Logger,
+  Inject,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import * as admin from 'firebase-admin';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { FirebaseLoginDto, FirebaseRegisterDto } from './dto/firebase-auth.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { User } from './entities/user.entity';
 import { UserRepository, RoleRepository } from '../../infra/database/repositories';
@@ -22,6 +25,7 @@ export class AuthService {
     private readonly roleRepository: RoleRepository,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    @Inject('FIREBASE_APP') private firebaseApp: admin.app.App,
   ) {}
 
   async register(registerDto: RegisterDto) {
@@ -146,6 +150,120 @@ export class AuthService {
 
   async getAllUsers(): Promise<User[]> {
     return this.userRepository.findAllExcludingSystemAdmin();
+  }
+
+  // Firebase Authentication Methods
+  async firebaseLogin(firebaseLoginDto: FirebaseLoginDto) {
+    try {
+      // Verify Firebase token
+      const decodedToken = await this.firebaseApp
+        .auth()
+        .verifyIdToken(firebaseLoginDto.idToken);
+
+      if (!decodedToken.email) {
+        throw new UnauthorizedException('Email not found in Firebase token');
+      }
+
+      // Find existing user
+      let user = await this.userRepository.findByEmail(decodedToken.email);
+
+      if (!user) {
+        throw new UnauthorizedException(
+          'User not found. Please register first.',
+        );
+      }
+
+      // Check if user is active
+      if (!user.isActive) {
+        throw new UnauthorizedException('Account is deactivated');
+      }
+
+      // Generate JWT token
+      const token = this.generateToken({
+        sub: user.id,
+        email: user.email,
+        role: user.role.name,
+      });
+
+      return {
+        access_token: token,
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role.name,
+        },
+      };
+    } catch (error) {
+      this.logger.error('Firebase login failed', error);
+      throw error;
+    }
+  }
+
+  async firebaseRegister(firebaseRegisterDto: FirebaseRegisterDto) {
+    try {
+      // Verify Firebase token
+      const decodedToken = await this.firebaseApp
+        .auth()
+        .verifyIdToken(firebaseRegisterDto.idToken);
+
+      if (!decodedToken.email) {
+        throw new UnauthorizedException('Email not found in Firebase token');
+      }
+
+      // Verify email matches
+      if (decodedToken.email !== firebaseRegisterDto.email) {
+        throw new UnauthorizedException(
+          'Email does not match Firebase token',
+        );
+      }
+
+      // Check if user already exists
+      const existingUser = await this.userRepository.findByEmail(
+        firebaseRegisterDto.email,
+      );
+
+      if (existingUser) {
+        throw new ConflictException('User with this email already exists');
+      }
+
+      // Get student role (default for registration)
+      const studentRole = await this.roleRepository.findByName('student');
+      if (!studentRole) {
+        throw new Error('Student role not found');
+      }
+
+      // Create user (no password needed for Firebase users)
+      const savedUser = await this.userRepository.create({
+        firstName: firebaseRegisterDto.firstName,
+        lastName: firebaseRegisterDto.lastName,
+        email: firebaseRegisterDto.email,
+        password: '', // Firebase users don't use password
+        roleId: studentRole.id,
+      });
+
+      // Generate JWT token
+      const token = this.generateToken({
+        sub: savedUser.id,
+        email: savedUser.email,
+        role: savedUser.role.name,
+      });
+
+      return {
+        access_token: token,
+        user: {
+          id: savedUser.id,
+          email: savedUser.email,
+          firstName: savedUser.firstName,
+          lastName: savedUser.lastName,
+          role: savedUser.role.name,
+        },
+      };
+    } catch (error) {
+      this.logger.error('Firebase registration failed', error);
+      throw error;
+    }
   }
 
   private generateToken(payload: JwtPayload): string {
