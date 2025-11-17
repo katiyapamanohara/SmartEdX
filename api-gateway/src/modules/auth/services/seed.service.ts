@@ -1,17 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from '../entities/user.entity';
-import { Role } from '../../../core/enums/role.enum';
+import { UserRepository, RoleRepository } from '../../../infra/database/repositories';
 
 @Injectable()
 export class SeedService {
   private readonly logger = new Logger(SeedService.name);
 
   constructor(
-    @InjectRepository(User)
-    private userRepository: Repository<User>,
+    private readonly userRepository: UserRepository,
+    private readonly roleRepository: RoleRepository,
   ) {}
 
   /**
@@ -19,48 +17,51 @@ export class SeedService {
    */
   async seedAdminUsers(): Promise<void> {
     try {
+      // Get roles
+      const adminRole = await this.roleRepository.findByName('admin');
+      const instructorRole = await this.roleRepository.findByName('instructor');
+
+      if (!adminRole || !instructorRole) {
+        this.logger.error('Roles not found. Please run migrations first.');
+        return;
+      }
+
       const adminUsers = [
         {
           firstName: 'System',
           lastName: 'Administrator',
           email: 'admin@gmail.com',
           password: 'Admin@123',
-          role: Role.ADMIN,
+          roleId: adminRole.id,
         },
         {
           firstName: 'John',
           lastName: 'Instructor',
           email: 'instructor@gmail.com',
           password: 'Instructor@123',
-          role: Role.INSTRUCTOR,
-        },
-        {
-          firstName: 'Jane',
-          lastName: 'Student',
-          email: 'student@gmail.com',
-          password: 'Student@123',
-          role: Role.STUDENT,
+          roleId: instructorRole.id,
         },
       ];
 
       for (const userData of adminUsers) {
-        const existingUser = await this.userRepository.findOne({
-          where: { email: userData.email },
-        });
+        const existingUser = await this.userRepository.findByEmail(
+          userData.email,
+        );
 
         if (!existingUser) {
           const hashedPassword = await bcrypt.hash(userData.password, 10);
-          const user = this.userRepository.create({
+          await this.userRepository.create({
             ...userData,
             password: hashedPassword,
             isActive: true,
           });
 
-          await this.userRepository.save(user);
-          this.logger.log(`✅ Created ${userData.role} user: ${userData.email}`);
+          const roleName = userData.roleId === adminRole.id ? 'admin' : 'instructor';
+          this.logger.log(`✅ Created ${roleName} user: ${userData.email}`);
         } else {
+          const roleName = userData.roleId === adminRole.id ? 'admin' : 'instructor';
           this.logger.log(
-            `ℹ️  ${userData.role} user already exists: ${userData.email}`,
+            `ℹ️  ${roleName} user already exists: ${userData.email}`,
           );
         }
       }
@@ -81,25 +82,27 @@ export class SeedService {
     email: string,
     password: string,
   ): Promise<User> {
-    const existingUser = await this.userRepository.findOne({
-      where: { email },
-    });
+    const existingUser = await this.userRepository.findByEmail(email);
 
     if (existingUser) {
       throw new Error(`User with email ${email} already exists`);
     }
 
+    const adminRole = await this.roleRepository.findByName('admin');
+    if (!adminRole) {
+      throw new Error('Admin role not found');
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = this.userRepository.create({
+    const user = await this.userRepository.create({
       firstName,
       lastName,
       email,
       password: hashedPassword,
-      role: Role.ADMIN,
+      roleId: adminRole.id,
       isActive: true,
     });
 
-    await this.userRepository.save(user);
     this.logger.log(`✅ Created custom admin user: ${email}`);
 
     return user;
@@ -109,9 +112,15 @@ export class SeedService {
    * Get all admin users
    */
   async getAllAdmins(): Promise<User[]> {
-    return this.userRepository.find({
-      where: { role: Role.ADMIN },
-      select: ['id', 'firstName', 'lastName', 'email', 'role', 'isActive'],
+    const adminRole = await this.roleRepository.findByName('admin');
+    if (!adminRole) {
+      return [];
+    }
+
+    return this.userRepository.findAll({
+      where: { roleId: adminRole.id },
+      select: ['id', 'firstName', 'lastName', 'email', 'roleId', 'isActive'],
+      relations: ['role'],
     });
   }
 
@@ -119,34 +128,40 @@ export class SeedService {
    * Toggle user active status
    */
   async toggleUserStatus(userId: string): Promise<User> {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
+    const user = await this.userRepository.findById(userId);
 
     if (!user) {
       throw new Error('User not found');
     }
 
-    user.isActive = !user.isActive;
-    await this.userRepository.save(user);
+    const isActive = !user.isActive;
+    const updatedUser = await this.userRepository.update(userId, { isActive });
 
     this.logger.log(
-      `🔄 User ${user.email} status changed to: ${user.isActive ? 'active' : 'inactive'}`,
+      `🔄 User ${user.email} status changed to: ${isActive ? 'active' : 'inactive'}`,
     );
 
-    return user;
+    return updatedUser!;
   }
 
   /**
    * Reset user password
+   * Only allows resetting password for admin and instructor roles
    */
   async resetPassword(userId: string, newPassword: string): Promise<void> {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
+    const user = await this.userRepository.findById(userId);
 
     if (!user) {
       throw new Error('User not found');
     }
 
-    user.password = await bcrypt.hash(newPassword, 10);
-    await this.userRepository.save(user);
+    const studentRole = await this.roleRepository.findByName('student');
+    if (studentRole && user.roleId === studentRole.id) {
+      throw new Error('Cannot reset password for student accounts');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await this.userRepository.updatePassword(userId, hashedPassword);
 
     this.logger.log(`🔑 Password reset for user: ${user.email}`);
   }

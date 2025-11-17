@@ -15,7 +15,6 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { Public } from '../../core/decorators/public.decorator';
 import { CurrentUser } from '../../core/decorators/current-user.decorator';
 import { Roles } from '../../core/decorators/roles.decorator';
-import { Role } from '../../core/enums/role.enum';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { SeedService } from './services/seed.service';
 
@@ -131,7 +130,7 @@ export class AuthController {
   }
 
   // Admin Management Endpoints
-  @Roles(Role.ADMIN)
+  @Roles('admin')
   @Post('admin/create')
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Create new admin user (Admin only)' })
@@ -159,11 +158,29 @@ export class AuthController {
     };
   }
 
-  @Roles(Role.ADMIN)
+  @Roles('admin')
   @Get('admin/list')
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get all admin users (Admin only)' })
-  @ApiResponse({ status: 200, description: 'Returns list of all admins' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns list of all admins',
+    schema: {
+      example: {
+        count: 2,
+        admins: [
+          {
+            id: '123e4567-e89b-12d3-a456-426614174000',
+            firstName: 'System',
+            lastName: 'Administrator',
+            email: 'admin@gmail.com',
+            role: 'admin',
+            isActive: true,
+          },
+        ],
+      },
+    },
+  })
   @ApiResponse({ status: 403, description: 'Forbidden - Admin role required' })
   async getAllAdmins() {
     const admins = await this.seedService.getAllAdmins();
@@ -173,7 +190,25 @@ export class AuthController {
     };
   }
 
-  @Roles(Role.ADMIN)
+  @UseGuards(JwtAuthGuard)
+  @Get('users')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get all users excluding system admin (Admin only)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns list of all users excluding admin@gmail.com',
+   
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - Admin role required' })
+  async getAllUsers() {
+    const users = await this.authService.getAllUsers();
+    return {
+      count: users.length,
+      users,
+    };
+  }
+
+  @Roles('admin')
   @Patch('admin/toggle-status/:userId')
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Toggle user active status (Admin only)' })
@@ -193,7 +228,7 @@ export class AuthController {
     };
   }
 
-  @Roles(Role.ADMIN)
+  @Roles('admin')
   @Post('admin/reset-password')
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Reset user password (Admin only)' })
@@ -201,6 +236,7 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Password reset successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden - Admin role required' })
   @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 400, description: 'Cannot reset password for student accounts' })
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     await this.seedService.resetPassword(
       resetPasswordDto.userId,
@@ -211,7 +247,7 @@ export class AuthController {
     };
   }
 
-  @Roles(Role.ADMIN)
+  @Roles('admin')
   @Post('seed/run')
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Manually run seed process (Admin only)' })

@@ -5,8 +5,10 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   Index,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
-import { Role } from '../../../core/enums/role.enum';
+import { Role } from './role.entity';
 
 @Entity('users')
 export class User {
@@ -26,12 +28,12 @@ export class User {
   @Column()
   password: string;
 
-  @Column({
-    type: 'enum',
-    enum: Role,
-    default: Role.STUDENT,
-  })
+  @ManyToOne(() => Role, (role) => role.users, { eager: true })
+  @JoinColumn({ name: 'roleId' })
   role: Role;
+
+  @Column()
+  roleId: string;
 
   @Column({ default: true })
   isActive: boolean;

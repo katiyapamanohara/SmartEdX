@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { User } from '../../modules/auth/entities/user.entity';
+import { Role } from '../../modules/auth/entities/role.entity';
 
 @Module({
   imports: [
@@ -14,7 +15,7 @@ import { User } from '../../modules/auth/entities/user.entity';
         username: configService.get<string>('DB_USERNAME', 'postgres'),
         password: configService.get<string>('DB_PASSWORD', 'postgres'),
         database: configService.get<string>('DB_DATABASE', 'api_gateway'),
-        entities: [User],
+        entities: [User, Role],
         synchronize: false, // Always use migrations
         logging: configService.get<string>('NODE_ENV') === 'development',
         migrations: [__dirname + '/migrations/*.ts'],

@@ -4,8 +4,6 @@ import {
   ConflictException,
   Logger,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -13,14 +11,15 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { User } from './entities/user.entity';
+import { UserRepository, RoleRepository } from '../../infra/database/repositories';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
   constructor(
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
+    private readonly userRepository: UserRepository,
+    private readonly roleRepository: RoleRepository,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
   ) {}
@@ -28,30 +27,35 @@ export class AuthService {
   async register(registerDto: RegisterDto) {
     try {
       // Check if user already exists
-      const existingUser = await this.userRepository.findOne({
-        where: { email: registerDto.email },
-      });
+      const existingUser = await this.userRepository.findByEmail(
+        registerDto.email,
+      );
 
       if (existingUser) {
         throw new ConflictException('User with this email already exists');
+      }
+
+      // Get student role (default for registration)
+      const studentRole = await this.roleRepository.findByName('student');
+      if (!studentRole) {
+        throw new Error('Student role not found');
       }
 
       // Hash password
       const hashedPassword = await bcrypt.hash(registerDto.password, 10);
 
       // Create user
-      const user = this.userRepository.create({
+      const savedUser = await this.userRepository.create({
         ...registerDto,
         password: hashedPassword,
+        roleId: studentRole.id,
       });
-
-      const savedUser = await this.userRepository.save(user);
 
       // Generate JWT token
       const token = this.generateToken({
         sub: savedUser.id,
         email: savedUser.email,
-        role: savedUser.role,
+        role: savedUser.role.name,
       });
 
       return {
@@ -61,7 +65,7 @@ export class AuthService {
           email: savedUser.email,
           firstName: savedUser.firstName,
           lastName: savedUser.lastName,
-          role: savedUser.role,
+          role: savedUser.role.name,
         },
       };
     } catch (error) {
@@ -73,9 +77,7 @@ export class AuthService {
   async login(loginDto: LoginDto) {
     try {
       // Find user by email
-      const user = await this.userRepository.findOne({
-        where: { email: loginDto.email },
-      });
+      const user = await this.userRepository.findByEmail(loginDto.email);
 
       if (!user) {
         throw new UnauthorizedException('Invalid credentials');
@@ -100,7 +102,7 @@ export class AuthService {
       const token = this.generateToken({
         sub: user.id,
         email: user.email,
-        role: user.role,
+        role: user.role.name,
       });
 
       return {
@@ -110,7 +112,7 @@ export class AuthService {
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
-          role: user.role,
+          role: user.role.name,
         },
       };
     } catch (error) {
@@ -121,9 +123,7 @@ export class AuthService {
 
   async validateUser(userId: string) {
     try {
-      const user = await this.userRepository.findOne({
-        where: { id: userId },
-      });
+      const user = await this.userRepository.findById(userId);
 
       if (!user) {
         return null;
@@ -137,15 +137,15 @@ export class AuthService {
   }
 
   async findById(userId: string): Promise<User | null> {
-    return this.userRepository.findOne({
-      where: { id: userId },
-    });
+    return this.userRepository.findById(userId);
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    return this.userRepository.findOne({
-      where: { email },
-    });
+    return this.userRepository.findByEmail(email);
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return this.userRepository.findAllExcludingSystemAdmin();
   }
 
   private generateToken(payload: JwtPayload): string {
