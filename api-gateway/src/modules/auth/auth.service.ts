@@ -155,6 +155,20 @@ export class AuthService {
   // Firebase Authentication Methods
   async firebaseLogin(firebaseLoginDto: FirebaseLoginDto) {
     try {
+      // Check if Firebase is configured
+      if (!this.firebaseApp) {
+        throw new Error('Firebase is not configured. Please check your environment variables.');
+      }
+
+      // Log token for debugging (first 50 chars only for security)
+      this.logger.debug(`Firebase login attempt - Token preview: ${firebaseLoginDto.idToken?.substring(0, 50)}...`);
+      this.logger.debug(`Token length: ${firebaseLoginDto.idToken?.length}`);
+      
+      // Validate token is not empty
+      if (!firebaseLoginDto.idToken || firebaseLoginDto.idToken.trim() === '') {
+        throw new UnauthorizedException('Firebase ID token is required');
+      }
+
       // Verify Firebase token
       const decodedToken = await this.firebaseApp
         .auth()
@@ -197,12 +211,35 @@ export class AuthService {
       };
     } catch (error) {
       this.logger.error('Firebase login failed', error);
+      
+      // Handle specific Firebase errors
+      if (error.code === 'auth/id-token-expired') {
+        throw new UnauthorizedException('Firebase ID token has expired. Please sign in again.');
+      }
+      if (error.code === 'auth/argument-error') {
+        throw new UnauthorizedException('Invalid Firebase ID token format. Please ensure you are sending a valid token.');
+      }
+      
       throw error;
     }
   }
 
   async firebaseRegister(firebaseRegisterDto: FirebaseRegisterDto) {
     try {
+      // Check if Firebase is configured
+      if (!this.firebaseApp) {
+        throw new Error('Firebase is not configured. Please check your environment variables.');
+      }
+
+      // Log token for debugging (first 50 chars only for security)
+      this.logger.debug(`Firebase register attempt - Token preview: ${firebaseRegisterDto.idToken?.substring(0, 50)}...`);
+      this.logger.debug(`Token length: ${firebaseRegisterDto.idToken?.length}`);
+      
+      // Validate token is not empty
+      if (!firebaseRegisterDto.idToken || firebaseRegisterDto.idToken.trim() === '') {
+        throw new UnauthorizedException('Firebase ID token is required');
+      }
+
       // Verify Firebase token
       const decodedToken = await this.firebaseApp
         .auth()
@@ -262,6 +299,15 @@ export class AuthService {
       };
     } catch (error) {
       this.logger.error('Firebase registration failed', error);
+      
+      // Handle specific Firebase errors
+      if (error.code === 'auth/id-token-expired') {
+        throw new UnauthorizedException('Firebase ID token has expired. Please sign in again.');
+      }
+      if (error.code === 'auth/argument-error') {
+        throw new UnauthorizedException('Invalid Firebase ID token format. Please ensure you are sending a valid token.');
+      }
+      
       throw error;
     }
   }

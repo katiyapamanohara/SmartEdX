@@ -8,7 +8,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 export interface RegisterData {
   firstName: string;
@@ -50,6 +50,11 @@ class AuthService {
 
       // 2. Get Firebase ID token
       const idToken = await userCredential.user.getIdToken();
+      
+      console.log('Firebase ID Token obtained for registration:', {
+        tokenLength: idToken.length,
+        tokenPreview: idToken.substring(0, 50) + '...',
+      });
 
       // 3. Register in backend with Firebase token
       const response = await fetch(`${API_URL}/auth/firebase/register`, {
@@ -98,6 +103,11 @@ class AuthService {
 
       // 2. Get Firebase ID token
       const idToken = await userCredential.user.getIdToken();
+      
+      console.log('Firebase ID Token obtained for login:', {
+        tokenLength: idToken.length,
+        tokenPreview: idToken.substring(0, 50) + '...',
+      });
 
       // 3. Login to backend with Firebase token
       const response = await fetch(`${API_URL}/auth/firebase/login`, {
