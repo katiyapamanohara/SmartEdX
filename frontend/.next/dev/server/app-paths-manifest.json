@@ -1,11 +1,6 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
-  "/admin/(others-pages)/(forms)/form-elements/page": "app/admin/(others-pages)/(forms)/form-elements/page.js",
-  "/admin/(others-pages)/(tables)/basic-tables/page": "app/admin/(others-pages)/(tables)/basic-tables/page.js",
-  "/admin/(others-pages)/blank/page": "app/admin/(others-pages)/blank/page.js",
   "/admin/(others-pages)/calendar/page": "app/admin/(others-pages)/calendar/page.js",
   "/admin/(others-pages)/profile/page": "app/admin/(others-pages)/profile/page.js",
   "/admin/page": "app/admin/page.js",
-  "/dashboard/(others-pages)/profile/page": "app/dashboard/(others-pages)/profile/page.js",
-  "/dashboard/page": "app/dashboard/page.js"
+  "/page": "app/page.js"
 }
