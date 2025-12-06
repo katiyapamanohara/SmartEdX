@@ -1,6 +1,0 @@
-{
-  "/admin/(others-pages)/calendar/page": "app/admin/(others-pages)/calendar/page.js",
-  "/admin/(others-pages)/profile/page": "app/admin/(others-pages)/profile/page.js",
-  "/admin/page": "app/admin/page.js",
-  "/page": "app/page.js"
-}
