@@ -1,8 +1,8 @@
-#!/usr/bin/env bash
-set -e
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
 
 echo "[pre-push] Running Tests for All Services..."
 npm test
 
-echo "[pre-push] Building All Services (Frontend, Backend, API Gateway)..."
+echo "[pre-push] Building All Services..."
 npm run build:all

@@ -14,7 +14,9 @@
     "dev:teacher": "npm --prefix frontend/teacher_protal run dev",
     "build:all": "concurrently \"npm --prefix api-gateway run build\" \"npm --prefix backend/course-service run build\" \"npm --prefix backend/quiz-service run build\" \"npm --prefix backend/user-service run build\" \"npm --prefix frontend/teacher_protal run build\"",
     "test": "concurrently \"npm --prefix api-gateway test\" \"npm --prefix backend/course-service test\" \"npm --prefix backend/quiz-service test\" \"npm --prefix backend/user-service test\"",
-    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\""
+    "lint": "concurrently \"npm --prefix api-gateway run lint\" \"npm --prefix backend/course-service run lint\" \"npm --prefix backend/quiz-service run lint\" \"npm --prefix backend/user-service run lint\" \"npm --prefix frontend/teacher_protal run lint\"",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
+    "prepare": "husky"
   },
   "devDependencies": {
     "concurrently": "^8.2.0",
