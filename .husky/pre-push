@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -e
+
+echo "[pre-push] Running Backend Tests..."
+npm test
+
+
+echo "[pre-push] Building Teacher Portal..."
+npm --prefix frontend/teacher_protal run build
