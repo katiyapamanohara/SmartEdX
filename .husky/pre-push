@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
-echo "[pre-push] Running Backend Tests..."
+echo "[pre-push] Running Tests for All Services..."
 npm test
 
-
-echo "[pre-push] Building Teacher Portal..."
-npm --prefix frontend/teacher_protal run build
+echo "[pre-push] Building All Services (Frontend, Backend, API Gateway)..."
+npm run build:all
