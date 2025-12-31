@@ -1,0 +1,24 @@
+{
+  "name": "full_stack_module-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install:all": "concurrently \"npm --prefix api-gateway install\" \"npm --prefix backend/course-service install\" \"npm --prefix backend/quiz-service install\" \"npm --prefix backend/user-service install\" \"npm --prefix frontend/teacher_protal install\"",
+    "start": "concurrently -k -n \"api,course,quiz,user,teacher\" -c \"cyan,green,magenta,yellow,blue\" \"npm --prefix api-gateway run start:dev\" \"npm --prefix backend/course-service run start:dev\" \"npm --prefix backend/quiz-service run start:dev\" \"npm --prefix backend/user-service run start:dev\" \"npm --prefix frontend/teacher_protal run dev\"",
+    "start:backend": "concurrently -k -n \"api,course,quiz,user\" -c \"cyan,green,magenta,yellow\" \"npm --prefix api-gateway run start:dev\" \"npm --prefix backend/course-service run start:dev\" \"npm --prefix backend/quiz-service run start:dev\" \"npm --prefix backend/user-service run start:dev\"",
+    "start:frontend": "npm --prefix frontend/teacher_protal run dev",
+    "dev:api": "npm --prefix api-gateway run start:dev",
+    "dev:course": "npm --prefix backend/course-service run start:dev",
+    "dev:quiz": "npm --prefix backend/quiz-service run start:dev",
+    "dev:user": "npm --prefix backend/user-service run start:dev",
+    "dev:teacher": "npm --prefix frontend/teacher_protal run dev",
+    "build:all": "concurrently \"npm --prefix api-gateway run build\" \"npm --prefix backend/course-service run build\" \"npm --prefix backend/quiz-service run build\" \"npm --prefix backend/user-service run build\" \"npm --prefix frontend/teacher_protal run build\"",
+    "test": "concurrently \"npm --prefix api-gateway test\" \"npm --prefix backend/course-service test\" \"npm --prefix backend/quiz-service test\" \"npm --prefix backend/user-service test\"",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0",
+    "husky": "^9.1.7",
+    "prettier": "^3.4.2"
+  }
+}
