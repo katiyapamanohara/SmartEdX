@@ -16,7 +16,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import SidebarWidget from "./SidebarWidget";
+
 
 type NavItem = {
   name: string;
@@ -36,61 +36,16 @@ const navItems: NavItem[] = [
     name: "Courses",
     path: "/dashboard/courses",
   },
-  {
-    icon: <UserCircleIcon />,
-    name: "User Profile",
-    path: "/dashboard/profile",
-  },
+  
 
-  {
-    name: "Forms",
-    icon: <ListIcon />,
-    subItems: [{ name: "Form Elements", path: "/dashboard/form-elements", pro: false }],
-  },
-  {
-    name: "Tables",
-    icon: <TableIcon />,
-    subItems: [{ name: "Basic Tables", path: "/dashboard/basic-tables", pro: false }],
-  },
-  {
-    name: "Pages",
-    icon: <PageIcon />,
-    subItems: [
-      { name: "Blank Page", path: "/dashboard/blank", pro: false },
-      { name: "404 Error", path: "/dashboard/error-404", pro: false },
-    ],
-  },
+  
+  
+  
+
 ];
 
 const othersItems: NavItem[] = [
-  {
-    icon: <PieChartIcon />,
-    name: "Charts",
-    subItems: [
-      { name: "Line Chart", path: "/dashboard/line-chart", pro: false },
-      { name: "Bar Chart", path: "/dashboard/bar-chart", pro: false },
-    ],
-  },
-  {
-    icon: <BoxCubeIcon />,
-    name: "UI Elements",
-    subItems: [
-      { name: "Alerts", path: "/dashboard/alerts", pro: false },
-      { name: "Avatar", path: "/dashboard/avatars", pro: false },
-      { name: "Badge", path: "/dashboard/badge", pro: false },
-      { name: "Buttons", path: "/dashboard/buttons", pro: false },
-      { name: "Images", path: "/dashboard/images", pro: false },
-      { name: "Videos", path: "/dashboard/videos", pro: false },
-    ],
-  },
-  {
-    icon: <PlugInIcon />,
-    name: "Authentication",
-    subItems: [
-      { name: "Sign In", path: "/signin", pro: false },
-      { name: "Sign Up", path: "/signup", pro: false },
-    ],
-  },
+ 
 ];
 
 const AppSidebar: React.FC = () => {
@@ -373,7 +328,7 @@ const AppSidebar: React.FC = () => {
             </div>
           </div>
         </nav>
-        {isExpanded || isHovered || isMobileOpen ? <SidebarWidget /> : null}
+      
       </div>
     </aside>
   );
