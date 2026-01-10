@@ -18,7 +18,7 @@ export function Navbar() {
           </Link>
           
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600 dark:text-gray-300">
-            {["Features", "Courses", "Pricing", "FAQ"].map((item) => (
+            {["Features", "Pricing", "FAQ"].map((item) => (
               <Link key={item} href={`#${item.toLowerCase()}`} className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors relative group">
                 {item}
                 <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-indigo-600 transition-all group-hover:w-full"></span>

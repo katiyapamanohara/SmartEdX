@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { EcommerceMetrics } from "@/components/ecommerce/EcommerceMetrics";
+import { EcommerceMetrics } from "@/components/dashboard/EcommerceMetrics";
 import React from "react";
-import MonthlyTarget from "@/components/ecommerce/MonthlyTarget";
-import MonthlySalesChart from "@/components/ecommerce/MonthlySalesChart";
-import StatisticsChart from "@/components/ecommerce/StatisticsChart";
-import RecentOrders from "@/components/ecommerce/RecentOrders";
-import DemographicCard from "@/components/ecommerce/DemographicCard";
+import MonthlyTarget from "@/components/dashboard/MonthlyTarget";
+import MonthlySalesChart from "@/components/dashboard/MonthlySalesChart";
+import StatisticsChart from "@/components/dashboard/StatisticsChart";
+import RecentOrders from "@/components/dashboard/RecentOrders";
+import DemographicCard from "@/components/dashboard/DemographicCard";
 
 export const metadata: Metadata = {
   title:

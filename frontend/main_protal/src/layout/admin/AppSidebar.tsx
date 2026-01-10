@@ -1,10 +1,6 @@
-"use client";
-import React, { useEffect, useRef, useState,useCallback } from "react";
-import Link from "next/link";
-import Image from "next/image";
-import { usePathname } from "next/navigation";
-import { useSidebar } from "../context/SidebarContext";
+import { useSidebar } from "@/context/SidebarContext";
 import {
+  BoltIcon,
   BoxCubeIcon,
   CalenderIcon,
   ChevronDownIcon,
@@ -15,8 +11,13 @@ import {
   PieChartIcon,
   PlugInIcon,
   TableIcon,
+  TaskIcon,
   UserCircleIcon,
-} from "../icons/index";
+} from "@/icons/index";
+import Image from "next/image";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import SidebarWidget from "./SidebarWidget";
 
 type NavItem = {
@@ -30,35 +31,43 @@ const navItems: NavItem[] = [
   {
     icon: <GridIcon />,
     name: "Dashboard",
-     path: "/dashboard",
+    subItems: [{ name: "Ecommerce", path: "/admin", pro: false }],
+  },
+  {
+    icon: <BoxCubeIcon />,
+    name: "Learning",
+    subItems: [
+        { name: "Courses", path: "/dashboard/courses", pro: false },
+        { name: "My Learning", path: "/dashboard/my-learning", pro: false },
+    ],
   },
   {
     icon: <CalenderIcon />,
-    name: "Courses",
-    path: "/dashboard/courses",
+    name: "Calendar",
+    path: "/admin/calendar",
   },
   {
     icon: <UserCircleIcon />,
     name: "User Profile",
-    path: "/dashboard/profile",
+    path: "/admin/profile",
   },
 
   {
     name: "Forms",
     icon: <ListIcon />,
-    subItems: [{ name: "Form Elements", path: "/dashboard/form-elements", pro: false }],
+    subItems: [{ name: "Form Elements", path: "/admin/form-elements", pro: false }],
   },
   {
     name: "Tables",
     icon: <TableIcon />,
-    subItems: [{ name: "Basic Tables", path: "/dashboard/basic-tables", pro: false }],
+    subItems: [{ name: "Basic Tables", path: "/admin/basic-tables", pro: false }],
   },
   {
     name: "Pages",
     icon: <PageIcon />,
     subItems: [
-      { name: "Blank Page", path: "/dashboard/blank", pro: false },
-      { name: "404 Error", path: "/dashboard/error-404", pro: false },
+      { name: "Blank Page", path: "/admin/blank", pro: false },
+      { name: "404 Error", path: "/admin/error-404", pro: false },
     ],
   },
 ];
@@ -68,20 +77,20 @@ const othersItems: NavItem[] = [
     icon: <PieChartIcon />,
     name: "Charts",
     subItems: [
-      { name: "Line Chart", path: "/dashboard/line-chart", pro: false },
-      { name: "Bar Chart", path: "/dashboard/bar-chart", pro: false },
+      { name: "Line Chart", path: "/admin/line-chart", pro: false },
+      { name: "Bar Chart", path: "/admin/bar-chart", pro: false },
     ],
   },
   {
     icon: <BoxCubeIcon />,
     name: "UI Elements",
     subItems: [
-      { name: "Alerts", path: "/dashboard/alerts", pro: false },
-      { name: "Avatar", path: "/dashboard/avatars", pro: false },
-      { name: "Badge", path: "/dashboard/badge", pro: false },
-      { name: "Buttons", path: "/dashboard/buttons", pro: false },
-      { name: "Images", path: "/dashboard/images", pro: false },
-      { name: "Videos", path: "/dashboard/videos", pro: false },
+      { name: "Alerts", path: "/admin/alerts", pro: false },
+      { name: "Avatar", path: "/admin/avatars", pro: false },
+      { name: "Badge", path: "/admin/badge", pro: false },
+      { name: "Buttons", path: "/admin/buttons", pro: false },
+      { name: "Images", path: "/admin/images", pro: false },
+      { name: "Videos", path: "/admin/videos", pro: false },
     ],
   },
   {
@@ -372,8 +381,66 @@ const AppSidebar: React.FC = () => {
               </h2>
               {renderMenuItems(othersItems, "others")}
             </div>
+
+            <div className="">
+               <h2
+                className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${
+                  !isExpanded && !isHovered
+                    ? "lg:justify-center"
+                    : "justify-start"
+                }`}
+              >
+                {isExpanded || isHovered || isMobileOpen ? (
+                  "Advanced"
+                ) : (
+                  <HorizontaLDots />
+                )}
+              </h2>
+               <ul className="flex flex-col gap-4">
+                  <li>
+                     <Link href="/dashboard/assessments" className={`menu-item group ${isActive("/dashboard/assessments") ? "menu-item-active" : "menu-item-inactive"}`}>
+                        <span className={`${isActive("/dashboard/assessments") ? "menu-item-icon-active" : "menu-item-icon-inactive"}`}>
+                           <TaskIcon />
+                        </span>
+                        {(isExpanded || isHovered || isMobileOpen) && <span className="menu-item-text">Assessments</span>}
+                     </Link>
+                  </li>
+                   <li>
+                     <Link href="/dashboard/analytics" className={`menu-item group ${isActive("/dashboard/analytics") ? "menu-item-active" : "menu-item-inactive"}`}>
+                        <span className={`${isActive("/dashboard/analytics") ? "menu-item-icon-active" : "menu-item-icon-inactive"}`}>
+                           <PieChartIcon />
+                        </span>
+                        {(isExpanded || isHovered || isMobileOpen) && <span className="menu-item-text">Analytics</span>}
+                     </Link>
+                  </li>
+                  <li>
+                     <Link href="/dashboard/settings" className={`menu-item group ${isActive("/dashboard/settings") ? "menu-item-active" : "menu-item-inactive"}`}>
+                        <span className={`${isActive("/dashboard/settings") ? "menu-item-icon-active" : "menu-item-icon-inactive"}`}>
+                           <BoltIcon />
+                        </span>
+                        {(isExpanded || isHovered || isMobileOpen) && <span className="menu-item-text">Settings</span>}
+                     </Link>
+                  </li>
+               </ul>
+            </div>
           </div>
         </nav>
+        
+        {/* Role Toggle */}
+        {(isExpanded || isHovered || isMobileOpen) && (
+            <div className="mt-auto mb-6 px-4">
+                <div className="bg-gray-100 dark:bg-gray-800 rounded-xl p-3 flex items-center justify-between">
+                    <div className="text-sm font-medium">
+                        <p className="text-gray-500 text-xs">View as</p>
+                        <p className="text-gray-900 dark:text-white font-bold">Student</p>
+                    </div>
+                    <Link href="/dashboard/instructor" className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors">
+                        Switch to Instructor
+                    </Link>
+                </div>
+            </div>
+        )}
+
         {isExpanded || isHovered || isMobileOpen ? <SidebarWidget /> : null}
       </div>
     </aside>
