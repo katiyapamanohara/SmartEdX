@@ -15,11 +15,16 @@ export const metadata: Metadata = {
 
 export default function Ecommerce() {
   return (
-    <div className="grid grid-cols-12 gap-4 md:gap-6">
+    <div className="grid grid-cols-12 gap-4 md:gap-6 relative">
+      
       <div className="col-span-12 space-y-6 xl:col-span-7">
-        <EcommerceMetrics />
+        <div id="tour-ecommerce-metrics">
+            <EcommerceMetrics />
+        </div>
 
-        <MonthlySalesChart />
+        <div id="tour-sales-chart">
+            <MonthlySalesChart />
+        </div>
       </div>
 
       <div className="col-span-12 xl:col-span-5">
@@ -35,7 +40,9 @@ export default function Ecommerce() {
       </div>
 
       <div className="col-span-12 xl:col-span-7">
-        <RecentOrders />
+        <div id="tour-recent-orders">
+             <RecentOrders />
+        </div>
       </div>
     </div>
   );

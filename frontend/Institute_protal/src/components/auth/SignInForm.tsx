@@ -16,6 +16,7 @@ export default function SignInForm() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // Mock login - allow any credentials
+    localStorage.setItem('accessToken', 'mock-token');
     router.push("/dashboard");
   };
 
