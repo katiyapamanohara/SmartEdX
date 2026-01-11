@@ -4,7 +4,35 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 
+import { useState, useEffect } from 'react';
+import { authService } from '@/services/authService';
+import UserDropdown from '../header/dashboard/UserDropdown';
+
 export function Navbar() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const isAuth = authService.isAuthenticated();
+      if (isAuth) {
+        try {
+          // Verify token is valid by fetching profile
+          await authService.getProfile();
+          setIsAuthenticated(true);
+        } catch (error) {
+          setIsAuthenticated(false);
+          // Optional: clear invalid token
+          authService.logout(); 
+        }
+      } else {
+        setIsAuthenticated(false);
+      }
+      setLoading(false);
+    };
+    checkAuth();
+  }, []);
+
   return (
     <motion.header 
         initial={{ y: -100 }}
@@ -28,14 +56,29 @@ export function Navbar() {
 
           <div className="flex items-center gap-4">
             <ThemeToggle />
-            <Link href="/signin" className="hidden sm:block text-sm font-bold text-gray-700 dark:text-gray-200 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
-              Log in
-            </Link>
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                <Link href="/signin" className="px-5 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 hover:shadow-indigo-600/50 transition-all">
-                Get Started
-                </Link>
-            </motion.div>
+            {!loading && (
+              isAuthenticated ? (
+                <>
+                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                    <Link href="/dashboard" className="px-5 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 hover:shadow-indigo-600/50 transition-all">
+                      Dashboard
+                    </Link>
+                  </motion.div>
+                  <UserDropdown />
+                </>
+              ) : (
+                <>
+                  <Link href="/signin" className="hidden sm:block text-sm font-bold text-gray-700 dark:text-gray-200 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                    Log in
+                  </Link>
+                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                      <Link href="/signin" className="px-5 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 hover:shadow-indigo-600/50 transition-all">
+                      Get Started
+                      </Link>
+                  </motion.div>
+                </>
+              )
+            )}
           </div>
         </div>
       </motion.header>

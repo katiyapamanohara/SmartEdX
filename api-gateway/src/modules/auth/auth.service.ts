@@ -39,10 +39,10 @@ export class AuthService {
         throw new ConflictException('User with this email already exists');
       }
 
-      // Get student role (default for registration)
-      const studentRole = await this.roleRepository.findByName('student');
-      if (!studentRole) {
-        throw new Error('Student role not found');
+      // Get owner role (default for registration for Institute Portal)
+      const ownerRole = await this.roleRepository.findByName('owner');
+      if (!ownerRole) {
+        throw new Error('Owner role not found');
       }
 
       // Hash password
@@ -52,14 +52,14 @@ export class AuthService {
       const savedUser = await this.userRepository.create({
         ...registerDto,
         password: hashedPassword,
-        roleId: studentRole.id,
+        roleId: ownerRole.id,
       });
 
       // Generate JWT token
       const token = this.generateToken({
         sub: savedUser.id,
         email: savedUser.email,
-        role: studentRole.name,
+        role: ownerRole.name,
       });
 
       return {
@@ -69,7 +69,7 @@ export class AuthService {
           email: savedUser.email,
           firstName: savedUser.firstName,
           lastName: savedUser.lastName,
-          role: studentRole.name,
+          role: ownerRole.name,
         },
       };
     } catch (error) {
@@ -265,10 +265,10 @@ export class AuthService {
         throw new ConflictException('User with this email already exists');
       }
 
-      // Get student role (default for registration)
-      const studentRole = await this.roleRepository.findByName('student');
-      if (!studentRole) {
-        throw new Error('Student role not found');
+      // Get owner role (default for registration for Institute Portal)
+      const ownerRole = await this.roleRepository.findByName('owner');
+      if (!ownerRole) {
+        throw new Error('Owner role not found');
       }
 
       // Create user (no password needed for Firebase users)
@@ -277,7 +277,7 @@ export class AuthService {
         lastName: firebaseRegisterDto.lastName,
         email: firebaseRegisterDto.email,
         password: '', // Firebase users don't use password
-        roleId: studentRole.id,
+        roleId: ownerRole.id,
         profilePicture: firebaseRegisterDto.photoUrl,
       });
 
@@ -285,7 +285,7 @@ export class AuthService {
       const token = this.generateToken({
         sub: savedUser.id,
         email: savedUser.email,
-        role: studentRole.name,
+        role: ownerRole.name,
       });
 
       return {
@@ -295,7 +295,7 @@ export class AuthService {
           email: savedUser.email,
           firstName: savedUser.firstName,
           lastName: savedUser.lastName,
-          role: studentRole.name,
+          role: ownerRole.name,
         },
       };
     } catch (error) {

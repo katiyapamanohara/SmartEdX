@@ -20,6 +20,7 @@ export class SeedService {
       // Get roles
       const adminRole = await this.roleRepository.findByName('admin');
       const instructorRole = await this.roleRepository.findByName('instructor');
+      const ownerRole = await this.roleRepository.findOrCreate('owner', 'Institute Owner');
 
       if (!adminRole || !instructorRole) {
         this.logger.error('Roles not found. Please run migrations first.');

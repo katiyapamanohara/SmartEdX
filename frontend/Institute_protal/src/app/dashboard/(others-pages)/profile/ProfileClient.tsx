@@ -36,7 +36,7 @@ export default function ProfileClient() {
         <div className="space-y-6">
           <UserMetaCard user={profile} />
           <UserInfoCard user={profile} />
-          <UserAddressCard user={profile} />
+         
         </div>
       </div>
     </div>
