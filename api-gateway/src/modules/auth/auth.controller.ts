@@ -13,6 +13,7 @@ import { RegisterDto } from './dto/register.dto';
 import { FirebaseLoginDto, FirebaseRegisterDto } from './dto/firebase-auth.dto';
 import { CreateAdminDto } from './dto/create-admin.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { CompleteOnboardingDto } from './dto/complete-onboarding.dto';
 import { Public } from '../../core/decorators/public.decorator';
 import { CurrentUser } from '../../core/decorators/current-user.decorator';
 import { Roles } from '../../core/decorators/roles.decorator';
@@ -180,6 +181,43 @@ export class AuthController {
     return {
       valid: true,
       user: userDetails,
+    };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('complete-onboarding')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Complete user onboarding' })
+  @ApiBody({ type: CompleteOnboardingDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Onboarding completed successfully',
+    schema: {
+      example: {
+        message: 'Onboarding completed successfully',
+        user: {
+          id: '123e4567-e89b-12d3-a456-426614174000',
+          email: 'user@example.com',
+          isNew: false,
+        },
+      },
+    },
+  })
+  async completeOnboarding(
+    @CurrentUser() user: any,
+    @Body() completeOnboardingDto: CompleteOnboardingDto,
+  ) {
+    const updatedUser = await this.authService.completeOnboarding(
+      user.userId,
+      completeOnboardingDto,
+    );
+    return {
+      message: 'Onboarding completed successfully',
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        isNew: updatedUser.isNew,
+      },
     };
   }
 

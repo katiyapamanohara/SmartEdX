@@ -12,6 +12,7 @@ import * as admin from 'firebase-admin';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { FirebaseLoginDto, FirebaseRegisterDto } from './dto/firebase-auth.dto';
+import { CompleteOnboardingDto } from './dto/complete-onboarding.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { User } from './entities/user.entity';
 import { UserRepository, RoleRepository } from '../../infra/database/repositories';
@@ -70,6 +71,7 @@ export class AuthService {
           firstName: savedUser.firstName,
           lastName: savedUser.lastName,
           role: ownerRole.name,
+          isNew: savedUser.isNew,
         },
       };
     } catch (error) {
@@ -117,6 +119,7 @@ export class AuthService {
           firstName: user.firstName,
           lastName: user.lastName,
           role: user.role.name,
+          isNew: user.isNew,
         },
       };
     } catch (error) {
@@ -207,6 +210,7 @@ export class AuthService {
           firstName: user.firstName,
           lastName: user.lastName,
           role: user.role.name,
+          isNew: user.isNew,
         },
       };
     } catch (error) {
@@ -296,6 +300,7 @@ export class AuthService {
           firstName: savedUser.firstName,
           lastName: savedUser.lastName,
           role: ownerRole.name,
+          isNew: savedUser.isNew,
         },
       };
     } catch (error) {
@@ -323,5 +328,18 @@ export class AuthService {
     } catch (error) {
       throw new UnauthorizedException('Invalid or expired token');
     }
+  }
+
+  async completeOnboarding(userId: string, data: CompleteOnboardingDto) {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    // Update user status
+    user.isNew = false;
+    
+    // Save user
+    return await this.userRepository.save(user);
   }
 }

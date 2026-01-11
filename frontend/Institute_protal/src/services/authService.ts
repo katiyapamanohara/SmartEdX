@@ -15,6 +15,12 @@ export const authService = {
     return localStorage.getItem('accessToken');
   },
 
+  getUser: () => {
+    if (typeof window === 'undefined') return null;
+    const userStr = localStorage.getItem('user');
+    return userStr ? JSON.parse(userStr) : null;
+  },
+
   saveToken: (token: string) => {
     if (typeof window === 'undefined') return;
     localStorage.setItem('accessToken', token);
@@ -150,10 +156,40 @@ export const authService = {
   },
 
   submitOnboardingData: async (data: any) => {
-    console.log('Submitting onboarding data:', data);
-    // Mock API call delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    return Promise.resolve({ success: true });
+    try {
+      const token = authService.getToken();
+      // data.authMeta contains the fields we defined in the DTO
+      const payload = data.authMeta; 
+      
+      const response = await fetch(`${API_URL}/auth/complete-onboarding`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Onboarding submission failed:', response.status, errorText);
+        throw new Error(`Failed to submit onboarding data: ${response.status} ${errorText}`);
+      }
+      
+      const result = await response.json();
+      
+      // Update local user data to reflect isNew: false
+      if (result.user) {
+         const currentUser = authService.getUser();
+         const updatedUser = { ...currentUser, ...result.user };
+         localStorage.setItem('user', JSON.stringify(updatedUser));
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Submit onboarding error:', error);
+      throw error;
+    }
   },
 
   getProfile: async () => {

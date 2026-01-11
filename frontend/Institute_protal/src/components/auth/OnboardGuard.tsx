@@ -16,14 +16,20 @@ export default function OnboardGuard({ children }: { children: React.ReactNode }
 
     if (!isAuth) {
       console.log('OnboardGuard: Not authenticated, redirecting to /signin');
-      // Redirect to login if not authenticated
-      // Uncomment this when ready for real auth enforcement
-      // router.push('/signin'); 
-      // For debugging, we'll allow access but log it
-      setAuthorized(true); 
+      router.push('/signin'); 
+      setAuthorized(false);
     } else {
-      console.log('OnboardGuard: Authenticated, authorizing');
-      setAuthorized(true);
+      const user = authService.getUser();
+      console.log('OnboardGuard: Checking user status', user);
+      
+      if (user && user.isNew === false) {
+        console.log('OnboardGuard: User is not new, redirecting to /dashboard');
+        router.push('/dashboard');
+        setAuthorized(false);
+      } else {
+        console.log('OnboardGuard: User is new or status unknown, authorizing');
+        setAuthorized(true);
+      }
     }
     setLoading(false);
   }, [router]);
