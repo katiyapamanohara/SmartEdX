@@ -146,11 +146,12 @@ export class AuthController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getProfile(@CurrentUser() user: any) {
-    return {
-      userId: user.userId,
-      email: user.email,
-      role: user.role,
-    };
+    const userDetails = await this.authService.findById(user.userId);
+    if (!userDetails) {
+      return null;
+    }
+    const { password, ...result } = userDetails;
+    return result;
   }
 
   @UseGuards(JwtAuthGuard)

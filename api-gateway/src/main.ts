@@ -78,7 +78,6 @@ async function bootstrap() {
   );
   logger.log(`\n🔐 Default Credentials:`);
   logger.log(`   Admin:      admin@example.com / Admin@123`);
-  logger.log(`   Instructor: instructor@example.com / Instructor@123`);
-  logger.log(`   Student:    student@example.com / Student@123`);
+
 }
 bootstrap();

@@ -34,13 +34,7 @@ export class SeedService {
           password: 'Admin@123',
           roleId: adminRole.id,
         },
-        {
-          firstName: 'John',
-          lastName: 'Instructor',
-          email: 'instructor@gmail.com',
-          password: 'Instructor@123',
-          roleId: instructorRole.id,
-        },
+        
       ];
 
       for (const userData of adminUsers) {

@@ -17,6 +17,7 @@ import * as admin from 'firebase-admin';
           console.warn(
             '⚠️  Firebase credentials not configured. Firebase authentication will not be available.',
           );
+          console.warn(`Debug: ProjectID: ${!!projectId}, Email: ${!!clientEmail}, Key: ${!!privateKey}`);
           return null;
         }
 

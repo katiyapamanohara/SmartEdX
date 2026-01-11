@@ -21,6 +21,9 @@ export class User {
   @Column()
   lastName: string;
 
+  @Column({ nullable: true })
+  profilePicture: string;
+
   @Column({ unique: true })
   @Index()
   email: string;

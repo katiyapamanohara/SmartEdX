@@ -11,6 +11,7 @@ import { CourseProxyModule } from './modules/course-proxy/course-proxy.module';
 import { QuizProxyModule } from './modules/quiz-proxy/quiz-proxy.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
+import { MinioModule } from './infra/storage/minio.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     }),
     DatabaseModule,
     FirebaseModule,
+    MinioModule,
     HttpModule,
     AuthModule,
     CourseProxyModule,

@@ -59,7 +59,7 @@ export class AuthService {
       const token = this.generateToken({
         sub: savedUser.id,
         email: savedUser.email,
-        role: savedUser.role.name,
+        role: studentRole.name,
       });
 
       return {
@@ -69,7 +69,7 @@ export class AuthService {
           email: savedUser.email,
           firstName: savedUser.firstName,
           lastName: savedUser.lastName,
-          role: savedUser.role.name,
+          role: studentRole.name,
         },
       };
     } catch (error) {
@@ -278,13 +278,14 @@ export class AuthService {
         email: firebaseRegisterDto.email,
         password: '', // Firebase users don't use password
         roleId: studentRole.id,
+        profilePicture: firebaseRegisterDto.photoUrl,
       });
 
       // Generate JWT token
       const token = this.generateToken({
         sub: savedUser.id,
         email: savedUser.email,
-        role: savedUser.role.name,
+        role: studentRole.name,
       });
 
       return {
@@ -294,7 +295,7 @@ export class AuthService {
           email: savedUser.email,
           firstName: savedUser.firstName,
           lastName: savedUser.lastName,
-          role: savedUser.role.name,
+          role: studentRole.name,
         },
       };
     } catch (error) {
