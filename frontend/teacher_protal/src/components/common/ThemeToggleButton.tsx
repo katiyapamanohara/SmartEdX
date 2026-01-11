@@ -1,8 +1,27 @@
-import React from "react";
-import { useTheme } from "../../context/ThemeContext";
+import React, { useEffect, useState } from "react";
+import { useTheme } from "next-themes";
 
 export const ThemeToggleButton: React.FC = () => {
-  const { toggleTheme } = useTheme();
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const toggleTheme = () => {
+    setTheme(resolvedTheme === "dark" ? "light" : "dark");
+  };
+
+  if (!mounted) {
+    return (
+      <button
+        className="relative flex items-center justify-center text-gray-500 transition-colors bg-white border border-gray-200 rounded-full h-11 w-11 hover:bg-gray-100 dark:border-gray-800 dark:bg-gray-900"
+      >
+        {/* Render nothing or a placeholder to match dimensions */}
+      </button>
+    );
+  }
 
   return (
     <button

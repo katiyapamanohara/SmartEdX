@@ -6,9 +6,50 @@ import { ChevronLeftIcon, EyeCloseIcon, EyeIcon } from "@/icons";
 import Link from "next/link";
 import React, { useState } from "react";
 
+import { authService } from "@/services/authService";
+import { useRouter } from "next/navigation";
+
 export default function SignUpForm() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [isChecked, setIsChecked] = useState(false);
+  
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    password: ""
+  });
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
+    setError(null);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isChecked) {
+      setError("Please agree to the Terms and Conditions.");
+      return;
+    }
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      await authService.register(formData);
+      router.push("/dashboard"); 
+    } catch (err: any) {
+      setError(err.message || "An error occurred during sign up");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="flex flex-col flex-1 lg:w-1/2 w-full overflow-y-auto no-scrollbar">
       <div className="w-full max-w-md sm:pt-10 mx-auto mb-5">
@@ -83,7 +124,7 @@ export default function SignUpForm() {
                 </span>
               </div>
             </div>
-            <form>
+            <form onSubmit={handleSubmit}>
               <div className="space-y-5">
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                   {/* <!-- First Name --> */}
@@ -94,8 +135,10 @@ export default function SignUpForm() {
                     <Input
                       type="text"
                       id="fname"
-                      name="fname"
+                      name="firstName"
                       placeholder="Enter your first name"
+                      value={formData.firstName}
+                      onChange={handleChange}
                     />
                   </div>
                   {/* <!-- Last Name --> */}
@@ -106,8 +149,10 @@ export default function SignUpForm() {
                     <Input
                       type="text"
                       id="lname"
-                      name="lname"
+                      name="lastName"
                       placeholder="Enter your last name"
+                      value={formData.lastName}
+                      onChange={handleChange}
                     />
                   </div>
                 </div>
@@ -121,6 +166,8 @@ export default function SignUpForm() {
                     id="email"
                     name="email"
                     placeholder="Enter your email"
+                    value={formData.email}
+                    onChange={handleChange}
                   />
                 </div>
                 {/* <!-- Password --> */}
@@ -132,6 +179,9 @@ export default function SignUpForm() {
                     <Input
                       placeholder="Enter your password"
                       type={showPassword ? "text" : "password"}
+                      name="password"
+                      value={formData.password}
+                      onChange={handleChange}
                     />
                     <span
                       onClick={() => setShowPassword(!showPassword)}
@@ -145,6 +195,9 @@ export default function SignUpForm() {
                     </span>
                   </div>
                 </div>
+                {error && (
+                  <div className="text-error-500 text-sm">{error}</div>
+                )}
                 {/* <!-- Checkbox --> */}
                 <div className="flex items-center gap-3">
                   <Checkbox
@@ -165,8 +218,8 @@ export default function SignUpForm() {
                 </div>
                 {/* <!-- Button --> */}
                 <div>
-                  <button className="flex items-center justify-center w-full px-4 py-3 text-sm font-medium text-white transition rounded-lg bg-brand-500 shadow-theme-xs hover:bg-brand-600">
-                    Sign Up
+                  <button className="flex items-center justify-center w-full px-4 py-3 text-sm font-medium text-white transition rounded-lg bg-brand-500 shadow-theme-xs hover:bg-brand-600" disabled={isLoading}>
+                    {isLoading ? "Signing Up..." : "Sign Up"}
                   </button>
                 </div>
               </div>
