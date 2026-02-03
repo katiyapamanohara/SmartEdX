@@ -11,7 +11,7 @@ async function bootstrap() {
 
   // Enable CORS
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || '*',
+    origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
     credentials: true,
   });
 
@@ -78,7 +78,6 @@ async function bootstrap() {
   );
   logger.log(`\n🔐 Default Credentials:`);
   logger.log(`   Admin:      admin@example.com / Admin@123`);
-  logger.log(`   Instructor: instructor@example.com / Instructor@123`);
-  logger.log(`   Student:    student@example.com / Student@123`);
+
 }
 bootstrap();

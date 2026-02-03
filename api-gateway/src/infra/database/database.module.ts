@@ -16,10 +16,13 @@ import { Role } from '../../modules/auth/entities/role.entity';
         password: configService.get<string>('DB_PASSWORD', 'postgres'),
         database: configService.get<string>('DB_DATABASE', 'api_gateway'),
         entities: [User, Role],
-        synchronize: false, // Always use migrations
+        synchronize: true, // Auto-sync for dev
         logging: configService.get<string>('NODE_ENV') === 'development',
         migrations: [__dirname + '/migrations/*.ts'],
         migrationsRun: true, // Auto-run migrations on startup
+        ssl: {
+          rejectUnauthorized: false, // Required for Supabase connections
+        },
       }),
       inject: [ConfigService],
     }),

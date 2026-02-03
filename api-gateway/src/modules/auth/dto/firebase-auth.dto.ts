@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class FirebaseLoginDto {
@@ -27,6 +27,15 @@ export class FirebaseRegisterDto {
   @IsString()
   @IsNotEmpty()
   lastName: string;
+
+  @ApiProperty({
+    example: 'https://example.com/photo.jpg',
+    description: 'User profile picture URL',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  photoUrl?: string;
 
   @ApiProperty({
     example: 'user@example.com',

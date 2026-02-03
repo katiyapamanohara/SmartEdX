@@ -12,6 +12,7 @@ import * as admin from 'firebase-admin';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { FirebaseLoginDto, FirebaseRegisterDto } from './dto/firebase-auth.dto';
+import { CompleteOnboardingDto } from './dto/complete-onboarding.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { User } from './entities/user.entity';
 import { UserRepository, RoleRepository } from '../../infra/database/repositories';
@@ -39,10 +40,10 @@ export class AuthService {
         throw new ConflictException('User with this email already exists');
       }
 
-      // Get student role (default for registration)
-      const studentRole = await this.roleRepository.findByName('student');
-      if (!studentRole) {
-        throw new Error('Student role not found');
+      // Get owner role (default for registration for Institute Portal)
+      const ownerRole = await this.roleRepository.findByName('owner');
+      if (!ownerRole) {
+        throw new Error('Owner role not found');
       }
 
       // Hash password
@@ -52,14 +53,14 @@ export class AuthService {
       const savedUser = await this.userRepository.create({
         ...registerDto,
         password: hashedPassword,
-        roleId: studentRole.id,
+        roleId: ownerRole.id,
       });
 
       // Generate JWT token
       const token = this.generateToken({
         sub: savedUser.id,
         email: savedUser.email,
-        role: savedUser.role.name,
+        role: ownerRole.name,
       });
 
       return {
@@ -69,7 +70,8 @@ export class AuthService {
           email: savedUser.email,
           firstName: savedUser.firstName,
           lastName: savedUser.lastName,
-          role: savedUser.role.name,
+          role: ownerRole.name,
+          isNew: savedUser.isNew,
         },
       };
     } catch (error) {
@@ -117,6 +119,7 @@ export class AuthService {
           firstName: user.firstName,
           lastName: user.lastName,
           role: user.role.name,
+          isNew: user.isNew,
         },
       };
     } catch (error) {
@@ -207,6 +210,7 @@ export class AuthService {
           firstName: user.firstName,
           lastName: user.lastName,
           role: user.role.name,
+          isNew: user.isNew,
         },
       };
     } catch (error) {
@@ -265,10 +269,10 @@ export class AuthService {
         throw new ConflictException('User with this email already exists');
       }
 
-      // Get student role (default for registration)
-      const studentRole = await this.roleRepository.findByName('student');
-      if (!studentRole) {
-        throw new Error('Student role not found');
+      // Get owner role (default for registration for Institute Portal)
+      const ownerRole = await this.roleRepository.findByName('owner');
+      if (!ownerRole) {
+        throw new Error('Owner role not found');
       }
 
       // Create user (no password needed for Firebase users)
@@ -277,14 +281,15 @@ export class AuthService {
         lastName: firebaseRegisterDto.lastName,
         email: firebaseRegisterDto.email,
         password: '', // Firebase users don't use password
-        roleId: studentRole.id,
+        roleId: ownerRole.id,
+        profilePicture: firebaseRegisterDto.photoUrl,
       });
 
       // Generate JWT token
       const token = this.generateToken({
         sub: savedUser.id,
         email: savedUser.email,
-        role: savedUser.role.name,
+        role: ownerRole.name,
       });
 
       return {
@@ -294,7 +299,8 @@ export class AuthService {
           email: savedUser.email,
           firstName: savedUser.firstName,
           lastName: savedUser.lastName,
-          role: savedUser.role.name,
+          role: ownerRole.name,
+          isNew: savedUser.isNew,
         },
       };
     } catch (error) {
@@ -322,5 +328,18 @@ export class AuthService {
     } catch (error) {
       throw new UnauthorizedException('Invalid or expired token');
     }
+  }
+
+  async completeOnboarding(userId: string, data: CompleteOnboardingDto) {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    // Update user status
+    user.isNew = false;
+    
+    // Save user
+    return await this.userRepository.save(user);
   }
 }

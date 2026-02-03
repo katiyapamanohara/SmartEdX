@@ -21,6 +21,9 @@ export class User {
   @Column()
   lastName: string;
 
+  @Column({ nullable: true })
+  profilePicture: string;
+
   @Column({ unique: true })
   @Index()
   email: string;
@@ -37,6 +40,9 @@ export class User {
 
   @Column({ default: true })
   isActive: boolean;
+
+  @Column({ default: true })
+  isNew: boolean;
 
   @CreateDateColumn()
   createdAt: Date;
