@@ -20,6 +20,9 @@ import { Role } from '../../modules/auth/entities/role.entity';
         logging: configService.get<string>('NODE_ENV') === 'development',
         migrations: [__dirname + '/migrations/*.ts'],
         migrationsRun: true, // Auto-run migrations on startup
+        ssl: {
+          rejectUnauthorized: false, // Required for Supabase connections
+        },
       }),
       inject: [ConfigService],
     }),

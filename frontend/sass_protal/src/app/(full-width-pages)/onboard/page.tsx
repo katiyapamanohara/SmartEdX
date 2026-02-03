@@ -693,7 +693,6 @@ const ArticomOnboarding = () => {
           auth: {},
           authMeta: {
             phoneNumber: `${countryCodeInput}${phoneNumber}`,
-            country: selectedCountry?.name || '',
             instituteName: instituteName,
             numberOfStudents: studentCount,
             hearAboutUs: referralSource,
