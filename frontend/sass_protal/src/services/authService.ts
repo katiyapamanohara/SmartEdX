@@ -287,6 +287,176 @@ export const authService = {
       console.error('Get institute error:', error);
       throw error;
     }
+  },
+
+  createInstitute: async (data: any) => {
+    try {
+      const token = authService.getToken();
+      if (!token) throw new Error("No auth token found");
+
+      const response = await fetch(`${API_URL}/api/auth/institutes`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create institute');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Create institute error:', error);
+      throw error;
+    }
+  },
+
+  updateInstitute: async (id: string, data: any) => {
+    try {
+      const token = authService.getToken();
+      if (!token) throw new Error("No auth token found");
+
+      const response = await fetch(`${API_URL}/api/auth/institutes/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update institute');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Update institute error:', error);
+      throw error;
+    }
+  },
+
+  getRoles: async () => {
+    try {
+      const token = authService.getToken();
+      if (!token) throw new Error("No auth token found");
+
+      const response = await fetch(`${API_URL}/api/auth/roles`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch roles');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Get roles error:', error);
+      throw error;
+    }
+  },
+
+  assignUserToInstitute: async (id: string, data: { email: string; roleName: string }) => {
+    try {
+      const token = authService.getToken();
+      if (!token) throw new Error("No auth token found");
+
+      const response = await fetch(`${API_URL}/api/auth/institutes/${id}/assign-user`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to assign user');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Assign user error:', error);
+      throw error;
+    }
+  },
+
+  getInstituteUsers: async (id: string) => {
+    try {
+      const token = authService.getToken();
+      if (!token) throw new Error("No auth token found");
+
+      const response = await fetch(`${API_URL}/api/auth/institutes/${id}/users`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch institute users');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Get institute users error:', error);
+      throw error;
+    }
+  },
+
+  deleteInstituteUser: async (instituteId: string, userId: string) => {
+    try {
+      const token = authService.getToken();
+      if (!token) throw new Error("No auth token found");
+
+      const response = await fetch(`${API_URL}/api/auth/institutes/${instituteId}/users/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to delete user');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Delete user error:', error);
+      throw error;
+    }
+  },
+
+  toggleInstituteUserStatus: async (instituteId: string, userId: string) => {
+    try {
+      const token = authService.getToken();
+      if (!token) throw new Error("No auth token found");
+
+      const response = await fetch(`${API_URL}/api/auth/institutes/${instituteId}/users/${userId}/toggle-status`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to toggle user status');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Toggle status error:', error);
+      throw error;
+    }
   }
 
 };

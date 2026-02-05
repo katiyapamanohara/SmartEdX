@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, HttpException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
@@ -41,10 +41,14 @@ export class AuthProxyService {
       );
 
       this.logger.log(`Response status: ${response.status}`);
-      // this.logger.log(`Response data: ${JSON.stringify(response.data)}`);
-
       return response.data;
     } catch (error) {
+      if (error.response) {
+        this.logger.error(
+          `SaaS service error: ${error.response.status} - ${JSON.stringify(error.response.data)}`,
+        );
+        throw new HttpException(error.response.data, error.response.status);
+      }
       this.logger.error(
         `Error forwarding request to ${url}: ${error.message}`,
       );

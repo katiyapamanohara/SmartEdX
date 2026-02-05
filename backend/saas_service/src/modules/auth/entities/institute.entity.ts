@@ -8,7 +8,7 @@ import {
 } from 'typeorm';
 import { User } from './user.entity';
 
-@Entity('saas_institutes')
+@Entity('institutes')
 export class Institute {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -31,13 +31,16 @@ export class Institute {
   @Column({ nullable: true })
   referralSource: string;
 
+  @Column({ nullable: true })
+  country: string;
+
   @Column({ type: 'text', nullable: true })
   primaryUseCases: string; // Stored as JSON string
 
   @Column({ default: 'gpt-4' })
   defaultModel: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true })
   logo: string;
 
   @Column({ default: true })

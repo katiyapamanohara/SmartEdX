@@ -10,18 +10,19 @@ export default function InstitutePage() {
   const [institutes, setInstitutes] = useState<Institute[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchInstitutes = async () => {
-      try {
-        const data = await authService.getInstitutes();
-        setInstitutes(data);
-      } catch (error) {
-        console.error("Error fetching institutes:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const fetchInstitutes = async () => {
+    try {
+      setIsLoading(true);
+      const data = await authService.getInstitutes();
+      setInstitutes(data);
+    } catch (error) {
+      console.error("Error fetching institutes:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchInstitutes();
   }, []);
 
@@ -111,6 +112,7 @@ export default function InstitutePage() {
       <CreateInstituteModal 
         isOpen={isCreateModalOpen} 
         onClose={() => setIsCreateModalOpen(false)} 
+        onSuccess={fetchInstitutes}
       />
     </div>
   );
@@ -149,7 +151,7 @@ interface Institute {
     id: string;
     name: string;
     description: string;
-    logo?: React.ReactNode;
+    logo?: string;
 }
 
 const MOCK_INSTITUTES: Institute[] = [
@@ -165,10 +167,14 @@ const InstituteCard: React.FC<{ institute: Institute }> = ({ institute }) => {
         <div className="overflow-hidden border border-gray-200 rounded-2xl bg-white dark:bg-white/[0.03] dark:border-gray-800 transition-all hover:shadow-md">
             <div className="p-6">
                 <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-blue-600 text-white">
-                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                        </svg>
+                    <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-blue-600 text-white overflow-hidden">
+                        {institute.logo && typeof institute.logo === 'string' ? (
+                            <img src={institute.logo} className="w-full h-full object-cover" alt={institute.name} />
+                        ) : (
+                            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                            </svg>
+                        )}
                     </div>
                     <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

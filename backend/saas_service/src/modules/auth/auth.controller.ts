@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, UseGuards, Patch, Param, NotFoundException } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Patch, Param, NotFoundException, Delete } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -14,6 +14,9 @@ import { FirebaseLoginDto, FirebaseRegisterDto } from './dto/firebase-auth.dto';
 import { CreateAdminDto } from './dto/create-admin.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { CompleteOnboardingDto } from './dto/complete-onboarding.dto';
+import { CreateInstituteDto } from './dto/create-institute.dto';
+import { UpdateInstituteDto } from './dto/update-institute.dto';
+import { AssignUserDto } from './dto/assign-user.dto';
 import { Public } from '../../core/decorators/public.decorator';
 import { CurrentUser } from '../../core/decorators/current-user.decorator';
 import { Roles } from '../../core/decorators/roles.decorator';
@@ -374,5 +377,87 @@ export class AuthController {
   })
   async getInstitute(@Param('id') id: string) {
     return this.authService.getInstituteById(id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('institutes')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Create a new institute' })
+  @ApiBody({ type: CreateInstituteDto })
+  @ApiResponse({ status: 201, description: 'Institute created successfully' })
+  async createInstitute(@CurrentUser() user: any, @Body() createInstituteDto: CreateInstituteDto) {
+    return this.authService.createInstitute(user.userId, createInstituteDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('institutes/:id')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Update institute details' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiBody({ type: UpdateInstituteDto })
+  @ApiResponse({ status: 200, description: 'Institute updated successfully' })
+  async updateInstitute(@Param('id') id: string, @Body() updateInstituteDto: UpdateInstituteDto) {
+    return this.authService.updateInstitute(id, updateInstituteDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('roles')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get all roles' })
+  @ApiResponse({ status: 200, description: 'Returns list of all roles' })
+  async getRoles() {
+    return this.authService.getRoles();
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('institutes/:id/assign-user')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Assign a user to an institute with a role' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiBody({ type: AssignUserDto })
+  @ApiResponse({ status: 200, description: 'User assigned successfully' })
+  async assignUser(
+    @Param('id') id: string,
+    @Body() assignUserDto: AssignUserDto,
+  ) {
+    return this.authService.assignUserToInstitute(id, assignUserDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('institutes/:id/users')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get all users assigned to an institute' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiResponse({ status: 200, description: 'Returns list of users' })
+  async getInstituteUsers(@Param('id') id: string) {
+    return this.authService.getInstituteUsers(id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('institutes/:id/users/:userId')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Remove a user from an institute' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiParam({ name: 'userId', description: 'User ID' })
+  @ApiResponse({ status: 200, description: 'User removed successfully' })
+  async deleteInstituteUser(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+  ) {
+    return this.authService.deleteInstituteUser(id, userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('institutes/:id/users/:userId/toggle-status')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Toggle user active status in an institute' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiParam({ name: 'userId', description: 'User ID' })
+  @ApiResponse({ status: 200, description: 'User status updated successfully' })
+  async toggleInstituteUserStatus(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+  ) {
+    return this.authService.toggleInstituteUserStatus(id, userId);
   }
 }

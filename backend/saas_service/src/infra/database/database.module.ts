@@ -4,6 +4,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { User } from '../../modules/auth/entities/user.entity';
 import { Role } from '../../modules/auth/entities/role.entity';
 import { Institute } from '../../modules/auth/entities/institute.entity';
+import { InstituteUser } from '../../modules/auth/entities/institute-user.entity';
+import { InstituteRole } from '../../modules/auth/entities/institute-role.entity';
 
 @Module({
   imports: [
@@ -16,7 +18,7 @@ import { Institute } from '../../modules/auth/entities/institute.entity';
         username: configService.get<string>('DB_USERNAME', 'postgres'),
         password: configService.get<string>('DB_PASSWORD', 'postgres'),
         database: configService.get<string>('DB_DATABASE', 'api_gateway'),
-        entities: [User, Role, Institute],
+        entities: [User, Role, Institute, InstituteUser, InstituteRole],
         synchronize: true, // Auto-sync for dev
         logging: configService.get<string>('NODE_ENV') === 'development',
         migrations: [__dirname + '/migrations/*.ts'],
