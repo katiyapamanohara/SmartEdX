@@ -1,9 +1,9 @@
 "use client";
-
-import React, { useState, Suspense } from "react";
+import React, { useState, Suspense, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useParams, useSearchParams, useRouter, usePathname } from "next/navigation";
 import { ApexOptions } from "apexcharts";
+import { authService } from "@/services/authService";
 
 // Dynamically import Chart to avoid SSR issues
 const ReactApexChart = dynamic(() => import("react-apexcharts"), {
@@ -18,15 +18,38 @@ function InstituteCustomizeContent() {
   
   const instituteId = params?.id as string;
   const activeTab = searchParams.get("tab") || "dashboard";
-  const instituteName = "testing-assistant";
 
   // Form State
-  const [name, setName] = useState(instituteName);
-  const [description, setDescription] = useState("setting");
-  const [category, setCategory] = useState("education");
-  const [location, setLocation] = useState("New York");
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("");
+  const [location, setLocation] = useState("");
   const [selectedModel, setSelectedModel] = useState("gpt-4");
   const [logo, setLogo] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchInstituteDetails = async () => {
+      if (!instituteId) return;
+      
+      try {
+        setIsLoading(true);
+        const data = await authService.getInstitute(instituteId);
+        setName(data.name || "");
+        setDescription(data.description || "");
+        setCategory(data.category || "education");
+        setLocation(data.location || "");
+        setSelectedModel(data.defaultModel || "gpt-4");
+        setLogo(data.logo || null);
+      } catch (error) {
+        console.error("Error fetching institute details:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchInstituteDetails();
+  }, [instituteId]);
 
   const handleTabChange = (tab: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -44,6 +67,15 @@ function InstituteCustomizeContent() {
     });
     alert("Changes saved successfully!");
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[600px] gap-4">
+        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-gray-500 font-medium">Loading institute data...</p>
+      </div>
+    );
+  }
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -143,7 +175,7 @@ function InstituteCustomizeContent() {
         <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
           <span className="cursor-pointer hover:underline" onClick={() => router.push('/dashboard/institute')}>Institutes</span>
           <span>{">"}</span>
-          <span className="text-gray-800 dark:text-white font-medium">{instituteName}</span>
+          <span className="text-gray-800 dark:text-white font-medium">{name}</span>
         </div>
       </div>
 
@@ -156,7 +188,7 @@ function InstituteCustomizeContent() {
                 <InstituteIcon />
               </div>
               <div>
-                <h3 className="font-bold text-gray-800 dark:text-white line-clamp-1">{instituteName}</h3>
+                <h3 className="font-bold text-gray-800 dark:text-white line-clamp-1">{name}</h3>
                 <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-green-500/10 text-green-500">ACTIVE</span>
               </div>
             </div>

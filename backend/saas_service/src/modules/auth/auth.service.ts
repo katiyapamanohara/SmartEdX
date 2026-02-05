@@ -4,6 +4,7 @@ import {
   ConflictException,
   Logger,
   Inject,
+  NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -362,5 +363,13 @@ export class AuthService {
     
     // Return the linked institute as an array (to support future multi-institute)
     return user.institute ? [user.institute] : [];
+  }
+
+  async getInstituteById(id: string) {
+    const institute = await this.instituteRepository.findById(id);
+    if (!institute) {
+      throw new NotFoundException('Institute not found');
+    }
+    return institute;
   }
 }

@@ -363,4 +363,16 @@ export class AuthController {
   async getInstitutes(@CurrentUser() user: any) {
     return this.authService.getUserInstitutes(user.userId);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('institutes/:id')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get institute details by ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns specific institute information',
+  })
+  async getInstitute(@Param('id') id: string) {
+    return this.authService.getInstituteById(id);
+  }
 }

@@ -99,4 +99,10 @@ export class AuthProxyController {
   async getInstitutes(@Headers() headers: any) {
     return this.authProxyService.forwardRequest('auth/institutes', 'GET', null, headers);
   }
+
+  @Get('institutes/:id')
+  @ApiOperation({ summary: 'Get institute details by ID (proxied to SaaS service)' })
+  async getInstitute(@Param('id') id: string, @Headers() headers: any) {
+    return this.authProxyService.forwardRequest(`auth/institutes/${id}`, 'GET', null, headers);
+  }
 }
