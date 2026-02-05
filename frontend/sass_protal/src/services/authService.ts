@@ -29,17 +29,29 @@ export const authService = {
 
   logout: () => {
     if (typeof window === 'undefined') return;
-    const theme = localStorage.getItem('theme'); // Preserve theme
+    
+    // Preserve theme
+    const theme = localStorage.getItem('theme');
+
+    // Clear all storage
     localStorage.clear();
-    if (theme) localStorage.setItem('theme', theme); // Restore theme
     sessionStorage.clear();
-    // Clear cookies with common probable paths and domains to be safe
+
+    // Restore theme
+    if (theme) {
+      localStorage.setItem('theme', theme);
+    }
+
+    // Clear cookies
     const cookies = document.cookie.split(";");
     for (const cookie of cookies) {
       const eqPos = cookie.indexOf("=");
       const name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
-      document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+      document.cookie = name.trim() + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+      document.cookie = name.trim() + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=" + window.location.hostname;
+      document.cookie = name.trim() + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=." + window.location.hostname;
     }
+    
     window.location.href = '/signin';
   },
 
@@ -194,23 +206,41 @@ export const authService = {
 
   getProfile: async () => {
     try {
+      // Check session storage first
+      if (typeof window !== 'undefined') {
+        const cachedProfile = sessionStorage.getItem('userProfile');
+        if (cachedProfile) {
+          return JSON.parse(cachedProfile);
+        }
+      }
+
       const token = authService.getToken();
+
+      if (!token) {
+        throw new Error("No auth token found");
+      }
+
       const response = await fetch(`${API_URL}/api/auth/profile`, {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch profile');
+      // Read raw text first
+      const responseData = await response.json();
+
+      // Store in session storage if successful
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('userProfile', JSON.stringify(responseData));
       }
 
-      return await response.json();
+      return responseData;
+
     } catch (error) {
       console.error('Get profile error:', error);
       throw error;
     }
   }
+
 };

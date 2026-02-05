@@ -33,14 +33,15 @@ export class AuthProxyService {
           url,
           data: body,
           headers: {
-            ...headers,
+            ...this.filterHeaders(headers),
             'x-gateway-secret': this.configService.get<string>('GATEWAY_SECRET'),
-            // Remove host header to avoid conflicts
-            host: undefined,
           },
           validateStatus: (status) => status < 400,
         }),
       );
+
+      this.logger.log(`Response status: ${response.status}`);
+      // this.logger.log(`Response data: ${JSON.stringify(response.data)}`);
 
       return response.data;
     } catch (error) {
@@ -49,5 +50,22 @@ export class AuthProxyService {
       );
       throw error;
     }
+  }
+
+  private filterHeaders(headers: any): any {
+    const allowedHeaders = [
+      'authorization',
+      'content-type',
+      'x-requested-with',
+      'accept',
+      'user-agent',
+    ];
+    
+    return Object.keys(headers).reduce((acc, key) => {
+      if (allowedHeaders.includes(key.toLowerCase())) {
+        acc[key] = headers[key];
+      }
+      return acc;
+    }, {});
   }
 }
