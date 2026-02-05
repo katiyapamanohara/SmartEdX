@@ -45,7 +45,7 @@ export const authService = {
 
   login: async (credentials: any) => {
     try {
-      const response = await fetch(`${API_URL}/auth/login`, {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
@@ -77,7 +77,7 @@ export const authService = {
 
       // First try to login
       try {
-        const loginResponse = await fetch(`${API_URL}/auth/firebase/login`, {
+        const loginResponse = await fetch(`${API_URL}/api/auth/firebase/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ idToken }),
@@ -100,7 +100,7 @@ export const authService = {
       const firstName = nameParts[0];
       const lastName = nameParts.slice(1).join(' ') || '';
 
-      const registerResponse = await fetch(`${API_URL}/auth/firebase/register`, {
+      const registerResponse = await fetch(`${API_URL}/api/auth/firebase/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -131,7 +131,7 @@ export const authService = {
 
   register: async (userData: any) => {
     try {
-      const response = await fetch(`${API_URL}/auth/register`, {
+      const response = await fetch(`${API_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData),
@@ -161,7 +161,7 @@ export const authService = {
       // data.authMeta contains the fields we defined in the DTO
       const payload = data.authMeta; 
       
-      const response = await fetch(`${API_URL}/auth/complete-onboarding`, {
+      const response = await fetch(`${API_URL}/api/auth/complete-onboarding`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -195,7 +195,7 @@ export const authService = {
   getProfile: async () => {
     try {
       const token = authService.getToken();
-      const response = await fetch(`${API_URL}/auth/me`, {
+      const response = await fetch(`${API_URL}/api/auth/profile`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',

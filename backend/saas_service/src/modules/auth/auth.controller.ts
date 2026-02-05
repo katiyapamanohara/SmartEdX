@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, UseGuards, Patch, Param } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Patch, Param, NotFoundException } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -149,7 +149,7 @@ export class AuthController {
   async getProfile(@CurrentUser() user: any) {
     const userDetails = await this.authService.findById(user.userId);
     if (!userDetails) {
-      return null;
+      throw new NotFoundException('User profile not found');
     }
     const { password, ...result } = userDetails;
     return result;

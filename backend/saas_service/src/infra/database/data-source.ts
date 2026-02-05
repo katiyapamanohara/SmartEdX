@@ -17,6 +17,9 @@ export const dataSourceOptions: DataSourceOptions = {
   synchronize: false, // Always use migrations in production
   logging: process.env.NODE_ENV === 'development',
   migrationsRun: true, // Don't auto-run migrations
+  ssl: {
+    rejectUnauthorized: false, // For cloud databases like Neon, Azure
+  },
 };
 
 const dataSource = new DataSource(dataSourceOptions);
