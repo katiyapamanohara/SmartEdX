@@ -3,10 +3,10 @@
   "version": "2.2.2",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "dotenv -- next dev",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint ."
+    "start": "dotenv -- next start",
+    "lint": "next lint"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.19",
@@ -21,6 +21,7 @@
     "@tailwindcss/postcss": "^4.1.17",
     "apexcharts": "^4.7.0",
     "autoprefixer": "^10.4.22",
+    "dotenv": "^17.2.4",
     "flatpickr": "^4.6.13",
     "next": "16.0.10",
     "react": "^19.2.0",
@@ -39,6 +40,7 @@
     "@types/react": "^19.2.1",
     "@types/react-dom": "^19.2.1",
     "@types/react-transition-group": "^4.4.12",
+    "dotenv-cli": "^11.0.0",
     "eslint": "^9.39.1",
     "eslint-config-next": "16.0.7",
     "postcss": "^8.5.6",
