@@ -5,6 +5,7 @@ export * from './base.repository';
 // Export specific repositories
 export * from './user.repository';
 export * from './role.repository';
+export * from './institute.repository';
 
 // Export repositories module
 export * from './repositories.module';

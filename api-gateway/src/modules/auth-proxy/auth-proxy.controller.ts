@@ -93,4 +93,10 @@ export class AuthProxyController {
   async runSeed(@Headers() headers: any) {
     return this.authProxyService.forwardRequest('auth/seed', 'GET', null, headers);
   }
+
+  @Get('institutes')
+  @ApiOperation({ summary: 'Get current user institutes (proxied to SaaS service)' })
+  async getInstitutes(@Headers() headers: any) {
+    return this.authProxyService.forwardRequest('auth/institutes', 'GET', null, headers);
+  }
 }

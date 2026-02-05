@@ -241,6 +241,29 @@ export const authService = {
       console.error('Get profile error:', error);
       throw error;
     }
+  },
+
+  getInstitutes: async () => {
+    try {
+      const token = authService.getToken();
+      if (!token) throw new Error("No auth token found");
+
+      const response = await fetch(`${API_URL}/api/auth/institutes`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch institutes');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Get institutes error:', error);
+      throw error;
+    }
   }
 
 };

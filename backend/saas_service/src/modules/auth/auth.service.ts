@@ -15,7 +15,7 @@ import { FirebaseLoginDto, FirebaseRegisterDto } from './dto/firebase-auth.dto';
 import { CompleteOnboardingDto } from './dto/complete-onboarding.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { User } from './entities/user.entity';
-import { UserRepository, RoleRepository } from '../../infra/database/repositories';
+import { UserRepository, RoleRepository, InstituteRepository } from '../../infra/database/repositories';
 
 @Injectable()
 export class AuthService {
@@ -24,6 +24,7 @@ export class AuthService {
   constructor(
     private readonly userRepository: UserRepository,
     private readonly roleRepository: RoleRepository,
+    private readonly instituteRepository: InstituteRepository,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     @Inject('FIREBASE_APP') private firebaseApp: admin.app.App,
@@ -336,17 +337,30 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
-    // Update user onboarding data
+    // Create new institute
+    const institute = await this.instituteRepository.create({
+      name: data.instituteName,
+      studentCount: data.numberOfStudents,
+      referralSource: data.hearAboutUs,
+      primaryUseCases: data.primaryUseCase,
+    });
+
+    // Link user to institute and update status
     user.phoneNumber = data.phoneNumber;
-    user.instituteName = data.instituteName;
-    user.numberOfStudents = data.numberOfStudents;
-    user.hearAboutUs = data.hearAboutUs;
-    user.primaryUseCase = data.primaryUseCase;
-    
-    // Update user status
+    user.instituteId = institute.id;
     user.isNew = false;
     
     // Save user
     return await this.userRepository.save(user);
+  }
+
+  async getUserInstitutes(userId: string) {
+    const user = await this.userRepository.findByIdWithRelations(userId);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    
+    // Return the linked institute as an array (to support future multi-institute)
+    return user.institute ? [user.institute] : [];
   }
 }

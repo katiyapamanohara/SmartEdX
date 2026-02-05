@@ -351,4 +351,16 @@ export class AuthController {
       message: 'Seed process completed successfully',
     };
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('institutes')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get current user institutes' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns list of institutes for current user',
+  })
+  async getInstitutes(@CurrentUser() user: any) {
+    return this.authService.getUserInstitutes(user.userId);
+  }
 }

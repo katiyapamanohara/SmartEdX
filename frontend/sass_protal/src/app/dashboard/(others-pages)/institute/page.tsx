@@ -1,13 +1,29 @@
-
 "use client";
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import CreateInstituteModal from "@/components/dashboard/CreateInstituteModal";
+import { authService } from "@/services/authService";
 
 export default function InstitutePage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [institutes, setInstitutes] = useState<Institute[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchInstitutes = async () => {
+      try {
+        const data = await authService.getInstitutes();
+        setInstitutes(data);
+      } catch (error) {
+        console.error("Error fetching institutes:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchInstitutes();
+  }, []);
 
   return (
     <div className="p-6 space-y-8">
@@ -17,7 +33,7 @@ export default function InstitutePage() {
       <div>
         <div className="mb-6 text-center">
           <h2 className="text-xl font-bold text-gray-800 dark:text-white">
-           Create Institute Branches
+           Create Institutes
           </h2>
           <p className="mt-1 text-gray-500 dark:text-gray-400">
             Manage your institute's locations and branches
@@ -25,9 +41,9 @@ export default function InstitutePage() {
         </div>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-          {/* Add New Branch */}
+        
           <CreateOptionCard
-            title="Add New Branch"
+            title="Add New Institute"
             description="Start fresh and build a fully customized branch tailored to your unique needs."
             onClick={() => setIsCreateModalOpen(true)}
             icon={
@@ -39,9 +55,9 @@ export default function InstitutePage() {
             }
           />
 
-          {/* Duplicate Branch */}
+
           <CreateOptionCard
-            title="Duplicate Branch"
+            title="Duplicate Institute"
             description="Quickly launch a new branch by replicating an existing one."
             icon={
               <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-purple-500/10 text-purple-500">
@@ -52,9 +68,9 @@ export default function InstitutePage() {
             }
           />
 
-          {/* Auto-configure Branch */}
+        
           <CreateOptionCard
-            title="Auto-configure Branch"
+            title="Auto-configure Institute"
             description="Let AI help you setup an intelligent branch configuration."
             icon={
               <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-indigo-500/10 text-indigo-500">
@@ -67,17 +83,29 @@ export default function InstitutePage() {
         </div>
       </div>
 
-      {/* Your Branches Section */}
+  
       <div className="pt-8">
         <h2 className="mb-6 text-xl font-bold text-center text-gray-800 dark:text-white">
-          Your Branches
+          Your Institutes
         </h2>
         
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {MOCK_INSTITUTES.map((institute) => (
-                <InstituteCard key={institute.id} institute={institute} />
-            ))}
-        </div>
+        {isLoading ? (
+          <div className="flex justify-center p-12">
+            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {institutes.length > 0 ? (
+                institutes.map((institute) => (
+                  <InstituteCard key={institute.id} institute={institute} />
+                ))
+              ) : (
+                <div className="col-span-full text-center py-12 text-gray-500 dark:text-gray-400">
+                  No Institutes found. Create one to get started.
+                </div>
+              )}
+          </div>
+        )}
       </div>
 
       <CreateInstituteModal 

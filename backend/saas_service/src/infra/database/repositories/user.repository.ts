@@ -66,7 +66,7 @@ export class UserRepository extends BaseRepository<User> {
   async findByIdWithRelations(id: string): Promise<User | null> {
     return this.userRepository.findOne({
       where: { id },
-      // relations: ['courses', 'quizzes'], // Add relations when needed
+      relations: ['institute'],
     });
   }
 
