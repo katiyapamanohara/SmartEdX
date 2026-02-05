@@ -52,7 +52,7 @@ export class AuthProxyController {
     return this.authProxyService.forwardRequest('auth/validate', 'GET', null, headers);
   }
 
-  @Post('onboarding/complete')
+  @Post('complete-onboarding')
   @ApiOperation({ summary: 'Complete onboarding (proxied to SaaS service)' })
   async completeOnboarding(@Body() body: any, @Headers() headers: any) {
     return this.authProxyService.forwardRequest('auth/complete-onboarding', 'POST', body, headers);

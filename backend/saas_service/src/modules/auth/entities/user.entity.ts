@@ -10,7 +10,7 @@ import {
 } from 'typeorm';
 import { Role } from './role.entity';
 
-@Entity('users')
+@Entity('sass_users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -43,6 +43,21 @@ export class User {
 
   @Column({ default: true })
   isNew: boolean;
+
+  @Column({ nullable: true })
+  phoneNumber: string;
+
+  @Column({ nullable: true })
+  instituteName: string;
+
+  @Column({ nullable: true })
+  numberOfStudents: string;
+
+  @Column({ nullable: true })
+  hearAboutUs: string;
+
+  @Column({ type: 'text', nullable: true })
+  primaryUseCase: string;
 
   @CreateDateColumn()
   createdAt: Date;

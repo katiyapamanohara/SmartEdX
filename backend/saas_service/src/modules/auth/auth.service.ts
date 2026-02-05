@@ -336,6 +336,13 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
+    // Update user onboarding data
+    user.phoneNumber = data.phoneNumber;
+    user.instituteName = data.instituteName;
+    user.numberOfStudents = data.numberOfStudents;
+    user.hearAboutUs = data.hearAboutUs;
+    user.primaryUseCase = data.primaryUseCase;
+    
     // Update user status
     user.isNew = false;
     
