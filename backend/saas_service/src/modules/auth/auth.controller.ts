@@ -1,4 +1,5 @@
-import { Controller, Post, Body, Get, UseGuards, Patch, Param, NotFoundException, Delete } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Patch, Param, NotFoundException, Delete, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiOperation,
@@ -6,6 +7,7 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiParam,
+  ApiConsumes,
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -459,5 +461,31 @@ export class AuthController {
     @Param('userId') userId: string,
   ) {
     return this.authService.toggleInstituteUserStatus(id, userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('institutes/:id/logo')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Upload institute logo' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiResponse({ status: 201, description: 'Logo uploaded successfully' })
+  async uploadLogo(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.authService.uploadInstituteLogo(id, file);
   }
 }

@@ -20,6 +20,7 @@ import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { User } from './entities/user.entity';
 import { UserRepository, RoleRepository, InstituteRepository, InstituteUserRepository, InstituteRoleRepository } from '../../infra/database/repositories';
 import { AssignUserDto } from './dto/assign-user.dto';
+import { MinioService } from '../../infra/storage/minio.service';
 
 @Injectable()
 export class AuthService {
@@ -33,8 +34,21 @@ export class AuthService {
     private readonly instituteUserRepository: InstituteUserRepository,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly minioService: MinioService,
     @Inject('FIREBASE_APP') private firebaseApp: admin.app.App,
   ) {}
+
+  async uploadInstituteLogo(instituteId: string, file: Express.Multer.File) {
+    const institute = await this.instituteRepository.findById(instituteId);
+    if (!institute) {
+      throw new NotFoundException('Institute not found');
+    }
+
+    const fileUrl = await this.minioService.uploadFile(file);
+    institute.logo = fileUrl;
+    await this.instituteRepository.save(institute);
+    return { url: fileUrl };
+  }
 
   async register(registerDto: RegisterDto) {
     try {

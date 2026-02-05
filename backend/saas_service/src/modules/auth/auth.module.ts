@@ -12,11 +12,13 @@ import { RolesGuard } from './guards/roles.guard';
 import { SeedService } from './services/seed.service';
 import { RepositoriesModule } from '../../infra/database/repositories';
 import { FirebaseModule } from '../../infra/firebase/firebase.module';
+import { MinioModule } from '../../infra/storage/minio.module';
 
 @Module({
   imports: [
     RepositoriesModule,
     FirebaseModule,
+    MinioModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

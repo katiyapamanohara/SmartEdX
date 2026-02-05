@@ -314,6 +314,33 @@ export const authService = {
     }
   },
 
+  uploadInstituteLogo: async (id: string, file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const token = authService.getToken();
+      if (!token) throw new Error("No auth token found");
+
+      const response = await fetch(`${API_URL}/api/auth/institutes/${id}/logo`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to upload logo');
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Upload logo error:', error);
+      throw error;
+    }
+  },
+
   updateInstitute: async (id: string, data: any) => {
     try {
       const token = authService.getToken();

@@ -24,7 +24,9 @@ function InstituteCustomizeContent() {
   const [referralSource, setReferralSource] = useState("");
   const [country, setCountry] = useState("");
   const [primaryUseCases, setPrimaryUseCases] = useState<string[]>([]);
+
   const [isLoading, setIsLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Assign User State
   const [assignEmail, setAssignEmail] = useState("");
@@ -115,14 +117,30 @@ function InstituteCustomizeContent() {
     router.push(`${pathname}?${params.toString()}`);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setLogo(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    if (file && instituteId) {
+      try {
+        setIsUploading(true);
+        // Show preview immediately
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setLogo(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+
+        // Upload to server
+        const result = await authService.uploadInstituteLogo(instituteId, file);
+        if (result && result.url) {
+          setLogo(result.url);
+          alert("Logo uploaded successfully!");
+        }
+      } catch (error) {
+        console.error("Failed to upload logo:", error);
+        alert("Failed to upload logo. Please try again.");
+      } finally {
+        setIsUploading(false);
+      }
     }
   };
 
@@ -243,6 +261,16 @@ function InstituteCustomizeContent() {
                   <p className="text-[10px] text-gray-500">Recommended: Square, at least 500x500px.</p>
                 </div>
               </div>
+              
+              {/* Overlay for uploading */}
+              {isUploading && (
+                  <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 z-10 flex items-center justify-center rounded-2xl">
+                      <div className="flex flex-col items-center">
+                          <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                          <span className="text-xs font-bold text-blue-600 mt-2">Uploading...</span>
+                      </div>
+                  </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Input label="Institute Name" value={name} onChange={setName} />

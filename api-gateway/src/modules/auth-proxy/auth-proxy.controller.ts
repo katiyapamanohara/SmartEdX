@@ -5,11 +5,14 @@ import {
   Patch,
   Body,
   Param,
-  Headers,
   Req,
   Delete,
+  UseInterceptors,
+  UploadedFile,
+  Headers,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiConsumes } from '@nestjs/swagger';
 import { AuthProxyService } from './auth-proxy.service';
 
 @ApiTags('Authentication')
@@ -152,18 +155,32 @@ export class AuthProxyController {
     );
   }
 
-  @Patch('institutes/:id/users/:userId/toggle-status')
-  @ApiOperation({ summary: 'Toggle institute user status (proxied to SaaS service)' })
-  async toggleInstituteUserStatus(
+  @Post('institutes/:id/logo')
+  @ApiOperation({ summary: 'Upload institute logo (proxied to SaaS service)' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadLogo(
     @Param('id') id: string,
-    @Param('userId') userId: string,
+    @UploadedFile() file: Express.Multer.File,
     @Headers() headers: any,
   ) {
+    // We need to reconstruct the formData for the forwarded request
+    const FormData = require('form-data');
+    const form = new FormData();
+    form.append('file', file.buffer, {
+        filename: file.originalname,
+        contentType: file.mimetype,
+    });
+
+    // Forward request with custom headers for form-data
     return this.authProxyService.forwardRequest(
-      `auth/institutes/${id}/users/${userId}/toggle-status`,
-      'PATCH',
-      null,
-      headers,
+        `auth/institutes/${id}/logo`, 
+        'POST', 
+        form, 
+        {
+            ...headers,
+            ...form.getHeaders(), // Add multipart boundary headers
+        }
     );
   }
 }
