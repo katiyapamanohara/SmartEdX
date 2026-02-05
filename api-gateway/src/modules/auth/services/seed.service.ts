@@ -17,15 +17,10 @@ export class SeedService {
    */
   async seedAdminUsers(): Promise<void> {
     try {
-      // Get roles
-      const adminRole = await this.roleRepository.findByName('admin');
-      const instructorRole = await this.roleRepository.findByName('instructor');
+      // Get or create roles (self-healing in case migrations haven't run)
+      const adminRole = await this.roleRepository.findOrCreate('admin', 'Administrator with full system access');
+      const instructorRole = await this.roleRepository.findOrCreate('instructor', 'Instructor who can create and manage courses');
       const ownerRole = await this.roleRepository.findOrCreate('owner', 'Institute Owner');
-
-      if (!adminRole || !instructorRole) {
-        this.logger.error('Roles not found. Please run migrations first.');
-        return;
-      }
 
       const adminUsers = [
         {

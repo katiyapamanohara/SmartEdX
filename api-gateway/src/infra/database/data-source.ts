@@ -16,7 +16,7 @@ export const dataSourceOptions: DataSourceOptions = {
   migrations: [__dirname + '/migrations/*.ts'],
   synchronize: false, // Always use migrations in production
   logging: process.env.NODE_ENV === 'development',
-  migrationsRun: false, // Don't auto-run migrations
+  migrationsRun: true, // Don't auto-run migrations
 };
 
 const dataSource = new DataSource(dataSourceOptions);
