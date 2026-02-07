@@ -90,11 +90,28 @@ export class AuthController {
   }
 
 
-
   // Admin Management Endpoints
 
-
-
+  @Public()
+  @Get('institutes/:id/info')
+  @ApiOperation({ summary: 'Get public institute information' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns institute name, logo, and phone number',
+    schema: {
+      example: {
+        id: '123e4567-e89b-12d3-a456-426614174000',
+        name: 'Example Institute',
+        logo: 'https://example.com/logo.png',
+        phoneNumber: '+1234567890',
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Institute not found' })
+  async getInstituteInfo(@Param('id') id: string) {
+    return this.authService.getInstituteInfo(id);
+  }
 
   @UseGuards(JwtAuthGuard)
   @Get('institutes/:id')

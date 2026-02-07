@@ -1,7 +1,7 @@
 "use client";
 import { ThemeToggleButton } from "@/components/common/ThemeToggleButton";
 import NotificationDropdown from "@/components/header/NotificationDropdown";
-import UserDropdown from "@/components/header/UserDropdown";
+import StudentUserDropdown from "@/components/header/StudentUserDropdown";
 import { useSidebar } from "@/context/SidebarContext";
 import Image from "next/image";
 import Link from "next/link";
@@ -185,7 +185,7 @@ const StudentHeader: React.FC = () => {
             {/* <!-- Notification Menu Area --> */}
           </div>
           {/* <!-- User Area --> */}
-          <UserDropdown user={user} isLoading={isLoading} />
+          <StudentUserDropdown user={user} isLoading={isLoading} />
     
         </div>
       </div>

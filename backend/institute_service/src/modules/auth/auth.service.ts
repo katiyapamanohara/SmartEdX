@@ -234,6 +234,21 @@ export class AuthService {
     return this.instituteRepository.findBy({ ownerId: userId });
   }
 
+  async getInstituteInfo(id: string) {
+    const institute = await this.instituteRepository.findById(id);
+    if (!institute) {
+      throw new NotFoundException('Institute not found');
+    }
+    
+    // Return only public information
+    return {
+      id: institute.id,
+      name: institute.name,
+      logo: institute.logo,
+      phoneNumber: institute.phoneNumber,
+    };
+  }
+
   async getInstituteById(id: string) {
     const institute = await this.instituteRepository.findById(id);
     if (!institute) {
