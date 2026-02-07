@@ -381,17 +381,17 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
-    // Create new institute
     const institute = await this.instituteRepository.create({
       name: data.instituteName,
       studentCount: data.numberOfStudents,
       referralSource: data.hearAboutUs,
       primaryUseCases: data.primaryUseCase,
+      ownerId: user.id,
     });
-
+    
+  
     // Link user to institute and update status
     user.phoneNumber = data.phoneNumber;
-    user.instituteId = institute.id;
     user.isNew = false;
     
     // Save user
@@ -399,13 +399,13 @@ export class AuthService {
   }
 
   async getUserInstitutes(userId: string) {
-    const user = await this.userRepository.findByIdWithRelations(userId);
+    const user = await this.userRepository.findById(userId);
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
-    
-    // Return the linked institute as an array (to support future multi-institute)
-    return user.institute ? [user.institute] : [];
+
+    // Return institutes where this user is the owner
+    return this.instituteRepository.findBy({ ownerId: userId });
   }
 
   async getInstituteById(id: string) {
@@ -425,12 +425,13 @@ export class AuthService {
     const institute = await this.instituteRepository.create({
       ...data,
       isActive: true,
+      ownerId: user.id,
     });
-
-    // If user doesn't have an institute yet, link it
-    if (!user.instituteId) {
-      user.instituteId = institute.id;
-      await this.userRepository.save(user);
+    
+     // Double check persistence
+    if (!institute.ownerId) {
+        this.logger.warn(`Institute ${institute.id} created (createInstitute) but ownerId is missing. Forcing update.`);
+        await this.instituteRepository.update(institute.id, { ownerId: user.id });
     }
 
     return institute;
@@ -443,7 +444,23 @@ export class AuthService {
     }
 
     Object.assign(institute, data);
+    Object.assign(institute, data);
     return await this.instituteRepository.save(institute);
+  }
+
+  async deleteInstitute(id: string, userId: string) {
+    const institute = await this.instituteRepository.findById(id);
+    if (!institute) {
+      throw new NotFoundException('Institute not found');
+    }
+
+    if (institute.ownerId !== userId) {
+      throw new UnauthorizedException('You are not authorized to delete this institute');
+    }
+
+    // Optional: Check if we need to delete related resources (users, etc.) manually or if constraints handle it.
+    // For now, simple delete.
+    return await this.instituteRepository.delete(id);
   }
 
   async getRoles() {

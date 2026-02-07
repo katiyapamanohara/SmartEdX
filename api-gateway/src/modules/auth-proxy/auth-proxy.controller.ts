@@ -122,6 +122,12 @@ export class AuthProxyController {
     return this.authProxyService.forwardRequest(`auth/institutes/${id}`, 'PATCH', body, headers);
   }
 
+  @Delete('institutes/:id')
+  @ApiOperation({ summary: 'Delete an institute (proxied to SaaS service)' })
+  async deleteInstitute(@Param('id') id: string, @Headers() headers: any) {
+    return this.authProxyService.forwardRequest(`auth/institutes/${id}`, 'DELETE', null, headers);
+  }
+
   @Get('roles')
   @ApiOperation({ summary: 'Get all roles (proxied to SaaS service)' })
   async getRoles(@Headers() headers: any) {

@@ -403,6 +403,16 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Delete('institutes/:id')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Delete an institute' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiResponse({ status: 200, description: 'Institute deleted successfully' })
+  async deleteInstitute(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.authService.deleteInstitute(id, user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('roles')
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get all roles' })

@@ -23,7 +23,9 @@ function InstituteCustomizeContent() {
   const [studentCount, setStudentCount] = useState("");
   const [referralSource, setReferralSource] = useState("");
   const [country, setCountry] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [primaryUseCases, setPrimaryUseCases] = useState<string[]>([]);
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
@@ -59,6 +61,7 @@ function InstituteCustomizeContent() {
         setStudentCount(data.studentCount || "");
         setReferralSource(data.referralSource || "");
         setCountry(data.country || "");
+        setPhoneNumber(data.phoneNumber || "");
         try {
           const useCases = data.primaryUseCases ? JSON.parse(data.primaryUseCases) : [];
           setPrimaryUseCases(Array.isArray(useCases) ? useCases : []);
@@ -144,7 +147,31 @@ function InstituteCustomizeContent() {
     }
   };
 
+  const validate = () => {
+    const newErrors: { [key: string]: string } = {};
+
+    if (!name.trim()) newErrors.name = "Institute Name is required";
+    if (!category) newErrors.category = "Category is required";
+    if (!country) newErrors.country = "Country is required";
+
+    if (!phoneNumber.trim()) {
+      newErrors.phoneNumber = "Phone Number is required";
+    } else if (!/^\d{10}$/.test(phoneNumber.replace(/\D/g, ''))) {
+      newErrors.phoneNumber = "Phone Number must be 10 digits";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleSave = async () => {
+    if (!validate()) {
+       // Find the first error and scroll to it if possible, or just alert
+       const firstError = Object.values(errors)[0];
+       // alert("Please fix the errors before saving.");
+       return;
+    }
+
     try {
       setIsLoading(true);
       await authService.updateInstitute(instituteId, {
@@ -157,6 +184,7 @@ function InstituteCustomizeContent() {
         studentCount,
         referralSource,
         country,
+        phoneNumber,
         primaryUseCases: JSON.stringify(primaryUseCases),
       });
       alert("Changes saved successfully!");
@@ -273,10 +301,10 @@ function InstituteCustomizeContent() {
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Input label="Institute Name" value={name} onChange={setName} />
+                <Input label="Institute Name" value={name} onChange={setName} error={errors.name} />
                 <Input label="Location" value={location} onChange={setLocation} />
                 <div className="md:col-span-2">
-                  <Select label="Category" value={category} onChange={setCategory}>
+                  <Select label="Category" value={category} onChange={setCategory} error={errors.category}>
                     <option value="education">Education</option>
                     <option value="technology">Technology</option>
                     <option value="business">Business</option>
@@ -312,7 +340,7 @@ function InstituteCustomizeContent() {
                     <option value="Other">Other</option>
                   </Select>
                   
-                  <Select label="Country" value={country} onChange={setCountry}>
+                  <Select label="Country" value={country} onChange={setCountry} error={errors.country}>
                     <option value="">Select Country</option>
                     <option value="United States">United States</option>
                     <option value="United Kingdom">United Kingdom</option>
@@ -324,6 +352,8 @@ function InstituteCustomizeContent() {
                     <option value="Japan">Japan</option>
                     <option value="Other">Other</option>
                   </Select>
+                  
+                  <Input label="Phone Number" value={phoneNumber} onChange={setPhoneNumber} error={errors.phoneNumber} />
                 </div>
 
                 <div className="md:col-span-2 space-y-3">
@@ -619,27 +649,36 @@ function FormSection({ title, description, children }: { title: string; descript
   );
 }
 
-function Input({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function Input({ label, value, onChange, error }: { label: string; value: string; onChange: (v: string) => void; error?: string }) {
   return (
     <div className="space-y-2">
       <label className="text-sm font-bold text-gray-700 dark:text-gray-300">{label}</label>
       <input
         type="text"
-        className="w-full px-4 py-3 text-sm border border-gray-200 dark:border-gray-800 rounded-xl bg-gray-50 dark:bg-gray-800/50 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+        className={`w-full px-4 py-3 text-sm border rounded-xl bg-gray-50 dark:bg-gray-800/50 outline-none transition-all ${
+             error 
+             ? "border-red-500 focus:ring-2 focus:ring-red-500/20" 
+             : "border-gray-200 dark:border-gray-800 focus:ring-2 focus:ring-blue-500/20"
+        }`}
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
+      {error && <p className="text-xs text-red-500">{error}</p>}
     </div>
   );
 }
 
-function Select({ label, value, onChange, children }: { label: string; value: string; onChange: (v: string) => void; children: React.ReactNode }) {
+function Select({ label, value, onChange, children, error }: { label: string; value: string; onChange: (v: string) => void; children: React.ReactNode; error?: string }) {
   return (
     <div className="space-y-2">
       <label className="text-sm font-bold text-gray-700 dark:text-gray-300">{label}</label>
       <div className="relative">
         <select
-          className="w-full px-4 py-3 text-sm border border-gray-200 dark:border-gray-800 rounded-xl bg-gray-50 dark:bg-gray-800/50 appearance-none outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
+          className={`w-full px-4 py-3 text-sm border rounded-xl bg-gray-50 dark:bg-gray-800/50 appearance-none outline-none transition-all ${
+             error
+             ? "border-red-500 focus:ring-2 focus:ring-red-500/20"
+             : "border-gray-200 dark:border-gray-800 focus:ring-2 focus:ring-blue-500/20"
+          }`}
           value={value}
           onChange={(e) => onChange(e.target.value)}
         >
@@ -649,6 +688,7 @@ function Select({ label, value, onChange, children }: { label: string; value: st
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
         </div>
       </div>
+      {error && <p className="text-xs text-red-500">{error}</p>}
     </div>
   );
 }

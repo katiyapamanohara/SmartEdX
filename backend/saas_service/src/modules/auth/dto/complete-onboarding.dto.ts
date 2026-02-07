@@ -26,4 +26,7 @@ export class CompleteOnboardingDto {
   @IsString()
   @IsOptional()
   primaryUseCase: string;
+
+
+
 }

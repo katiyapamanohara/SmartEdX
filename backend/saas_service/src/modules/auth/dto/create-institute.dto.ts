@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNotEmpty } from 'class-validator';
+import { IsString, IsOptional, IsNotEmpty, Matches } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateInstituteDto {
@@ -17,10 +17,10 @@ export class CreateInstituteDto {
   @IsOptional()
   location?: string;
 
-  @ApiProperty({ example: 'education', description: 'Institute category', required: false })
+  @ApiProperty({ example: 'education', description: 'Institute category', required: true })
   @IsString()
-  @IsOptional()
-  category?: string;
+  @IsNotEmpty()
+  category: string;
 
   @ApiProperty({ example: 'gpt-4', description: 'Default AI model', required: false })
   @IsString()
@@ -42,10 +42,16 @@ export class CreateInstituteDto {
   @IsOptional()
   referralSource?: string;
 
-  @ApiProperty({ example: 'United States', description: 'Institute country', required: false })
+  @ApiProperty({ example: 'United States', description: 'Institute country', required: true })
   @IsString()
-  @IsOptional()
-  country?: string;
+  @IsNotEmpty()
+  country: string;
+
+  @ApiProperty({ example: '+1234567890', description: 'Institute phone number', required: true })
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/^\d{10}$/, { message: 'Phone number must be exactly 10 digits' })
+  phoneNumber: string;
 
   @ApiProperty({ example: '["Customer Support", "Tutoring"]', description: 'Primary use cases', required: false })
   @IsString()

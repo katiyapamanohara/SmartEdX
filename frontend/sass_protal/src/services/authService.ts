@@ -230,10 +230,7 @@ export const authService = {
       // Read raw text first
       const responseData = await response.json();
 
-      // Store in session storage if successful
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('userProfile', JSON.stringify(responseData));
-      }
+     
 
       return responseData;
 
@@ -484,6 +481,29 @@ export const authService = {
       console.error('Toggle status error:', error);
       throw error;
     }
-  }
+  },
+
+  deleteInstitute: async (id: string) => {
+    try {
+      const token = authService.getToken();
+      if (!token) throw new Error("No auth token found");
+
+      const response = await fetch(`${API_URL}/api/auth/institutes/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete institute');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Delete institute error:', error);
+      throw error;
+    }
+  },
 
 };

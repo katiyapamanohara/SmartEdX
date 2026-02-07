@@ -9,7 +9,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Role } from './role.entity';
-import { Institute } from './institute.entity';
+
 
 @Entity('sass_users')
 export class User {
@@ -39,12 +39,8 @@ export class User {
   @Column()
   roleId: string;
 
-  @ManyToOne(() => Institute, (institute) => institute.users, { nullable: true })
-  @JoinColumn({ name: 'instituteId' })
-  institute: Institute;
 
-  @Column({ nullable: true })
-  instituteId: string;
+
 
   @Column({ default: true })
   isActive: boolean;

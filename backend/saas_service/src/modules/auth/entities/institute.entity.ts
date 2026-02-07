@@ -5,6 +5,8 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 import { User } from './user.entity';
 
@@ -34,6 +36,9 @@ export class Institute {
   @Column({ nullable: true })
   country: string;
 
+  @Column({ nullable: true })
+  phoneNumber: string;
+
   @Column({ type: 'text', nullable: true })
   primaryUseCases: string; // Stored as JSON string
 
@@ -46,8 +51,14 @@ export class Institute {
   @Column({ default: true })
   isActive: boolean;
 
-  @OneToMany(() => User, (user) => user.institute)
-  users: User[];
+
+
+  @Column({ nullable: true })
+  ownerId: string;
+
+  @ManyToOne(() => User, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'ownerId' })
+  owner: User;
 
   @CreateDateColumn()
   createdAt: Date;

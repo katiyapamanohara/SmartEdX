@@ -23,36 +23,70 @@ export default function CreateInstituteModal({
   const [category, setCategory] = useState("");
   const [location, setLocation] = useState("");
   const [logo, setLogo] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
   const [studentCount, setStudentCount] = useState("");
   const [referralSource, setReferralSource] = useState("");
   const [country, setCountry] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [primaryUseCases, setPrimaryUseCases] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+
+  const validate = () => {
+    const newErrors: { [key: string]: string } = {};
+    if (!name.trim()) newErrors.name = " Institute name is required";
+    if (!category) newErrors.category = "Category is required";
+    if (!country) newErrors.country = "Country is required";
+    if (!phoneNumber.trim()) {
+      newErrors.phoneNumber = "Phone number is required";
+    } else if (!/^\d{10}$/.test(phoneNumber.replace(/\D/g, ''))) {
+      newErrors.phoneNumber = "Phone number must be exactly 10 digits";
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name) return;
+    if (!validate()) return;
 
     try {
       setIsSubmitting(true);
-      await authService.createInstitute({
+      
+      // 1. Create Institute
+      const newInstitute = await authService.createInstitute({
         name,
         description,
         defaultModel: selectedModel,
         category,
         location,
-        logo,
+        // logo, // Don't send base64 logo here
         studentCount,
         referralSource,
         country,
+        phoneNumber,
         primaryUseCases: JSON.stringify(primaryUseCases),
       });
-      console.log("Institute created successfully");
+
+      console.log("Institute created successfully", newInstitute);
+
+      // 2. Upload Logo if selected
+      if (logoFile && newInstitute.id) {
+        try {
+            await authService.uploadInstituteLogo(newInstitute.id, logoFile);
+            console.log("Logo uploaded successfully");
+        } catch (logoError) {
+            console.error("Failed to upload logo:", logoError);
+            // Optional: Show a warning toast that institute was created but logo failed
+        }
+      }
+
       if (onSuccess) onSuccess();
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to create institute:", error);
-      alert("Failed to create institute. Please try again.");
+      alert(error.message || "Failed to create institute. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -61,6 +95,7 @@ export default function CreateInstituteModal({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setLogoFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setLogo(reader.result as string);
@@ -70,11 +105,11 @@ export default function CreateInstituteModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} className="max-w-[700px] p-0 overflow-hidden" showCloseButton={false}>
-      <div className="flex flex-col h-full bg-[#1e293b] text-white rounded-3xl">
+    <Modal isOpen={isOpen} onClose={onClose} className="max-w-[700px] w-full h-[85vh] !max-h-[85vh] flex flex-col" showCloseButton={false}>
+      <div className="flex flex-col h-full bg-[#1e293b] text-white rounded-3xl overflow-hidden w-full">
         {/* Header with Close Button */}
         <div className="flex items-center justify-between px-8 py-6">
-          <h2 className="text-xl font-bold text-white">Add New Branch</h2>
+          <h2 className="text-xl font-bold text-white">Add New  Institute</h2>
           <button
             onClick={onClose}
             className="flex items-center justify-center w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
@@ -85,27 +120,28 @@ export default function CreateInstituteModal({
           </button>
         </div>
 
-        <div className="px-8 pb-8 space-y-6">
-            {/* Branch Name */}
+        <div className="px-8 py-6 space-y-6 flex-1 overflow-y-auto custom-scrollbar">
+            {/*  Institute Name */}
             <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-400">
-                    Branch Name
-                    <span className="block text-xs font-normal text-gray-500">What is the name of this branch?</span>
+                     Institute Name
+                    <span className="block text-xs font-normal text-gray-500">What is the name of this  Institute?</span>
                 </label>
                 <input 
                     type="text" 
-                    placeholder="Branch Name"
+                    placeholder=" Institute Name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full px-4 py-3 text-sm text-white placeholder-gray-500 bg-[#0f172a]/50 border border-gray-700/50 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                    className={`w-full px-4 py-3 text-sm text-white placeholder-gray-500 bg-[#0f172a]/50 border ${errors.name ? 'border-red-500' : 'border-gray-700/50'} rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all`}
                 />
+                {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
             </div>
 
             {/* Image Upload */}
             <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-400">
-                    Branch Logo
-                    <span className="block text-xs font-normal text-gray-500">An optional logo for this branch.</span>
+                     Institute Logo
+                    <span className="block text-xs font-normal text-gray-500">An optional logo for this  Institute.</span>
                 </label>
                 <div className="flex items-center gap-4">
                     <div className="flex items-center justify-center w-16 h-16 rounded-full bg-[#0f172a]/50 border border-dash border-gray-700/50 text-gray-400 overflow-hidden">
@@ -136,12 +172,12 @@ export default function CreateInstituteModal({
                 <div className="space-y-2">
                      <label className="text-sm font-medium text-gray-400">
                         Category
-                        <span className="block text-xs font-normal text-gray-500">Select category for your branch</span>
+                        <span className="block text-xs font-normal text-gray-500">Select category for your  Institute</span>
                     </label>
                      <div className="relative">
                         <select 
-                            className="w-full appearance-none px-4 py-3 text-sm text-white bg-[#0f172a]/50 border border-gray-700/50 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
-                            value={category}
+                            className={`w-full appearance-none px-4 py-3 text-sm text-white bg-[#0f172a]/50 border ${errors.category ? 'border-red-500' : 'border-gray-700/50'} rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all`}
+                             value={category}
                             onChange={(e) => setCategory(e.target.value)}
                         >
                             <option value="">Select Category</option>
@@ -161,6 +197,7 @@ export default function CreateInstituteModal({
                              </svg>
                         </div>
                     </div>
+                    {errors.category && <p className="text-xs text-red-500 mt-1">{errors.category}</p>}
                 </div>
 
                  <div className="space-y-2">
@@ -184,7 +221,7 @@ export default function CreateInstituteModal({
                     </label>
                     <div className="relative">
                         <select 
-                            className="w-full appearance-none px-4 py-3 text-sm text-white bg-[#0f172a]/50 border border-gray-700/50 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                            className={`w-full appearance-none px-4 py-3 text-sm text-white bg-[#0f172a]/50 border ${errors.country ? 'border-red-500' : 'border-gray-700/50'} rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all`}
                             value={country}
                             onChange={(e) => setCountry(e.target.value)}
                         >
@@ -205,7 +242,24 @@ export default function CreateInstituteModal({
                             </svg>
                         </div>
                     </div>
+                    {errors.country && <p className="text-xs text-red-500 mt-1">{errors.country}</p>}
                 </div>
+            </div>
+
+            {/* Phone Number */}
+            <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-400">
+                    Phone Number
+                    <span className="block text-xs font-normal text-gray-500">Contact number</span>
+                </label>
+                <input
+                    type="text"
+                    placeholder="e.g. +1234567890"
+                    className={`w-full px-4 py-3 text-sm text-white placeholder-gray-500 bg-[#0f172a]/50 border ${errors.phoneNumber ? 'border-red-500' : 'border-gray-700/50'} rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all`}
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                />
+                {errors.phoneNumber && <p className="text-xs text-red-500 mt-1">{errors.phoneNumber}</p>}
             </div>
 
             {/* Expansion Fields */}
@@ -297,7 +351,7 @@ export default function CreateInstituteModal({
              <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-400">
                     Description
-                    <span className="block text-xs font-normal text-gray-500">Description about your branch</span>
+                    <span className="block text-xs font-normal text-gray-500">Description about your  Institute</span>
                 </label>
                 <textarea 
                     placeholder="Description"
@@ -319,9 +373,17 @@ export default function CreateInstituteModal({
             </button>
             <button 
                 onClick={handleSubmit}
-                className="px-6 py-2.5 text-sm font-medium text-white bg-[#465fff] rounded-lg hover:bg-[#3b4ecc] transition-colors shadow-lg shadow-blue-500/20"
+                disabled={isSubmitting}
+                className={`px-6 py-2.5 text-sm font-medium text-white bg-[#465fff] rounded-lg hover:bg-[#3b4ecc] transition-colors shadow-lg shadow-blue-500/20 flex items-center gap-2 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
             >
-                Create Branch
+                {isSubmitting ? (
+                    <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Creating...
+                    </>
+                ) : (
+                    "Create  Institute"
+                )}
             </button>
         </div>
       </div>
