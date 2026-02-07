@@ -22,7 +22,7 @@ const navItems: NavItem[] = [
  {
     icon: <GridIcon />,
     name: "Dashboard",
-     path: "/dashboard",
+     path: "/",
   },
 
 ];
@@ -233,7 +233,7 @@ const StudentSidebar: React.FC = () => {
           !isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
         }`}
       >
-        <Link href={`/${instituteId}/dashboard`} className="flex items-center gap-3 overflow-hidden">
+        <Link href={`/${instituteId}/student`} className="flex items-center gap-3 overflow-hidden">
           {isLoading ? (
             <div className="flex items-center gap-3 animate-pulse">
               <div className="w-8 h-8 bg-gray-200 rounded-lg dark:bg-gray-700 flex-shrink-0"></div>
