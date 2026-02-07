@@ -1,14 +1,14 @@
 "use client";
 
 import { useSidebar } from "@/context/SidebarContext";
-import AppHeader from "@/layout/AppHeader";
-import AppSidebar from "@/layout/AppSidebar";
-import Backdrop from "@/layout/Backdrop";
+import StudentHeader from "@/layout/student/StudentHeader";
+import StudentSidebar from "@/layout/student/StudentSidebar";
+import StudentBackdrop from "@/layout/student/StudentBackdrop";
 import React, { useEffect } from "react";
 import { useParams } from "next/navigation";
 import { authService } from "@/services/authService";
 
-export default function AdminLayout({
+export default function StudentLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -33,14 +33,14 @@ export default function AdminLayout({
   return (
     <div className="min-h-screen xl:flex">
       {/* Sidebar and Backdrop */}
-      <AppSidebar />
-      <Backdrop />
+      <StudentSidebar />
+      <StudentBackdrop />
       {/* Main Content Area */}
       <div
         className={`flex-1 transition-all  duration-300 ease-in-out ${mainContentMargin}`}
       >
         {/* Header */}
-        <AppHeader />
+        <StudentHeader />
         {/* Page Content */}
         <div className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">{children}</div>
       </div>

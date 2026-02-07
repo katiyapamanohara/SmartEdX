@@ -47,7 +47,7 @@ export default function EditProfileForm() {
 
             <div className="col-span-2 lg:col-span-1">
               <Label>Role</Label>
-              <Input type="text" defaultValue={user.role} disabled placeholder="Your role" />
+              <Input type="text" defaultValue={user.role.name} disabled placeholder="Your role" />
             </div>
 
             <div className="col-span-2">

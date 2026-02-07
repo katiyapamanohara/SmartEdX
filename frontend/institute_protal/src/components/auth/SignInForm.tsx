@@ -23,12 +23,7 @@ export default function SignInForm() {
       }
 
       const data = await authService.signInWithGoogle(instituteId);
-
-      if (data.user.instituteId) {
-        router.push(`/${data.user.instituteId}`);
-      } else {
-        router.push("/");
-      }
+      window.location.href = `/${data.user.instituteId}`;
     } catch (err: any) {
       console.error("Google Sign-In Error:", err);
       setError(err.message || "Failed to sign in with Google");

@@ -1,11 +1,31 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { jwtDecode } from 'jwt-decode';
+
+// JWT Payload interface
+interface JWTPayload {
+  sub: string; // User ID
+  email: string;
+  role: string;
+  instituteId: string;
+  type: string;
+  iat: number;
+  exp: number;
+}
+
+// Helper function to decode JWT token
+function decodeToken(token: string): JWTPayload | null {
+  try {
+    return jwtDecode<JWTPayload>(token);
+  } catch (error) {
+    console.error('Failed to decode JWT token in middleware:', error);
+    return null;
+  }
+}
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get('access_token')?.value;
-
-  // 1. Allow essential public assets and system routes
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon.ico') ||
@@ -25,13 +45,13 @@ export function middleware(request: NextRequest) {
     pathname === '/signin' || 
     pathname.endsWith('/signin');
 
-  // 3. User is NOT logged in
+ 
   if (!token) {
     if (isPublicRoute) {
       return NextResponse.next();
     }
     
-    // Redirect to institute-specific signin if we have an institute context in the URL
+   
     if (instituteId && instituteId !== 'signin' && instituteId !== 'dashboard' && instituteId !== 'error-404') {
       const url = request.nextUrl.clone();
       url.pathname = `/${instituteId}/signin`;
@@ -44,12 +64,42 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // 4. User IS logged in
-  // If they are on a public route or just the institute root, send them to the dashboard
-  if (isPublicRoute || (pathParts.length === 2 && instituteId && instituteId !== 'signin')) {
-    if (instituteId && instituteId !== 'signin' && instituteId !== 'dashboard') {
+  // Extract role from JWT token payload (primary source)
+  const decoded = decodeToken(token);
+  const userRole = decoded?.role || request.cookies.get('user_role')?.value;
+
+  const roleBasePath = pathParts[2]; 
+  
+  if (instituteId && roleBasePath && userRole) {
+    const rolePathMap: Record<string, string> = {
+      'instructor': 'institute',
+      'student': 'student',
+      'teacher': 'teacher'
+    };
+    
+    const allowedPath = rolePathMap[userRole];
+    
+    if (['institute', 'student', 'teacher'].includes(roleBasePath) && roleBasePath !== allowedPath) {
       const url = request.nextUrl.clone();
-      url.pathname = `/${instituteId}/dashboard`;
+      url.pathname = `/${instituteId}/${allowedPath}`;
+      return NextResponse.redirect(url);
+    }
+  }
+  
+  if (isPublicRoute || (pathParts.length === 2 && instituteId && instituteId !== 'signin')) {
+    if (instituteId && instituteId !== 'signin' ) {
+      const url = request.nextUrl.clone();
+      
+      if (userRole === 'instructor') {
+        url.pathname = `/${instituteId}/institute`;
+      } else if (userRole === 'student') {
+        url.pathname = `/${instituteId}/student`;
+      } else if (userRole === 'teacher') {
+        url.pathname = `/${instituteId}/teacher`;
+      } else {
+        url.pathname = `/`;
+      }
+      
       return NextResponse.redirect(url);
     }
   }
@@ -59,13 +109,7 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
+
     '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
 };
