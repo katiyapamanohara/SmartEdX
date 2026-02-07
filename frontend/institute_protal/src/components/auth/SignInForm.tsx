@@ -18,12 +18,15 @@ export default function SignInForm() {
 
   const handleGoogleSignIn = async () => {
     try {
+      googleProvider.setCustomParameters({
+        prompt: "select_account",
+      });
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
       const idToken = await user.getIdToken();
 
       // Call backend to verify and get JWT
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL }`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL }/api/institutes/auth/firebase/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

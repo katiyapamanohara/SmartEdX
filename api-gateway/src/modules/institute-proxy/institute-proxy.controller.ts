@@ -11,20 +11,34 @@ export class InstituteProxyController {
   @All('*')
   @ApiOperation({ summary: 'Proxy all institute requests' })
   async proxy(
-    @Param('0') path: string,
     @Req() req: Request,
     @Body() body: any,
     @Headers() headers: any,
   ) {
-    // When using * wildcard, the captured path is usually passed as the parameter
-    // If path is undefined (root match), treat as empty string
-    const targetPath = path || '0'; 
-    const method = req.method;
+    // Manually extract path to ensure reliability
+    // req.originalUrl includes query strings, so this handles them too? 
+    // The forwardRequest method constructs URL as base + /api/ + path. 
+    // If backend expects query params, we should pass them.
+    // For now, let's just get the path.
     
-    // If targetPath is '0' (wildcard not matched/empty), treat as empty string
-    const finalPath = targetPath === '0' ? '' : targetPath;
-
-    return this.instituteProxyService.forwardRequest(finalPath, method, body, headers);
+    // originalUrl: /api/institutes/auth/firebase/login
+    // We want: auth/firebase/login
+    
+    // Note: This assumes the controller is mounted at /api/institutes
+    const prefix = '/api/institutes';
+    let relativePath = req.originalUrl;
+    
+    if (relativePath.startsWith(prefix)) {
+      relativePath = relativePath.slice(prefix.length);
+    }
+    
+    // Remove leading slash if present
+    if (relativePath.startsWith('/')) {
+      relativePath = relativePath.slice(1);
+    }
+    
+    const method = req.method;
+    return this.instituteProxyService.forwardRequest(relativePath, method, body, headers);
   }
 
   // Also catch root /api/institutes if needed (though usually list)

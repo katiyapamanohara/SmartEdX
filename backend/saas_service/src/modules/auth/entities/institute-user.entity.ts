@@ -28,6 +28,9 @@ export class InstituteUser {
   lastName: string;
 
   @Column({ nullable: true })
+  profilePicture: string;
+
+  @Column({ nullable: true })
   email: string;
 
   @Column({ nullable: true })
