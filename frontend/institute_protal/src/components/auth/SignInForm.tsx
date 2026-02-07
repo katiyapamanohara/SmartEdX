@@ -8,11 +8,12 @@ import Link from "next/link";
 import React, { useState } from "react";
 import { signInWithPopup } from "firebase/auth";
 import { auth, googleProvider } from "@/utils/firebase";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import Cookies from "js-cookie";
 
 export default function SignInForm() {
   const router = useRouter();
+  const params = useParams();
   const [error, setError] = useState("");
 
   const handleGoogleSignIn = async () => {
@@ -27,7 +28,10 @@ export default function SignInForm() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ idToken }),
+        body: JSON.stringify({ 
+          idToken,
+          instituteId: Array.isArray(params.instituteId) ? params.instituteId[0] : params.instituteId,
+        }),
       });
 
       if (!response.ok) {
@@ -55,13 +59,6 @@ export default function SignInForm() {
   return (
     <div className="flex flex-col flex-1 lg:w-1/2 w-full">
       <div className="w-full max-w-md sm:pt-10 mx-auto mb-5">
-        <Link
-          href="/"
-          className="inline-flex items-center text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-        >
-          <ChevronLeftIcon />
-          Back to dashboard
-        </Link>
       </div>
       <div className="flex flex-col justify-center flex-1 w-full max-w-md mx-auto">
         <div>

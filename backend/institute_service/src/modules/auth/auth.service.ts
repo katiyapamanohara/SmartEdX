@@ -5,6 +5,7 @@ import {
   Logger,
   Inject,
   NotFoundException,
+  HttpException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -128,15 +129,22 @@ export class AuthService {
         .auth()
         .verifyIdToken(firebaseLoginDto.idToken);
 
-      const email = decodedToken.email;
+      const { email } = decodedToken;
+
       if (!email) {
         throw new UnauthorizedException('Invalid Firebase token: Email not found');
       }
-
-      const user = await this.instituteUserRepository.findByEmail(email);
+      
+      let user;
+      
+      if (firebaseLoginDto.instituteId) {
+        user = await this.instituteUserRepository.findByEmailAndInstituteId(email, firebaseLoginDto.instituteId);
+      } else {
+        user = await this.instituteUserRepository.findByEmail(email);
+      }
 
       if (!user) {
-        throw new UnauthorizedException('User not found in this institute.');
+        throw new UnauthorizedException('User not found in this institute');
       }
 
       if (!user.isActive) {
@@ -166,8 +174,11 @@ export class AuthService {
         },
       };
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       this.logger.error('Firebase login failed', error);
-      throw new UnauthorizedException('Invalid Firebase token');
+      throw new UnauthorizedException(`Invalid Firebase token: ${error.message}`);
     }
   }
 

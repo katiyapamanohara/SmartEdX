@@ -5,19 +5,31 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
   // Public routes
-  if (pathname === '/signin' || pathname === '/' || pathname.startsWith('/_next') || pathname.startsWith('/favicon.ico')) {
+  // Allow /signin (old) or /[instituteId]/signin
+  if (pathname === '/signin' || pathname === '/' || pathname.endsWith('/signin') || pathname.startsWith('/_next') || pathname.startsWith('/favicon.ico')) {
     return NextResponse.next();
   }
 
   const token = request.cookies.get('access_token')?.value;
 
   // Protect /[instituteId] routes
-  // Assuming instituteId is a UUID or specific format, but generally checking if it's not a public route
-  // and we are trying to access dashboard-like pages.
-  // Since we moved everything to [instituteId], we can check if token exists.
-  
   if (!token) {
      const url = request.nextUrl.clone();
+     // Redirect to generic signin if no institute context, or maybe we want to keep them on the current URL but show auth?
+     // For now, let's redirect to a generic signin or keep it simple.
+     // But wait, if they are at /[id]/dashboard and not logged in, we should redirect to /[id]/signin
+     
+     // Extract instituteId from pathname if possible
+     const parts = pathname.split('/');
+     if (parts.length > 1 && parts[1]) {
+        const instituteId = parts[1];
+        // simple check if it looks like an ID
+        if (instituteId !== 'signin' && instituteId !== 'error-404') {
+             url.pathname = `/${instituteId}/signin`;
+             return NextResponse.redirect(url);
+        }
+     }
+
      url.pathname = '/signin';
      return NextResponse.redirect(url);
   }

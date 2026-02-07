@@ -70,12 +70,7 @@ async function bootstrap() {
   logger.log(`🚀 API Gateway is running on: http://localhost:${port}`);
   logger.log(`📚 Swagger documentation: http://localhost:${port}/docs`);
   logger.log(`📡 Proxying to:`);
-  logger.log(
-    `   - Course Service: ${process.env.COURSE_SERVICE_URL || 'http://localhost:3002'}`,
-  );
-  logger.log(
-    `   - Quiz Service: ${process.env.QUIZ_SERVICE_URL || 'http://localhost:3003'}`,
-  );
+
   logger.log(`\n🔐 Default Credentials:`);
   logger.log(`   Admin:      admin@example.com / Admin@123`);
 

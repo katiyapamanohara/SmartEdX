@@ -27,6 +27,13 @@ export class InstituteUserRepository extends BaseRepository<InstituteUser> {
     });
   }
 
+  async findByEmailAndInstituteId(email: string, instituteId: string): Promise<InstituteUser | null> {
+    return this.instituteUserRepository.findOne({
+      where: { email, instituteId },
+      relations: ['role', 'institute'],
+    });
+  }
+
   async findById(id: string): Promise<InstituteUser | null> {
     return this.instituteUserRepository.findOne({
       where: { id },
