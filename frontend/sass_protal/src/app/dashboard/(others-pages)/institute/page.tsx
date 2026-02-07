@@ -33,6 +33,18 @@ export default function InstitutePage() {
     }
   };
 
+  const handleToggleStatus = async (id: string, currentStatus: boolean) => {
+    try {
+      await authService.updateInstitute(id, { isActive: !currentStatus });
+      setInstitutes(institutes.map(inst => 
+        inst.id === id ? { ...inst, isActive: !currentStatus } : inst
+      ));
+    } catch (error) {
+      console.error("Failed to toggle status:", error);
+      alert("Failed to toggle status");
+    }
+  };
+
   useEffect(() => {
     fetchInstitutes();
   }, []);
@@ -109,7 +121,12 @@ export default function InstitutePage() {
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
               {institutes.length > 0 ? (
                 institutes.map((institute) => (
-                  <InstituteCard key={institute.id} institute={institute} onDelete={() => handleDeleteInstitute(institute.id)} />
+                  <InstituteCard 
+                    key={institute.id} 
+                    institute={institute} 
+                    onDelete={() => handleDeleteInstitute(institute.id)} 
+                    onToggleStatus={() => handleToggleStatus(institute.id, institute.isActive ?? true)}
+                  />
                 ))
               ) : (
                 <div className="col-span-full text-center py-12 text-gray-500 dark:text-gray-400">
@@ -163,6 +180,7 @@ interface Institute {
     name: string;
     description: string;
     logo?: string;
+    isActive?: boolean;
 }
 
 const MOCK_INSTITUTES: Institute[] = [
@@ -173,13 +191,30 @@ const MOCK_INSTITUTES: Institute[] = [
     },
 ];
 
-const InstituteCard: React.FC<{ institute: Institute; onDelete: () => Promise<void> }> = ({ institute, onDelete }) => {
+const InstituteCard: React.FC<{ 
+    institute: Institute; 
+    onDelete: () => Promise<void>;
+    onToggleStatus: () => Promise<void>;
+}> = ({ institute, onDelete, onToggleStatus }) => {
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isToggling, setIsToggling] = useState(false);
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const menuRef = React.useRef<HTMLDivElement>(null);
 
-    const handleDeleteClick = async (e: React.MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                setIsMenuOpen(false);
+            }
+        };
+
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, []);
+
+    const handleDeleteClick = async () => {
         if (confirm("Are you sure you want to delete this institute? This action cannot be undone.")) {
             setIsDeleting(true);
             try {
@@ -187,12 +222,23 @@ const InstituteCard: React.FC<{ institute: Institute; onDelete: () => Promise<vo
             } catch (error) {
                 setIsDeleting(false); 
             }
-            // Note: If successful, component unmounts, so no need to setIsDeleting(false)
+        }
+    };
+
+    const handleToggleClick = async () => {
+        setIsToggling(true);
+        try {
+            await onToggleStatus();
+        } catch (error) {
+            console.error("Failed to toggle status", error);
+        } finally {
+            setIsToggling(false);
+            setIsMenuOpen(false);
         }
     };
 
     return (
-        <div className="overflow-hidden border border-gray-200 rounded-2xl bg-white dark:bg-white/[0.03] dark:border-gray-800 transition-all hover:shadow-md group">
+        <div className="overflow-hidden border border-gray-200 rounded-2xl bg-white dark:bg-white/[0.03] dark:border-gray-800 transition-all hover:shadow-md group relative">
             <div className="p-6">
                 <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-blue-600 text-white overflow-hidden">
@@ -205,27 +251,68 @@ const InstituteCard: React.FC<{ institute: Institute; onDelete: () => Promise<vo
                         )}
                     </div>
                     
-                    <button 
-                        onClick={handleDeleteClick}
-                        disabled={isDeleting}
-                        className="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Delete Institute"
-                    >
-                         {isDeleting ? (
-                             <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    <div className="relative" ref={menuRef}>
+                        <button 
+                            onClick={() => setIsMenuOpen(!isMenuOpen)}
+                            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                        >
+                             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
                              </svg>
-                         ) : (
-                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                             </svg>
-                         )}
-                    </button>
+                        </button>
+
+                        {isMenuOpen && (
+                            <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-100 dark:border-gray-800 z-10 overflow-hidden">
+                                <button
+                                    onClick={handleToggleClick}
+                                    disabled={isToggling}
+                                    className="w-full text-left px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-2"
+                                >
+                                    {isToggling ? (
+                                        <div className="w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin"></div>
+                                    ) : (
+                                        (institute.isActive ?? true) ? (
+                                             <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                             </svg>
+                                        ) : (
+                                            <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                        )
+                                    )}
+                                    {(institute.isActive ?? true) ? "Deactivate" : "Activate"}
+                                </button>
+                                <button
+                                    onClick={handleDeleteClick}
+                                    disabled={isDeleting}
+                                    className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors flex items-center gap-2 border-t border-gray-100 dark:border-gray-800"
+                                >
+                                     {isDeleting ? (
+                                        <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                                    ) : (
+                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                         </svg>
+                                    )}
+                                    Delete Institute
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
-                <h3 className="mb-1 text-lg font-semibold text-gray-800 dark:text-white">
-                    {institute.name}
-                </h3>
+                <div className="flex items-center gap-2 mb-1">
+                    <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
+                        {institute.name}
+                    </h3>
+                    <span className={`px-2 py-0.5 text-[10px] font-bold rounded ${
+                        (institute.isActive ?? true) 
+                            ? "bg-green-500/10 text-green-500" 
+                            : "bg-red-500/10 text-red-500"
+                    }`}>
+                        {(institute.isActive ?? true) ? "ACTIVE" : "INACTIVE"}
+                    </span>
+                </div>
                 <p className="mb-6 text-sm text-gray-500 dark:text-gray-400 line-clamp-2">
                     {institute.description}
                 </p>

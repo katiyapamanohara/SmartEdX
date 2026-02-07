@@ -25,6 +25,7 @@ function InstituteCustomizeContent() {
   const [country, setCountry] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [primaryUseCases, setPrimaryUseCases] = useState<string[]>([]);
+  const [isActive, setIsActive] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
   const [isLoading, setIsLoading] = useState(true);
@@ -62,6 +63,7 @@ function InstituteCustomizeContent() {
         setReferralSource(data.referralSource || "");
         setCountry(data.country || "");
         setPhoneNumber(data.phoneNumber || "");
+        setIsActive(data.isActive ?? true);
         try {
           const useCases = data.primaryUseCases ? JSON.parse(data.primaryUseCases) : [];
           setPrimaryUseCases(Array.isArray(useCases) ? useCases : []);
@@ -575,7 +577,13 @@ function InstituteCustomizeContent() {
               </div>
               <div>
                 <h3 className="font-bold text-gray-800 dark:text-white line-clamp-1">{name}</h3>
-                <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-green-500/10 text-green-500">ACTIVE</span>
+                <span className={`px-2 py-0.5 text-[10px] font-bold rounded ${
+                  isActive 
+                    ? "bg-green-500/10 text-green-500" 
+                    : "bg-red-500/10 text-red-500"
+                }`}>
+                  {isActive ? "ACTIVE" : "INACTIVE"}
+                </span>
               </div>
             </div>
 
