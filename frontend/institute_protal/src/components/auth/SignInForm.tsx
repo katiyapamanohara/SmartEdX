@@ -23,7 +23,7 @@ export default function SignInForm() {
       const idToken = await user.getIdToken();
 
       // Call backend to verify and get JWT
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5002'}/api/auth/firebase/login`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL }`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
