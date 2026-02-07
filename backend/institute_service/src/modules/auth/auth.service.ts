@@ -177,15 +177,25 @@ export class AuthService {
       }
 
       if (!user.isActive) {
-        throw new UnauthorizedException('Account is deactivated');
-      }
+      throw new UnauthorizedException('Account is deactivated');
+    }
 
-      // Generate JWT token
-      const payload: JwtPayload = {
-        sub: user.id,
-        email: user.email,
-        role: user.role?.name || 'student',
-      };
+    // Check if the institute is active
+    const institute = await this.instituteRepository.findById(user.instituteId);
+    if (!institute) {
+      throw new UnauthorizedException('Institute not found');
+    }
+    
+    if (!institute.isActive) {
+      throw new UnauthorizedException('Institute is inactive. Please contact support.');
+    }
+
+    // Generate JWT token
+    const payload: JwtPayload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role?.name || 'student',
+    };
 
       const token = this.generateToken(payload);
 
