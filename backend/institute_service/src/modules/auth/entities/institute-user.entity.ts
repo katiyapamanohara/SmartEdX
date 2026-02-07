@@ -8,6 +8,7 @@ import {
   JoinColumn,
   Index,
 } from 'typeorm';
+
 import { Institute } from './institute.entity';
 import { InstituteRole } from './institute-role.entity';
 
@@ -16,10 +17,6 @@ import { InstituteRole } from './institute-role.entity';
 export class InstituteUser {
   @PrimaryGeneratedColumn('uuid')
   id: string;
-
-
-
-
 
   @Column({ nullable: true })
   firstName: string;
