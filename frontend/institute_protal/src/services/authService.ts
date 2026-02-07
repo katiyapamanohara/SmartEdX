@@ -119,7 +119,8 @@ class AuthService {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to authenticate with backend");
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to authenticate with backend");
       }
 
       const data: AuthResponse = await response.json();

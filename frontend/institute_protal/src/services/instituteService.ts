@@ -24,7 +24,10 @@ class InstituteService {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to fetch institute details");
+        // If any error occurs (4xx or 5xx), sign out the user
+        console.error(`Institute fetch failed with status ${response.status}. Signing out...`);
+        await authService.logout();
+        return null;
       }
 
       return await response.json();
