@@ -5,12 +5,28 @@ import UserDropdown from "@/components/header/UserDropdown";
 import { useSidebar } from "@/context/SidebarContext";
 import Image from "next/image";
 import Link from "next/link";
-import React, { useState ,useEffect,useRef} from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { authService, User } from "@/services/authService";
 
 const AppHeader: React.FC = () => {
   const [isApplicationMenuOpen, setApplicationMenuOpen] = useState(false);
+  const [user, setUser] = useState<User | null>(authService.getUser());
+  const [isLoading, setIsLoading] = useState(true);
 
   const { isMobileOpen, toggleSidebar, toggleMobileSidebar } = useSidebar();
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      setIsLoading(true);
+      try {
+        const userData = await authService.getProfile();
+        setUser(userData);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchUser();
+  }, []);
 
   const handleToggle = () => {
     if (window.innerWidth >= 1024) {
@@ -169,7 +185,7 @@ const AppHeader: React.FC = () => {
             {/* <!-- Notification Menu Area --> */}
           </div>
           {/* <!-- User Area --> */}
-          <UserDropdown /> 
+          <UserDropdown user={user} isLoading={isLoading} />
     
         </div>
       </div>

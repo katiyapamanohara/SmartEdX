@@ -92,6 +92,7 @@ export class AuthService {
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
+          profilePicture: user.profilePicture, // Add profile picture
           role: user.role?.name,
           isNew: false, // Institute users likely considered not 'new' in same sense or we default
           type: isInstituteUser ? 'institute_user' : 'saas_user',
@@ -142,9 +143,37 @@ export class AuthService {
       } else {
         user = await this.instituteUserRepository.findByEmail(email);
       }
-
+      
       if (!user) {
         throw new UnauthorizedException('User not found in this institute');
+      }
+
+      const { name, picture, given_name, family_name } = decodedToken;
+      
+      // Update profile info from Firebase if it has changed or is missing
+      let hasChanges = false;
+      
+      const firstNameFromToken = given_name || (name ? name.split(' ')[0] : '');
+      const lastNameFromToken = family_name || (name ? name.split(' ').slice(1).join(' ') : '');
+
+      if (firstNameFromToken && user.firstName !== firstNameFromToken) {
+        user.firstName = firstNameFromToken;
+        hasChanges = true;
+      }
+      
+      if (lastNameFromToken && user.lastName !== lastNameFromToken) {
+        user.lastName = lastNameFromToken;
+        hasChanges = true;
+      }
+
+      if (picture && user.profilePicture !== picture) {
+        user.profilePicture = picture;
+        hasChanges = true;
+      }
+
+      if (hasChanges) {
+        await this.instituteUserRepository.save(user);
+        this.logger.log(`Updated profile for user ${email} from Firebase token`);
       }
 
       if (!user.isActive) {
@@ -167,6 +196,7 @@ export class AuthService {
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
+          profilePicture: user.profilePicture, // Add profile picture
           role: user.role?.name,
           isNew: false,
           type: 'institute_user',
@@ -347,6 +377,7 @@ export class AuthService {
         
         firstName: iu.firstName,
         lastName: iu.lastName,
+        profilePicture: iu.profilePicture, // Add profile picture
         email: iu.email,
         isActive: iu.isActive, // Use local active state
         role: iu.role,

@@ -4,7 +4,9 @@ import { useSidebar } from "@/context/SidebarContext";
 import AppHeader from "@/layout/AppHeader";
 import AppSidebar from "@/layout/AppSidebar";
 import Backdrop from "@/layout/Backdrop";
-import React from "react";
+import React, { useEffect } from "react";
+import { useParams } from "next/navigation";
+import { authService } from "@/services/authService";
 
 export default function AdminLayout({
   children,
@@ -12,6 +14,14 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
+  const params = useParams();
+  const instituteId = params.instituteId as string;
+
+  useEffect(() => {
+    if (instituteId) {
+      authService.validateInstitute(instituteId);
+    }
+  }, [instituteId]);
 
   // Dynamic class for main content margin based on sidebar state
   const mainContentMargin = isMobileOpen

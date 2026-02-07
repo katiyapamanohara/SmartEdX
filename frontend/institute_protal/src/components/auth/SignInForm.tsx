@@ -6,10 +6,8 @@ import Button from "@/components/ui/button/Button";
 import { ChevronLeftIcon, EyeCloseIcon, EyeIcon } from "@/icons";
 import Link from "next/link";
 import React, { useState } from "react";
-import { signInWithPopup } from "firebase/auth";
-import { auth, googleProvider } from "@/utils/firebase";
 import { useRouter, useParams } from "next/navigation";
-import Cookies from "js-cookie";
+import { authService } from "@/services/authService";
 
 export default function SignInForm() {
   const router = useRouter();
@@ -18,41 +16,19 @@ export default function SignInForm() {
 
   const handleGoogleSignIn = async () => {
     try {
-      googleProvider.setCustomParameters({
-        prompt: "select_account",
-      });
-      const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
-      const idToken = await user.getIdToken();
-
-      // Call backend to verify and get JWT
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL }/api/institutes/auth/firebase/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          idToken,
-          instituteId: Array.isArray(params.instituteId) ? params.instituteId[0] : params.instituteId,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to authenticate with backend');
+      const instituteId = Array.isArray(params.instituteId) ? params.instituteId[0] : params.instituteId;
+      
+      if (!instituteId) {
+        throw new Error("Institute ID is missing");
       }
 
-      const data = await response.json();
-      
-      // Store token (example: in localStorage, ideally in cookies via server action or library)
-      Cookies.set('access_token', data.access_token, { expires: 7, secure: true, sameSite: 'strict' });
-      // Also store in localStorage if needed for client-side access, though cookie is often enough
-      localStorage.setItem('user', JSON.stringify(data.user));
+      const data = await authService.signInWithGoogle(instituteId);
 
       if (data.user.instituteId) {
         router.push(`/${data.user.instituteId}`);
       } else {
-        router.push('/'); // Fallback if no instituteId (shouldn't happen for institute users)
-      } 
+        router.push("/");
+      }
     } catch (err: any) {
       console.error("Google Sign-In Error:", err);
       setError(err.message || "Failed to sign in with Google");

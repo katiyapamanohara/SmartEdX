@@ -3,35 +3,55 @@ import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  
-  // Public routes
-  // Allow /signin (old) or /[instituteId]/signin
-  if (pathname === '/signin' || pathname === '/' || pathname.endsWith('/signin') || pathname.startsWith('/_next') || pathname.startsWith('/favicon.ico')) {
+  const token = request.cookies.get('access_token')?.value;
+
+  // 1. Allow essential public assets and system routes
+  if (
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/favicon.ico') ||
+    pathname.startsWith('/api') ||
+    pathname.startsWith('/images')
+  ) {
     return NextResponse.next();
   }
 
-  const token = request.cookies.get('access_token')?.value;
+  // 2. Extract instituteId if present (matches /:instituteId/...)
+  const pathParts = pathname.split('/');
+  const instituteId = pathParts[1];
+  
+  // A route is "public" if it's the root, a generic signin, or an institute-specific signin
+  const isPublicRoute = 
+    pathname === '/' || 
+    pathname === '/signin' || 
+    pathname.endsWith('/signin');
 
-  // Protect /[instituteId] routes
+  // 3. User is NOT logged in
   if (!token) {
-     const url = request.nextUrl.clone();
-     // Redirect to generic signin if no institute context, or maybe we want to keep them on the current URL but show auth?
-     // For now, let's redirect to a generic signin or keep it simple.
-     // But wait, if they are at /[id]/dashboard and not logged in, we should redirect to /[id]/signin
-     
-     // Extract instituteId from pathname if possible
-     const parts = pathname.split('/');
-     if (parts.length > 1 && parts[1]) {
-        const instituteId = parts[1];
-        // simple check if it looks like an ID
-        if (instituteId !== 'signin' && instituteId !== 'error-404') {
-             url.pathname = `/${instituteId}/signin`;
-             return NextResponse.redirect(url);
-        }
-     }
+    if (isPublicRoute) {
+      return NextResponse.next();
+    }
+    
+    // Redirect to institute-specific signin if we have an institute context in the URL
+    if (instituteId && instituteId !== 'signin' && instituteId !== 'dashboard' && instituteId !== 'error-404') {
+      const url = request.nextUrl.clone();
+      url.pathname = `/${instituteId}/signin`;
+      return NextResponse.redirect(url);
+    }
 
-     url.pathname = '/signin';
-     return NextResponse.redirect(url);
+    // Fallback to generic signin
+    const url = request.nextUrl.clone();
+    url.pathname = '/signin';
+    return NextResponse.redirect(url);
+  }
+
+  // 4. User IS logged in
+  // If they are on a public route or just the institute root, send them to the dashboard
+  if (isPublicRoute || (pathParts.length === 2 && instituteId && instituteId !== 'signin')) {
+    if (instituteId && instituteId !== 'signin' && instituteId !== 'dashboard') {
+      const url = request.nextUrl.clone();
+      url.pathname = `/${instituteId}/dashboard`;
+      return NextResponse.redirect(url);
+    }
   }
 
   return NextResponse.next();
@@ -45,9 +65,7 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - signin (auth page)
-     * - / (landing page if exists, or redirect to signin)
      */
-    '/((?!api|_next/static|_next/image|favicon.ico|signin|$).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
 };

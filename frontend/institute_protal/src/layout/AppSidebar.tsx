@@ -2,8 +2,9 @@
 import React, { useEffect, useRef, useState,useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useParams } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
+import { instituteService, Institute } from "@/services/instituteService";
 import {
   ChevronDownIcon,
   GridIcon,
@@ -31,6 +32,23 @@ const navItems: NavItem[] = [
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const pathname = usePathname();
+  const params = useParams();
+  const instituteId = params.instituteId as string;
+
+  const [institute, setInstitute] = useState<Institute | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchInstitute = async () => {
+      if (instituteId) {
+        setIsLoading(true);
+        const data = await instituteService.getInstituteById(instituteId);
+        setInstitute(data);
+        setIsLoading(false);
+      }
+    };
+    fetchInstitute();
+  }, [instituteId]);
 
   const renderMenuItems = (
     navItems: NavItem[],
@@ -78,14 +96,14 @@ const AppSidebar: React.FC = () => {
           ) : (
             nav.path && (
               <Link
-                href={nav.path}
+                href={nav.path ? `/${instituteId}${nav.path}` : "#"}
                 className={`menu-item group ${
-                  isActive(nav.path) ? "menu-item-active" : "menu-item-inactive"
+                  isActive(`/${instituteId}${nav.path}`) ? "menu-item-active" : "menu-item-inactive"
                 }`}
               >
                 <span
                   className={`${
-                    isActive(nav.path)
+                    isActive(`/${instituteId}${nav.path}`)
                       ? "menu-item-icon-active"
                       : "menu-item-icon-inactive"
                   }`}
@@ -115,9 +133,9 @@ const AppSidebar: React.FC = () => {
                 {nav.subItems.map((subItem) => (
                   <li key={subItem.name}>
                     <Link
-                      href={subItem.path}
+                      href={`/${instituteId}${subItem.path}`}
                       className={`menu-dropdown-item ${
-                        isActive(subItem.path)
+                        isActive(`/${instituteId}${subItem.path}`)
                           ? "menu-dropdown-item-active"
                           : "menu-dropdown-item-inactive"
                       }`}
@@ -127,7 +145,7 @@ const AppSidebar: React.FC = () => {
                         {subItem.new && (
                           <span
                             className={`ml-auto ${
-                              isActive(subItem.path)
+                              isActive(`/${instituteId}${subItem.path}`)
                                 ? "menu-dropdown-badge-active"
                                 : "menu-dropdown-badge-inactive"
                             } menu-dropdown-badge `}
@@ -211,35 +229,44 @@ const AppSidebar: React.FC = () => {
       onMouseLeave={() => setIsHovered(false)}
     >
       <div
-        className={`py-8 flex  ${
+        className={`py-8 flex items-center gap-3 ${
           !isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
         }`}
       >
-        <Link href="/">
-          {isExpanded || isHovered || isMobileOpen ? (
-            <>
-              <Image
-                className="dark:hidden"
-                src="/images/logo/logo.svg"
-                alt="Logo"
-                width={150}
-                height={40}
-              />
-              <Image
-                className="hidden dark:block"
-                src="/images/logo/logo-dark.svg"
-                alt="Logo"
-                width={150}
-                height={40}
-              />
-            </>
+        <Link href={`/${instituteId}/dashboard`} className="flex items-center gap-3 overflow-hidden">
+          {isLoading ? (
+            <div className="flex items-center gap-3 animate-pulse">
+              <div className="w-8 h-8 bg-gray-200 rounded-lg dark:bg-gray-700 flex-shrink-0"></div>
+              {(isExpanded || isHovered || isMobileOpen) && (
+                <div className="w-24 h-4 bg-gray-200 rounded dark:bg-gray-700"></div>
+              )}
+            </div>
           ) : (
-            <Image
-              src="/images/logo/logo-icon.svg"
-              alt="Logo"
-              width={32}
-              height={32}
-            />
+            <>
+              <div className="flex-shrink-0">
+                {institute?.logo ? (
+                  <Image
+                    src={institute.logo}
+                    alt={institute?.name || "Logo"}
+                    width={34}
+                    height={34}
+                    className="rounded-lg object-contain"
+                    unoptimized
+                  />
+                ) : (
+                  <div className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-200 dark:bg-gray-700">
+                    <span className="text-gray-500 dark:text-gray-400 font-bold text-sm">
+                      {institute?.name?.charAt(0).toUpperCase() || "S"}
+                    </span>
+                  </div>
+                )}
+              </div>
+              {(isExpanded || isHovered || isMobileOpen) && (
+                <span className="text-lg font-bold truncate text-gray-800 dark:text-white/90">
+                  {institute?.name || "SmartEdX"}
+                </span>
+              )}
+            </>
           )}
         </Link>
       </div>
