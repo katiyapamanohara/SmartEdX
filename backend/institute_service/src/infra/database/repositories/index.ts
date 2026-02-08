@@ -7,6 +7,7 @@ export * from './base.repository';
 export * from './institute.repository';
 export * from './institute-user.repository';
 export * from './institute-role.repository';
+export * from './teacher.repository';
 
 // Export repositories module
 export * from './repositories.module';

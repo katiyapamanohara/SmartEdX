@@ -14,6 +14,8 @@ import { RepositoriesModule } from '../../infra/database/repositories';
 import { FirebaseModule } from '../../infra/firebase/firebase.module';
 import { MinioModule } from '../../infra/storage/minio.module';
 
+import { InstituteUserController } from './institute-user.controller';
+
 @Module({
   imports: [
     RepositoriesModule,
@@ -31,7 +33,7 @@ import { MinioModule } from '../../infra/storage/minio.module';
       inject: [ConfigService],
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, InstituteUserController],
   providers: [
     AuthService,
     JwtStrategy,

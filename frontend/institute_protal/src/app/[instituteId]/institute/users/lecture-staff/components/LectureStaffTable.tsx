@@ -14,12 +14,14 @@ interface LectureStaffTableProps {
   users: any[];
   onEdit: (user: any) => void;
   onDelete: (userId: string) => void;
+  onToggleStatus?: (userId: string) => void;
 }
 
 const LectureStaffTable: React.FC<LectureStaffTableProps> = ({
   users,
   onEdit,
   onDelete,
+  onToggleStatus,
 }) => {
   return (
     <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
@@ -87,7 +89,7 @@ const LectureStaffTable: React.FC<LectureStaffTableProps> = ({
                           {user.firstName} {user.lastName}
                         </span>
                         <span className="block text-gray-500 text-theme-xs dark:text-gray-400">
-                          {user.role}
+                          {typeof user.role === 'object' ? user.role?.name : user.role}
                         </span>
                       </div>
                     </div>
@@ -96,28 +98,22 @@ const LectureStaffTable: React.FC<LectureStaffTableProps> = ({
                     {user.email}
                   </TableCell>
                   <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
-                    <Badge
-                      size="sm"
-                      color={
-                        user.role === "admin"
-                          ? "error"
-                          : user.role === "teacher"
-                          ? "success"
-                          : "info"
-                      }
-                    >
-                      Active
-                    </Badge>
+                    <label className="inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="sr-only peer"
+                        checked={user.isActive}
+                        onChange={() => onToggleStatus && onToggleStatus(user.id)}
+                      />
+                      <div className="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 dark:peer-focus:ring-brand-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-brand-500"></div>
+                      <span className="ms-3 text-sm font-medium text-gray-900 dark:text-gray-300">
+                        {user.isActive ? "Active" : "Inactive"}
+                      </span>
+                    </label>
                   </TableCell>
                   <TableCell className="px-4 py-3 text-gray-500 text-end text-theme-sm dark:text-gray-400">
                     <div className="flex items-center justify-end gap-2">
-                       <button
-                        onClick={() => onEdit(user)}
-                        className="p-2 text-gray-500 hover:text-primary-600 hover:bg-gray-100 dark:hover:bg-white/10 rounded-full transition-colors"
-                        title="Edit User"
-                      >
-                        <PencilIcon className="w-5 h-5" />
-                      </button>
+                       
                       <button
                         onClick={() => onDelete(user.id)}
                         className="p-2 text-gray-500 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-500/10 rounded-full transition-colors"

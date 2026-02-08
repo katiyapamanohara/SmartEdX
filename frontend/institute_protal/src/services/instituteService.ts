@@ -37,7 +37,39 @@ class InstituteService {
     }
   }
 
-  
+  async getInstituteUsers(instituteId: string, role?: string): Promise<any[]> {
+    const token = authService.getToken();
+    if (!token) return [];
+
+    try {
+      // The backend controller is now at /institutes/:id/users
+      // If role filtering is needed, we should add it to the backend controller query params.
+      // For now, fetching all and filtering on frontend or backend (backend returns all currently).
+      
+      const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/users`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch users: ${response.statusText}`);
+      }
+
+      const users = await response.json();
+      
+      // Optional client-side filtering if backend doesn't support it yet
+      if (role) {
+          return users.filter((u: any) => u.role?.name === role || u.role === role);
+      }
+      return users;
+    } catch (error) {
+      console.error("InstituteService.getInstituteUsers Error:", error);
+      return [];
+    }
+  }
 
   async createInstituteUser(instituteId: string, userData: any): Promise<any> {
     const token = authService.getToken();
@@ -96,6 +128,33 @@ class InstituteService {
     if (!response.ok) {
       throw new Error("Failed to delete user");
     }
+  }
+
+  async toggleInstituteUserStatus(instituteId: string, userId: string): Promise<any> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+
+    const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/users/${userId}/toggle-status`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+        // Log detailed error for debugging
+       console.error(`Toggle status failed: ${response.status} ${response.statusText}`);
+       try {
+           const errorBody = await response.json();
+           console.error("Error body:", errorBody);
+       } catch (e) {
+           console.error("Could not parse error body");
+       }
+      throw new Error("Failed to toggle user status");
+    }
+    
+    return await response.json();
   }
 }
 

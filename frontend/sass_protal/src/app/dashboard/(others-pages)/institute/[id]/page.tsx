@@ -84,10 +84,16 @@ function InstituteCustomizeContent() {
     const fetchRoles = async () => {
       try {
         const roles = await authService.getRoles();
-        setRolesList(roles.filter((r: any) => r.name !== 'admin'));
-        if (roles.length > 0) {
-          const instructorRole = roles.find((r: any) => r.name === 'instructor');
-          setAssignRole(instructorRole?.name || roles[0].name);
+        // Filter roles to only include 'instructor' and 'teacher'
+        const allowedRoles = ['instructor', 'teacher'];
+        const filteredRoles = roles.filter((r: any) => allowedRoles.includes(r.name));
+        
+        setRolesList(filteredRoles);
+        
+        if (filteredRoles.length > 0) {
+          // Default to instructor if available, otherwise first available
+          const instructorRole = filteredRoles.find((r: any) => r.name === 'instructor');
+          setAssignRole(instructorRole?.name || filteredRoles[0].name);
         }
       } catch (error) {
         console.error("Error fetching roles:", error);
@@ -102,7 +108,14 @@ function InstituteCustomizeContent() {
     try {
       setIsUsersLoading(true);
       const users = await authService.getInstituteUsers(instituteId);
-      setAssignedUsers(Array.isArray(users) ? users : []);
+      
+      // Filter users to only show those with allowed roles
+      const allowedRoles = ['instructor', 'teacher'];
+      const filteredUsers = Array.isArray(users) 
+        ? users.filter((u: any) => u.role?.name && allowedRoles.includes(u.role.name))
+        : [];
+        
+      setAssignedUsers(filteredUsers);
     } catch (error) {
       console.error("Error fetching institute users:", error);
     } finally {

@@ -10,6 +10,7 @@ import { Teacher } from '../../../modules/auth/entities/teacher.entity';
 import { InstituteRepository } from './institute.repository';
 import { InstituteUserRepository } from './institute-user.repository';
 import { InstituteRoleRepository } from './institute-role.repository';
+import { TeacherRepository } from './teacher.repository';
 
 /**
  * Repositories Module
@@ -17,7 +18,7 @@ import { InstituteRoleRepository } from './institute-role.repository';
  */
 @Module({
   imports: [TypeOrmModule.forFeature([Institute, InstituteUser, InstituteRole, Student, Teacher])],
-  providers: [InstituteRepository, InstituteUserRepository, InstituteRoleRepository],
-  exports: [InstituteRepository, InstituteUserRepository, InstituteRoleRepository],
+  providers: [InstituteRepository, InstituteUserRepository, InstituteRoleRepository, TeacherRepository],
+  exports: [InstituteRepository, InstituteUserRepository, InstituteRoleRepository, TeacherRepository],
 })
 export class RepositoriesModule {}

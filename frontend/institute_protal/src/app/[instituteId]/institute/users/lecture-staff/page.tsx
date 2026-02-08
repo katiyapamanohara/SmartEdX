@@ -67,6 +67,18 @@ const LectureStaffPage = () => {
     }
   };
 
+  const handleToggleStatus = async (userId: string) => {
+    try {
+      await instituteService.toggleInstituteUserStatus(instituteId, userId);
+      // Optimistic update or refetch
+      setUsers(users.map(u => u.id === userId ? { ...u, isActive: !u.isActive } : u));
+      fetchUsers(); // To ensure sync
+    } catch (error) {
+      console.error("Failed to toggle status:", error);
+      alert("Failed to update status.");
+    }
+  };
+
   const handleSaveUser = async (userData: any) => {
     try {
       if (selectedUser) {
@@ -126,6 +138,7 @@ const LectureStaffPage = () => {
             users={filteredUsers}
             onEdit={handleEditUser}
             onDelete={handleDeleteUser}
+            onToggleStatus={handleToggleStatus}
           />
         )}
       </div>

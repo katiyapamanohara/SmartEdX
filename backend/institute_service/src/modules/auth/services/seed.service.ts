@@ -10,8 +10,14 @@ export class SeedService {
   ) {}
 
   async seedAdminUsers(): Promise<void> {
-     // Previously seeded global admin users. Now redundant or needs to be adapted for Institute Roles?
-     // For now, doing nothing to allow application start.
-     this.logger.log('Seed service invalid for global users. Skipping.');
+     const roles = ['admin', 'teacher', 'student'];
+     
+     for (const roleName of roles) {
+         const exists = await this.instituteRoleRepository.findByName(roleName);
+         if (!exists) {
+             await this.instituteRoleRepository.create({ name: roleName, description: `Role for ${roleName}` });
+             this.logger.log(`Seeded role: ${roleName}`);
+         }
+     }
   }
 }

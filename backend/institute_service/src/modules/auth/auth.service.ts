@@ -18,7 +18,7 @@ import { CompleteOnboardingDto } from './dto/complete-onboarding.dto';
 import { CreateInstituteDto } from './dto/create-institute.dto';
 import { UpdateInstituteDto } from './dto/update-institute.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
-import { InstituteRepository, InstituteUserRepository, InstituteRoleRepository } from '../../infra/database/repositories';
+import { InstituteRepository, InstituteUserRepository, InstituteRoleRepository, TeacherRepository } from '../../infra/database/repositories';
 import { AssignUserDto } from './dto/assign-user.dto';
 import { MinioService } from '../../infra/storage/minio.service';
 
@@ -30,6 +30,7 @@ export class AuthService {
     private readonly instituteRoleRepository: InstituteRoleRepository,
     private readonly instituteRepository: InstituteRepository,
     private readonly instituteUserRepository: InstituteUserRepository,
+    private readonly teacherRepository: TeacherRepository,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly minioService: MinioService,
@@ -312,7 +313,10 @@ export class AuthService {
   }
 
   async getRoles() {
-    return this.instituteRoleRepository.findAll();
+    const roles = await this.instituteRoleRepository.findAll();
+    // Filter roles to only include 'instructor' and 'teacher'
+    const allowedRoles = ['instructor', 'teacher'];
+    return roles.filter(role => allowedRoles.includes(role.name));
   }
 
   async assignUserToInstitute(instituteId: string, assignUserDto: AssignUserDto) {
@@ -395,7 +399,11 @@ export class AuthService {
     const instituteUsers = await this.instituteUserRepository.findByInstituteId(instituteId);
     
     // Map to a cleaner format for the frontend
-    return instituteUsers.map(iu => {
+    // Filter users to only show those with allowed roles
+    const allowedRoles = ['instructor', 'teacher'];
+    return instituteUsers
+      .filter(iu => iu.role?.name && allowedRoles.includes(iu.role.name))
+      .map(iu => {
       // Prioritize InstituteUser fields (new decoupled model), fallback to User fields (legacy/linked model)
       return {
         id: iu.id, // Always use InstituteUser ID for management actions
@@ -439,5 +447,73 @@ export class AuthService {
     // Toggle status locally on InstituteUser
     instituteUser.isActive = !instituteUser.isActive;
     return this.instituteUserRepository.save(instituteUser);
+  }
+
+  async createInstituteUser(instituteId: string, createDto: any) {
+    const { email, password, firstName, lastName, role } = createDto;
+
+    // Check if user already exists in this institute
+    const existingUser = await this.instituteUserRepository.findByEmailAndInstituteId(email, instituteId);
+    if (existingUser) {
+      throw new ConflictException('User with this email already exists in this institute');
+    }
+
+    const roleEntity = await this.instituteRoleRepository.findByName(role);
+    if (!roleEntity) {
+      throw new NotFoundException(`Role ${role} not found`);
+    }
+
+    const defaultPassword = 'User@123';
+    const hashedPassword = await bcrypt.hash(password || defaultPassword, 10);
+
+    const newUser = await this.instituteUserRepository.create({
+      instituteId,
+      roleId: roleEntity.id,
+      email,
+      password: hashedPassword,
+      firstName: firstName || 'Lecture',
+      lastName: lastName || 'Staff',
+      isActive: true,
+    });
+
+    if (role === 'teacher') {
+        const teacher = await this.teacherRepository.create({
+            userId: newUser.id,
+            instituteId: instituteId,
+            // Initialize with defaults or leave empty
+            designation: 'Lecture Staff',
+            joiningDate: new Date(),
+        });
+        this.logger.log(`Created teacher record for user ${newUser.id}`);
+    }
+
+    return newUser;
+  }
+
+  async updateInstituteUser(instituteId: string, userId: string, updateDto: any) {
+    const user = await this.instituteUserRepository.findById(userId);
+
+    if (!user || user.instituteId !== instituteId) {
+      throw new NotFoundException('User not found in this institute');
+    }
+
+    if (updateDto.firstName) user.firstName = updateDto.firstName;
+    if (updateDto.lastName) user.lastName = updateDto.lastName;
+    if (updateDto.email) user.email = updateDto.email;
+    
+    if (updateDto.password) {
+      user.password = await bcrypt.hash(updateDto.password, 10);
+    }
+
+    if (updateDto.role) {
+      const roleEntity = await this.instituteRoleRepository.findByName(updateDto.role);
+      if (!roleEntity) {
+        throw new NotFoundException(`Role ${updateDto.role} not found`);
+      }
+      user.role = roleEntity;
+      user.roleId = roleEntity.id;
+    }
+
+    return await this.instituteUserRepository.save(user);
   }
 }
