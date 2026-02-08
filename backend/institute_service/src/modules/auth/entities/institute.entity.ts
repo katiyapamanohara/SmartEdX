@@ -51,10 +51,8 @@ export class Institute {
   @Column({ default: true })
   isActive: boolean;
 
-
-
-@Column({ type: 'uuid', nullable: true })
-  ownerId: string | null
+  @Column({ type: 'uuid', nullable: true })
+  ownerId: string | null;
 
   @CreateDateColumn()
   createdAt: Date;

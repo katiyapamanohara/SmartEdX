@@ -8,8 +8,10 @@ import { instituteService, Institute } from "@/services/instituteService";
 import {
   ChevronDownIcon,
   GridIcon,
+  DocsIcon,
   HorizontaLDots,
   UserIcon,
+  DollarLineIcon,
 } from "../../icons/index";
 
 type NavItem = {
@@ -26,12 +28,23 @@ const navItems: NavItem[] = [
     path: "/",
   },
   {
+    icon: <DocsIcon />,
+    name: "Courses",
+    path: "/institute/courses",
+  },
+  {
     icon: <UserIcon />,
     name: "User Management",
     subItems: [
       { name: "Lecture Staff", path: "/institute/users/lecture-staff" },
       { name: "Students", path: "/institute/users/students" },
     ],
+  },
+ 
+  {
+    icon: <DollarLineIcon />,
+    name: "Finance",
+    path: "/institute/finance",
   },
 ];
 

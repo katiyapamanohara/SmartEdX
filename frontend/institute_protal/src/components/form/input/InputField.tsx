@@ -6,6 +6,7 @@ interface InputProps {
   name?: string;
   placeholder?: string;
   defaultValue?: string | number;
+  value?: string | number;
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   className?: string;
   min?: string;
@@ -15,6 +16,8 @@ interface InputProps {
   success?: boolean;
   error?: boolean;
   hint?: string; // Optional hint text
+  startIcon?: React.ReactNode;
+  endIcon?: React.ReactNode;
 }
 
 const Input: FC<InputProps> = ({
@@ -23,6 +26,7 @@ const Input: FC<InputProps> = ({
   name,
   placeholder,
   defaultValue,
+  value,
   onChange,
   className = "",
   min,
@@ -32,9 +36,13 @@ const Input: FC<InputProps> = ({
   success = false,
   error = false,
   hint,
+  startIcon,
+  endIcon,
 }) => {
   // Determine input styles based on state (disabled, success, error)
-  let inputClasses = `h-11 w-full rounded-lg border appearance-none px-4 py-2.5 text-sm shadow-theme-xs placeholder:text-gray-400 focus:outline-hidden focus:ring-3 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800 ${className}`;
+  let inputClasses = `h-11 w-full rounded-lg border appearance-none py-2.5 text-sm shadow-theme-xs placeholder:text-gray-400 focus:outline-hidden focus:ring-3 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800 ${
+    startIcon ? "pl-11" : "pl-4"
+  } ${endIcon ? "pr-11" : "pr-4"} ${className}`;
 
   // Add styles for the different states
   if (disabled) {
@@ -49,12 +57,18 @@ const Input: FC<InputProps> = ({
 
   return (
     <div className="relative">
+      {startIcon && (
+        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">
+          {startIcon}
+        </div>
+      )}
       <input
         type={type}
         id={id}
         name={name}
         placeholder={placeholder}
         defaultValue={defaultValue}
+        value={value}
         onChange={onChange}
         min={min}
         max={max}
@@ -62,6 +76,11 @@ const Input: FC<InputProps> = ({
         disabled={disabled}
         className={inputClasses}
       />
+      {endIcon && (
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">
+          {endIcon}
+        </div>
+      )}
 
       {/* Optional Hint Text */}
       {hint && (

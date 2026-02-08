@@ -26,7 +26,7 @@ class InstituteService {
       if (!response.ok) {
         // If any error occurs (4xx or 5xx), sign out the user
         console.error(`Institute fetch failed with status ${response.status}. Signing out...`);
-        await authService.logout();
+        // await authService.logout(); // Commenting out auto-logout to prevent disruptions during dev
         return null;
       }
 
@@ -34,6 +34,67 @@ class InstituteService {
     } catch (error) {
       console.error("InstituteService.getInstituteById Error:", error);
       return null;
+    }
+  }
+
+  
+
+  async createInstituteUser(instituteId: string, userData: any): Promise<any> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+
+    const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/users`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(userData),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || "Failed to create user");
+    }
+
+    return await response.json();
+  }
+
+  async updateInstituteUser(instituteId: string, userId: string, userData: any): Promise<any> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+
+    const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/users/${userId}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(userData),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || "Failed to update user");
+    }
+
+    return await response.json();
+  }
+
+  async deleteInstituteUser(instituteId: string, userId: string): Promise<void> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+
+    const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/users/${userId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to delete user");
     }
   }
 }
