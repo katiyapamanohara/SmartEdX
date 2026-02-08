@@ -471,8 +471,8 @@ export class AuthService {
       roleId: roleEntity.id,
       email,
       password: hashedPassword,
-      firstName: firstName || 'Lecture',
-      lastName: lastName || 'Staff',
+      firstName: firstName || 'Pending',
+      lastName: lastName || 'authentication',
       isActive: true,
     });
 

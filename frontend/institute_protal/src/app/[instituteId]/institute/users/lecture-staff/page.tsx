@@ -56,14 +56,12 @@ const LectureStaffPage = () => {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (confirm("Are you sure you want to delete this staff member?")) {
-      try {
-        await instituteService.deleteInstituteUser(instituteId, userId);
-        fetchUsers();
-      } catch (error) {
-        console.error("Failed to delete user:", error);
-        alert("Failed to delete user. Please try again.");
-      }
+    try {
+      await instituteService.deleteInstituteUser(instituteId, userId);
+      fetchUsers();
+    } catch (error) {
+      console.error("Failed to delete user:", error);
+      alert("Failed to delete user. Please try again.");
     }
   };
 
@@ -131,16 +129,13 @@ const LectureStaffPage = () => {
       </div>
 
       <div className="bg-white rounded-xl shadow-xs border border-gray-100 dark:border-gray-700 dark:bg-gray-800 overflow-hidden">
-        {loading ? (
-          <div className="p-6 text-center text-gray-500">Loading...</div>
-        ) : (
           <LectureStaffTable
             users={filteredUsers}
+            loading={loading}
             onEdit={handleEditUser}
             onDelete={handleDeleteUser}
             onToggleStatus={handleToggleStatus}
           />
-        )}
       </div>
 
       <AddEditUserModal
