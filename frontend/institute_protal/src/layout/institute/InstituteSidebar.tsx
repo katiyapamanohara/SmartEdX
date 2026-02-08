@@ -9,6 +9,7 @@ import {
   ChevronDownIcon,
   GridIcon,
   HorizontaLDots,
+  UserIcon,
 } from "../../icons/index";
 
 type NavItem = {
@@ -19,12 +20,19 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
- {
+  {
     icon: <GridIcon />,
     name: "Dashboard",
     path: "/",
   },
-
+  {
+    icon: <UserIcon />,
+    name: "User Management",
+    subItems: [
+      { name: "Lecture Staff", path: "/institute/users/lecture-staff" },
+      { name: "Students", path: "/institute/users/students" },
+    ],
+  },
 ];
 
 
