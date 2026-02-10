@@ -7,6 +7,21 @@ export interface Institute {
   // Add other fields as needed
 }
 
+export interface Course {
+  id: string;
+  name: string;
+  code: string;
+  coverImage?: string;
+  batchNumber: string;
+  description?: string;
+  assignedTeacher?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+}
+
 class InstituteService {
   private readonly apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
@@ -27,7 +42,7 @@ class InstituteService {
         // If any error occurs (4xx or 5xx), sign out the user
         console.error(`Institute fetch failed with status ${response.status}. Signing out...`);
         await authService.logout(); // Commenting out auto-logout to prevent disruptions during dev
-        return null;bu
+        return null;
       }
 
       return await response.json();
@@ -174,6 +189,90 @@ class InstituteService {
     }
     
     return await response.json();
+  }
+
+  // Course Management Methods
+  async getCourses(instituteId: string): Promise<Course[]> {
+    const token = authService.getToken();
+    if (!token) return [];
+
+    try {
+      const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch courses: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("InstituteService.getCourses Error:", error);
+      return [];
+    }
+  }
+
+  async createCourse(instituteId: string, courseData: any): Promise<Course> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+
+    const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(courseData),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || "Failed to create course");
+    }
+
+    return await response.json();
+  }
+
+  async updateCourse(instituteId: string, courseId: string, courseData: any): Promise<Course> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+
+    const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/${courseId}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(courseData),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || "Failed to update course");
+    }
+
+    return await response.json();
+  }
+
+  async deleteCourse(instituteId: string, courseId: string): Promise<void> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+
+    const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/${courseId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to delete course");
+    }
   }
 }
 
