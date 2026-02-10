@@ -5,7 +5,7 @@ import { instituteService } from "@/services/instituteService";
 import Button from "@/components/ui/button/Button";
 import InputField from "@/components/form/input/InputField";
 import LectureStaffTable from "./components/LectureStaffTable";
-import AddEditUserModal from "./components/AddEditUserModal";
+import TeacherDetailsModal from "./components/TeacherDetailsModal";
 import { PlusIcon, UserIcon } from "@/icons"; // Using UserIcon as temporary placeholder if SearchIcon doesn't exist
 
 const LectureStaffPage = () => {
@@ -98,6 +98,29 @@ const LectureStaffPage = () => {
     }
   };
 
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [teacherDetails, setTeacherDetails] = useState<any | null>(null);
+
+  const handleViewUser = async (userId: string) => {
+    setIsDetailsModalOpen(true);
+    setDetailsLoading(true);
+    try {
+        const details = await instituteService.getTeacherDetails(instituteId, userId);
+        setTeacherDetails(details);
+    } catch (error) {
+        console.error("Failed to fetch teacher details", error);
+        alert("Failed to load details");
+        setIsDetailsModalOpen(false); // Close on error? or show error state in modal?
+    } finally {
+        setDetailsLoading(false);
+    }
+  };
+
+  const handleCloseDetailsModal = () => {
+    setIsDetailsModalOpen(false);
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-4">
@@ -135,14 +158,17 @@ const LectureStaffPage = () => {
             onEdit={handleEditUser}
             onDelete={handleDeleteUser}
             onToggleStatus={handleToggleStatus}
+            onView={handleViewUser}
           />
       </div>
 
-      <AddEditUserModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSave={handleSaveUser}
-        user={selectedUser}
+      
+      
+      <TeacherDetailsModal
+        isOpen={isDetailsModalOpen}
+        onClose={handleCloseDetailsModal}
+        teacher={teacherDetails}
+        loading={detailsLoading}
       />
     </div>
   );

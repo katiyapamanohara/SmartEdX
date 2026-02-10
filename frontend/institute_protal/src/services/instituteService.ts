@@ -26,8 +26,8 @@ class InstituteService {
       if (!response.ok) {
         // If any error occurs (4xx or 5xx), sign out the user
         console.error(`Institute fetch failed with status ${response.status}. Signing out...`);
-        // await authService.logout(); // Commenting out auto-logout to prevent disruptions during dev
-        return null;
+        await authService.logout(); // Commenting out auto-logout to prevent disruptions during dev
+        return null;bu
       }
 
       return await response.json();
@@ -128,6 +128,25 @@ class InstituteService {
     if (!response.ok) {
       throw new Error("Failed to delete user");
     }
+  }
+
+  async getTeacherDetails(instituteId: string, userId: string): Promise<any> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+
+    const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/users/${userId}/details`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+        throw new Error("Failed to fetch teacher details");
+    }
+    
+    return await response.json();
   }
 
   async toggleInstituteUserStatus(instituteId: string, userId: string): Promise<any> {

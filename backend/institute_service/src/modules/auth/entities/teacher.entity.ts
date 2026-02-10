@@ -17,9 +17,6 @@ export class Teacher {
   id: string;
 
   @Column({ nullable: true })
-  employeeId: string;
-
-  @Column({ nullable: true })
   qualification: string;
 
   @Column({ nullable: true })

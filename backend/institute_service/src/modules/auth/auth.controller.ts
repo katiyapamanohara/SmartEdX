@@ -200,6 +200,8 @@ export class AuthController {
     return this.authService.toggleInstituteUserStatus(id, userId);
   }
 
+
+
   @UseGuards(JwtAuthGuard)
   @Post('institutes/:id/logo')
   @ApiBearerAuth('JWT-auth')

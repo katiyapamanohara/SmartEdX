@@ -516,4 +516,50 @@ export class AuthService {
 
     return await this.instituteUserRepository.save(user);
   }
+  async getTeacherDetails(instituteId: string, userId: string) {
+    const teacher = await this.teacherRepository.findOne({
+      where: { userId, instituteId },
+      relations: ['user', 'user.role'],
+    });
+
+    if (!teacher) {
+        // Fallback: If no teacher record exists but user is valid, return basic user info
+        const user = await this.instituteUserRepository.findOne({ where: { id: userId, instituteId }, relations: ['role'] });
+        if (!user) {
+             throw new NotFoundException('Teacher not found');
+        }
+        return {
+            id: user.id,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            email: user.email,
+            profilePicture: user.profilePicture,
+            role: user.role?.name,
+            isActive: user.isActive,
+            // Teacher specific fields null
+            qualification: null,
+            experience: null,
+            joiningDate: null,
+            designation: null,
+            department: null,
+             employeeId: null
+        };
+    }
+
+    return {
+      id: teacher.user.id,
+      firstName: teacher.user.firstName,
+      lastName: teacher.user.lastName,
+      email: teacher.user.email,
+      profilePicture: teacher.user.profilePicture,
+      role: teacher.user.role?.name,
+      isActive: teacher.user.isActive,
+      qualification: teacher.qualification,
+      experience: teacher.experience,
+      joiningDate: teacher.joiningDate,
+      designation: teacher.designation,
+      department: teacher.department,
+   
+    };
+  }
 }

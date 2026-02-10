@@ -6,15 +6,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import Badge from "@/components/ui/badge/Badge";
 import Image from "next/image";
-import { PencilIcon, TrashBinIcon } from "@/icons";
+import {  TrashBinIcon, EyeIcon } from "@/icons";
 
 interface LectureStaffTableProps {
   users: any[];
   onEdit: (user: any) => void;
   onDelete: (userId: string) => Promise<void> | void;
   onToggleStatus?: (userId: string) => Promise<void> | void;
+  onView?: (userId: string) => void;
   loading?: boolean;
 }
 
@@ -23,6 +23,7 @@ const LectureStaffTable: React.FC<LectureStaffTableProps> = ({
   onEdit,
   onDelete,
   onToggleStatus,
+  onView,
   loading,
 }) => {
   const [actionLoading, setActionLoading] = React.useState<{ [key: string]: string | null }>({});
@@ -114,7 +115,15 @@ const LectureStaffTable: React.FC<LectureStaffTableProps> = ({
                   </TableCell>
                   <TableCell className="px-4 py-3 text-gray-500 text-end text-theme-sm dark:text-gray-400">
                     <div className="flex items-center justify-end gap-2">
-                  
+                       <button
+                        onClick={() => onView && onView(user.id)}
+                        className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 rounded-full transition-colors"
+                        title="View Details"
+                        // disabled={!!actionLoading[user.id]} // Viewing usually doesn't need to block on other actions, or maybe it should? Let's leave enabled.
+                      >
+                        <EyeIcon className="w-5 h-5" />
+                      </button>
+                     
                       <button
                         onClick={() => handleDeleteUserWrapper(user.id)}
                         className={`p-2 text-gray-500 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-500/10 rounded-full transition-colors ${actionLoading[user.id] === 'delete' ? 'opacity-50 cursor-not-allowed' : ''}`}

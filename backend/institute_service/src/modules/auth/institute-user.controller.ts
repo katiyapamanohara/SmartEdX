@@ -64,4 +64,16 @@ export class InstituteUserController {
   ) {
     return this.authService.toggleInstituteUserStatus(instituteId, userId);
   }
+
+  @Get(':userId/details')
+  @ApiOperation({ summary: 'Get teacher/user details' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiParam({ name: 'userId', description: 'User ID' })
+  @ApiResponse({ status: 200, description: 'Returns teacher details' })
+  async getTeacherDetails(
+    @Param('id') instituteId: string,
+    @Param('userId') userId: string,
+  ) {
+    return this.authService.getTeacherDetails(instituteId, userId);
+  }
 }
