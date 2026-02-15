@@ -16,6 +16,7 @@ import { TeacherProxyModule } from './modules/teacher-proxy/teacher-proxy.module
       isGlobal: true,
       envFilePath: '.env',
     }),
+    // RedisModule,
     HttpModule,
     AuthProxyModule,
     InstituteProxyModule,

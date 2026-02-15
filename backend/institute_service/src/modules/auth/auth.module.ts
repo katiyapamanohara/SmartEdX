@@ -15,6 +15,8 @@ import { FirebaseModule } from '../../infra/firebase/firebase.module';
 import { MinioModule } from '../../infra/storage/minio.module';
 
 import { InstituteUserController } from './institute-user.controller';
+import { CourseController } from './course.controller';
+import { CourseService } from './course.service';
 
 @Module({
   imports: [
@@ -33,9 +35,10 @@ import { InstituteUserController } from './institute-user.controller';
       inject: [ConfigService],
     }),
   ],
-  controllers: [AuthController, InstituteUserController],
+  controllers: [AuthController, InstituteUserController, CourseController],
   providers: [
     AuthService,
+    CourseService,
     JwtStrategy,
     FirebaseAuthStrategy,
     JwtAuthGuard,
@@ -48,7 +51,6 @@ import { InstituteUserController } from './institute-user.controller';
     JwtAuthGuard,
     FirebaseAuthGuard,
     RolesGuard,
-    SeedService,
   ],
 })
 export class AuthModule implements OnModuleInit {

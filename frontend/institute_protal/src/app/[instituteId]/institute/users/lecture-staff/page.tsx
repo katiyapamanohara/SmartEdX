@@ -6,6 +6,7 @@ import Button from "@/components/ui/button/Button";
 import InputField from "@/components/form/input/InputField";
 import LectureStaffTable from "./components/LectureStaffTable";
 import TeacherDetailsModal from "./components/TeacherDetailsModal";
+import AddTeacherModal from "./components/AddTeacherModal";
 import { PlusIcon, UserIcon } from "@/icons"; // Using UserIcon as temporary placeholder if SearchIcon doesn't exist
 
 const LectureStaffPage = () => {
@@ -162,7 +163,12 @@ const LectureStaffPage = () => {
           />
       </div>
 
-      
+      <AddTeacherModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleSaveUser}
+        initialData={selectedUser}
+      />
       
       <TeacherDetailsModal
         isOpen={isDetailsModalOpen}

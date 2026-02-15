@@ -7,9 +7,12 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
+  ManyToMany,
+  JoinTable,
 } from 'typeorm';
 import { InstituteUser } from './institute-user.entity';
 import { Institute } from './institute.entity';
+import { Course } from './course.entity';
 
 @Entity('teachers')
 export class Teacher {
@@ -44,6 +47,10 @@ export class Teacher {
 
   @Column()
   instituteId: string;
+
+  @ManyToMany(() => Course, (course) => course.teachers)
+  @JoinTable({ name: 'teacher_courses' })
+  courses: Course[];
 
   @CreateDateColumn()
   createdAt: Date;

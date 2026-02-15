@@ -8,6 +8,8 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
+import { Course } from './course.entity';
+
 
 
 @Entity('institutes')
@@ -53,6 +55,9 @@ export class Institute {
 
   @Column({ type: 'uuid', nullable: true })
   ownerId: string | null;
+
+  @OneToMany(() => Course, (course) => course.institute)
+  courses: Course[];
 
   @CreateDateColumn()
   createdAt: Date;

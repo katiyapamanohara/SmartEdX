@@ -484,6 +484,7 @@ export class AuthService {
             designation: 'Lecture Staff',
             joiningDate: new Date(),
         });
+        await this.teacherRepository.save(teacher);
         this.logger.log(`Created teacher record for user ${newUser.id}`);
     }
 

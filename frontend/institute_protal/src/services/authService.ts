@@ -35,7 +35,7 @@ export interface User {
   firstName: string;
   lastName: string;
   role: string; // Role name as string (e.g., "student", "instructor", "teacher")
-  profilePicture?: string;
+  profilePicture: string;
   isNew: boolean;
   type: string; // e.g., "institute_user"
   instituteId: string;
