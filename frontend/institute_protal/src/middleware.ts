@@ -64,9 +64,30 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Extract role from JWT token payload (primary source)
+  // Extract role and instituteId from JWT token payload (primary source)
   const decoded = decodeToken(token);
   const userRole = decoded?.role || request.cookies.get('user_role')?.value;
+  const userInstituteId = decoded?.instituteId;
+
+  // Strict Institute Check: If we are in an institute route, user MUST belong to that institute
+  if (instituteId && instituteId !== 'signin' && instituteId !== 'dashboard' && instituteId !== 'error-404') {
+     if (userInstituteId && userInstituteId !== instituteId) {
+        console.warn(`Middleware: Institute mismatch. User ${userInstituteId} tried to access ${instituteId}`);
+        const url = request.nextUrl.clone();
+        
+        // Redirect to their CORRECT dashboard
+        if (userRole === 'instructor') {
+            url.pathname = `/${userInstituteId}/institute`;
+        } else if (userRole === 'student') {
+            url.pathname = `/${userInstituteId}/student`;
+        } else if (userRole === 'teacher') {
+            url.pathname = `/${userInstituteId}/teacher`;
+        } else {
+             url.pathname = `/${userInstituteId}/dashboard`;
+        }
+        return NextResponse.redirect(url);
+     }
+  }
 
   const roleBasePath = pathParts[2]; 
   

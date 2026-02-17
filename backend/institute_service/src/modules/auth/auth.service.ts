@@ -81,7 +81,7 @@ export class AuthService {
         sub: user.id,
         email: user.email,
         role: user.role?.name || 'student', // Fallback
-        // instituteId: isInstituteUser ? user.instituteId : undefined, // Optional: add context
+        instituteId: user.instituteId,
       };
 
       const token = this.generateToken(payload);
@@ -196,6 +196,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role?.name || 'student',
+      instituteId: user.instituteId,
     };
 
       const token = this.generateToken(payload);

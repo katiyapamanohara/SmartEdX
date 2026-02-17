@@ -486,12 +486,18 @@ export class AuthService {
     // Proceeding with assumption: try to reuse existing InstituteUser if found (globally?) or just for this institute?
     // Let's check if the email exists in `institute_users`.
     
-    let instituteUser = await this.instituteUserRepository.findByEmail(email);
+    // Check if user is already assigned to THIS institute
+    const existingInstituteUser = await this.instituteUserRepository.findOne({
+      where: { email, instituteId },
+      relations: ['role'],
+    });
+
+    if (existingInstituteUser) {
+      throw new ConflictException('User with this email is already assigned to this institute');
+    }
 
     const role = await this.instituteRoleRepository.findByName(roleName);
     if (!role) {
-      // Auto-seed basic roles if not found?
-      // For now, fail if not found, but we need to seed.
       throw new NotFoundException(`Role ${roleName} not found`);
     }
 
@@ -499,35 +505,13 @@ export class AuthService {
     if (!institute) {
       throw new NotFoundException(`Institute with ID ${instituteId} not found`);
     }
-
-    if (instituteUser) {
-        // User exists (somewhere). 
-        // If they are in THIS institute, update role.
-        if (instituteUser.instituteId === instituteId) {
-            instituteUser.role = role;
-            return this.instituteUserRepository.save(instituteUser);
-        } else {
-             // User exists but in DIFFERENT institute.
-             // If we create another record with same email, login fails/ambiguous.
-             // We can either:
-             // A) Block duplicate email.
-             // B) Create new record and accept ambiguity.
-             // C) Link same record to multiple institutes? (Requires ManyToMany or keeping InstituteUser unique and using a junction... which brings us back to User + Junction).
-             
-             // The prompt wanted "separate".
-             // If I create a new one, I support "separate".
-             // I will create a new one. Login will be the first matching one (maybe unpredictable).
-             // Ideally we'd throw Conflict, but for "Decouple", we create new.
-             // Let's create a new one for THIS institute.
-             // NOTE: `instituteUser` variable currently holds the other institute's user. We'll ignore it and create new.
-        }
-    }
     
     // Proceed to create NEW InstituteUser for this institute
     const bcrypt = require('bcrypt'); 
     const hashedPassword = await bcrypt.hash('User@123', 10);
     
-    instituteUser = await this.instituteUserRepository.create({
+    // Declare the variable before use
+    const instituteUser = await this.instituteUserRepository.create({
         instituteId,
         roleId: role.id,
         email,

@@ -26,14 +26,41 @@ export class RedisCacheInterceptor implements NestInterceptor {
   ): Promise<Observable<any>> {
     const request = context.switchToHttp().getRequest();
     const method = request.method;
+    const userId = request.user?.userId || 'public';
+
+    // Invalidate cache for state-changing requests
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      return next.handle().pipe(
+        tap(async () => {
+          try {
+            const pattern = `users:${userId}:*`;
+            const stream = this.redisClient.scanStream({
+              match: pattern,
+            });
+
+            stream.on('data', async (keys: string[]) => {
+              if (keys.length > 0) {
+                await this.redisClient.del(...keys);
+                this.logger.log(`Invalidated cache for keys: ${keys.join(', ')}`);
+              }
+            });
+
+            stream.on('end', () => {
+              this.logger.log(`Cache invalidation complete for pattern: ${pattern}`);
+            });
+          } catch (error) {
+            this.logger.error(`Redis invalidation error: ${error.message}`);
+          }
+        }),
+      );
+    }
 
     // Only cache GET requests
     if (method !== 'GET') {
       return next.handle();
     }
 
-    const userId = request.user?.uid || 'public';
-    const key = `cache:${userId}:${request.url}`;
+    const key = `saas_users:${userId}:${request.url}`;
 
     try {
       const cachedResponse = await this.redisClient.get(key);

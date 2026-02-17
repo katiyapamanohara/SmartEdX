@@ -214,8 +214,20 @@ class AuthService {
 
     if (user.instituteId !== urlInstituteId) {
       console.warn(`Institute mismatch: User is from ${user.instituteId} but tried to access ${urlInstituteId}`);
+      
+      // Determine correct path based on role
+      let redirectPath = `/${user.instituteId}/dashboard`; // Default fallback
+      
+      if (user.role === 'instructor') {
+        redirectPath = `/${user.instituteId}/institute`;
+      } else if (user.role === 'student') {
+        redirectPath = `/${user.instituteId}/student`;
+      } else if (user.role === 'teacher') {
+        redirectPath = `/${user.instituteId}/teacher`;
+      }
+
       // Redirect to their correct dashboard
-      window.location.href = `/${user.instituteId}/dashboard`;
+      window.location.href = redirectPath;
       return false;
     }
     return true;
