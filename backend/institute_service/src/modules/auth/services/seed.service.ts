@@ -10,7 +10,7 @@ export class SeedService {
   ) {}
 
   async seedAdminUsers(): Promise<void> {
-     const roles = ['admin', 'teacher', 'student'];
+     const roles = ['instructor', 'teacher', 'student'];
      
      for (const roleName of roles) {
          const exists = await this.instituteRoleRepository.findByName(roleName);

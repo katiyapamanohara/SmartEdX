@@ -33,7 +33,7 @@ export class RedisCacheInterceptor implements NestInterceptor {
       return next.handle().pipe(
         tap(async () => {
           try {
-            const pattern = `users:${userId}:*`;
+            const pattern = `saas_users:${userId}:*`;
             const stream = this.redisClient.scanStream({
               match: pattern,
             });
@@ -41,12 +41,16 @@ export class RedisCacheInterceptor implements NestInterceptor {
             stream.on('data', async (keys: string[]) => {
               if (keys.length > 0) {
                 await this.redisClient.del(...keys);
-                this.logger.log(`Invalidated cache for keys: ${keys.join(', ')}`);
+                this.logger.log(
+                  `Invalidated cache for keys: ${keys.join(', ')}`,
+                );
               }
             });
 
             stream.on('end', () => {
-              this.logger.log(`Cache invalidation complete for pattern: ${pattern}`);
+              this.logger.log(
+                `Cache invalidation complete for pattern: ${pattern}`,
+              );
             });
           } catch (error) {
             this.logger.error(`Redis invalidation error: ${error.message}`);
