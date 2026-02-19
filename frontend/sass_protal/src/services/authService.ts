@@ -29,23 +29,35 @@ export const authService = {
 
   logout: () => {
     if (typeof window === 'undefined') return;
-    const theme = localStorage.getItem('theme'); // Preserve theme
+    
+    // Preserve theme
+    const theme = localStorage.getItem('theme');
+
+    // Clear all storage
     localStorage.clear();
-    if (theme) localStorage.setItem('theme', theme); // Restore theme
     sessionStorage.clear();
-    // Clear cookies with common probable paths and domains to be safe
+
+    // Restore theme
+    if (theme) {
+      localStorage.setItem('theme', theme);
+    }
+
+    // Clear cookies
     const cookies = document.cookie.split(";");
     for (const cookie of cookies) {
       const eqPos = cookie.indexOf("=");
       const name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
-      document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+      document.cookie = name.trim() + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+      document.cookie = name.trim() + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=" + window.location.hostname;
+      document.cookie = name.trim() + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=." + window.location.hostname;
     }
+    
     window.location.href = '/signin';
   },
 
   login: async (credentials: any) => {
     try {
-      const response = await fetch(`${API_URL}/auth/login`, {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
@@ -77,7 +89,7 @@ export const authService = {
 
       // First try to login
       try {
-        const loginResponse = await fetch(`${API_URL}/auth/firebase/login`, {
+        const loginResponse = await fetch(`${API_URL}/api/auth/firebase/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ idToken }),
@@ -100,7 +112,7 @@ export const authService = {
       const firstName = nameParts[0];
       const lastName = nameParts.slice(1).join(' ') || '';
 
-      const registerResponse = await fetch(`${API_URL}/auth/firebase/register`, {
+      const registerResponse = await fetch(`${API_URL}/api/auth/firebase/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -131,7 +143,7 @@ export const authService = {
 
   register: async (userData: any) => {
     try {
-      const response = await fetch(`${API_URL}/auth/register`, {
+      const response = await fetch(`${API_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData),
@@ -161,7 +173,7 @@ export const authService = {
       // data.authMeta contains the fields we defined in the DTO
       const payload = data.authMeta; 
       
-      const response = await fetch(`${API_URL}/auth/complete-onboarding`, {
+      const response = await fetch(`${API_URL}/api/auth/complete-onboarding`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -194,23 +206,304 @@ export const authService = {
 
   getProfile: async () => {
     try {
+      // Check session storage first
+      if (typeof window !== 'undefined') {
+        const cachedProfile = sessionStorage.getItem('userProfile');
+        if (cachedProfile) {
+          return JSON.parse(cachedProfile);
+        }
+      }
+
       const token = authService.getToken();
-      const response = await fetch(`${API_URL}/auth/me`, {
+
+      if (!token) {
+        throw new Error("No auth token found");
+      }
+
+      const response = await fetch(`${API_URL}/api/auth/profile`, {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      // Read raw text first
+      const responseData = await response.json();
+
+     
+
+      return responseData;
+
+    } catch (error) {
+      console.error('Get profile error:', error);
+      throw error;
+    }
+  },
+
+  getInstitutes: async () => {
+    try {
+      const token = authService.getToken();
+      if (!token) throw new Error("No auth token found");
+
+      const response = await fetch(`${API_URL}/api/auth/institutes`, {
+        method: 'GET',
+        headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch profile');
+        throw new Error('Failed to fetch institutes');
       }
 
       return await response.json();
     } catch (error) {
-      console.error('Get profile error:', error);
+      console.error('Get institutes error:', error);
       throw error;
     }
-  }
+  },
+
+  getInstitute: async (id: string) => {
+    try {
+      const token = authService.getToken();
+      if (!token) throw new Error("No auth token found");
+
+      const response = await fetch(`${API_URL}/api/auth/institutes/${id}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch institute details');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Get institute error:', error);
+      throw error;
+    }
+  },
+
+  createInstitute: async (data: any) => {
+    try {
+      const token = authService.getToken();
+      if (!token) throw new Error("No auth token found");
+
+      const response = await fetch(`${API_URL}/api/auth/institutes`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create institute');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Create institute error:', error);
+      throw error;
+    }
+  },
+
+  uploadInstituteLogo: async (id: string, file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const token = authService.getToken();
+      if (!token) throw new Error("No auth token found");
+
+      const response = await fetch(`${API_URL}/api/auth/institutes/${id}/logo`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to upload logo');
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Upload logo error:', error);
+      throw error;
+    }
+  },
+
+  updateInstitute: async (id: string, data: any) => {
+    try {
+      const token = authService.getToken();
+      if (!token) throw new Error("No auth token found");
+
+      const response = await fetch(`${API_URL}/api/auth/institutes/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update institute');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Update institute error:', error);
+      throw error;
+    }
+  },
+
+  getRoles: async () => {
+    try {
+      const token = authService.getToken();
+      if (!token) throw new Error("No auth token found");
+
+      const response = await fetch(`${API_URL}/api/auth/roles`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch roles');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Get roles error:', error);
+      throw error;
+    }
+  },
+
+  assignUserToInstitute: async (id: string, data: { email: string; roleName: string }) => {
+    try {
+      const token = authService.getToken();
+      if (!token) throw new Error("No auth token found");
+
+      const response = await fetch(`${API_URL}/api/auth/institutes/${id}/assign-user`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to assign user');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Assign user error:', error);
+      throw error;
+    }
+  },
+
+  getInstituteUsers: async (id: string) => {
+    try {
+      const token = authService.getToken();
+      if (!token) throw new Error("No auth token found");
+
+      const response = await fetch(`${API_URL}/api/auth/institutes/${id}/users`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch institute users');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Get institute users error:', error);
+      throw error;
+    }
+  },
+
+  deleteInstituteUser: async (instituteId: string, userId: string) => {
+    try {
+      const token = authService.getToken();
+      if (!token) throw new Error("No auth token found");
+
+      const response = await fetch(`${API_URL}/api/auth/institutes/${instituteId}/users/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to delete user');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Delete user error:', error);
+      throw error;
+    }
+  },
+
+  toggleInstituteUserStatus: async (instituteId: string, userId: string) => {
+    try {
+      const token = authService.getToken();
+      if (!token) throw new Error("No auth token found");
+
+      const response = await fetch(`${API_URL}/api/auth/institutes/${instituteId}/users/${userId}/toggle-status`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to toggle user status');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Toggle status error:', error);
+      throw error;
+    }
+  },
+
+  deleteInstitute: async (id: string) => {
+    try {
+      const token = authService.getToken();
+      if (!token) throw new Error("No auth token found");
+
+      const response = await fetch(`${API_URL}/api/auth/institutes/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete institute');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Delete institute error:', error);
+      throw error;
+    }
+  },
+
 };

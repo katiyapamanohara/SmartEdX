@@ -25,5 +25,16 @@ services:
       exit 0;
       "
 
+  redis:
+    image: redis:alpine 
+    command: redis-server --maxmemory 100mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    mem_limit: 128m
+    cpus: 0.25  
+
 volumes:
   minio_data:
+  redis_data:
