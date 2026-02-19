@@ -65,10 +65,14 @@ export class RedisCacheInterceptor implements NestInterceptor {
       return next.handle();
     }
 
-    const instituteId = request.params?.id;
+    const instituteId = request.user?.instituteId;
     const role = request.user?.role;
 
-    if (!instituteId || !role) {
+    this.logger.debug(
+      `Cache Interceptor: instituteId=${instituteId}, userId=${userId}, role=${role}, url=${request.url}`,
+    );
+
+    if (!instituteId) {
       return next.handle();
     }
     const key = `Institute_users:${instituteId}:${userId}:${role}:${request.url}`;
