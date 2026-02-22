@@ -227,10 +227,12 @@ export const authService = {
         },
       });
 
+      if (!response.ok) {
+        throw new Error('Failed to fetch profile');
+      }
+
       // Read raw text first
       const responseData = await response.json();
-
-     
 
       return responseData;
 
