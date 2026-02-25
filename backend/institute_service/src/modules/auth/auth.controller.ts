@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, UseGuards, Patch, Param, NotFoundException, Delete, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Patch, Param, NotFoundException, Delete, UseInterceptors, UploadedFile, Query } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
@@ -7,6 +7,7 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiParam,
+  ApiQuery,
   ApiConsumes,
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
@@ -125,6 +126,19 @@ export class AuthController {
     return this.authService.getInstituteById(id);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('institutes/:id/teachers/count')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get total teacher count for an institute' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns total teacher count',
+    schema: { example: { count: 12 } },
+  })
+  async getTeacherCount(@Param('id') id: string) {
+    return this.authService.getTeacherCount(id);
+  }
 
 
 
@@ -165,11 +179,15 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get('institutes/:id/users')
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Get all users assigned to an institute' })
+  @ApiOperation({ summary: 'Get all users assigned to an institute, optionally filtered by role' })
   @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiQuery({ name: 'role', required: false, description: 'Filter by role (student, teacher, instructor)' })
   @ApiResponse({ status: 200, description: 'Returns list of users' })
-  async getInstituteUsers(@Param('id') id: string) {
-    return this.authService.getInstituteUsers(id);
+  async getInstituteUsers(
+    @Param('id') id: string,
+    @Query('role') role?: string,
+  ) {
+    return this.authService.getInstituteUsers(id, role);
   }
 
   @UseGuards(JwtAuthGuard)
