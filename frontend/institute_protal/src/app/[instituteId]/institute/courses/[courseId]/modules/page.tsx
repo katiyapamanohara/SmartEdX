@@ -111,16 +111,32 @@ interface ModuleAccordionProps {
   module: CourseModule;
   instituteId: string;
   courseId: string;
-  defaultOpen?: boolean;
+  forceOpen?: boolean;  // controlled by parent Expand/Collapse all
   onEditModule: (m: CourseModule) => void;
   onDeleteModule: (id: string) => void;
 }
 
-function ModuleAccordion({ module, instituteId, courseId, defaultOpen = false, onEditModule, onDeleteModule }: ModuleAccordionProps) {
-  const [open, setOpen] = useState(defaultOpen);
+function ModuleAccordion({ module, instituteId, courseId, forceOpen = false, onEditModule, onDeleteModule }: ModuleAccordionProps) {
+  const [open, setOpen] = useState(forceOpen);
   const [contents, setContents] = useState<ModuleContent[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Respond to parent Expand all / Collapse all
+  useEffect(() => {
+    if (forceOpen && !loaded) {
+      // Auto-fetch contents when force-expanded for the first time
+      setLoading(true);
+      instituteService
+        .getModuleContents(instituteId, courseId, module.id)
+        .then((data) => {
+          setContents(data);
+          setLoaded(true);
+        })
+        .finally(() => setLoading(false));
+    }
+    setOpen(forceOpen);
+  }, [forceOpen]);
 
   const toggle = async () => {
     if (!loaded && !open) {
@@ -307,7 +323,7 @@ export default function ModulesPage() {
               module={mod}
               instituteId={instituteId}
               courseId={courseId}
-              defaultOpen={allExpanded}
+              forceOpen={allExpanded}
               onEditModule={(m) => { setEditingModule(m); setIsModalOpen(true); }}
               onDeleteModule={handleDeleteModule}
             />

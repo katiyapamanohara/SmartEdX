@@ -79,11 +79,12 @@ class InstituteService {
     if (!token) return [];
 
     try {
-      // The backend controller is now at /institutes/:id/users
-      // If role filtering is needed, we should add it to the backend controller query params.
-      // For now, fetching all and filtering on frontend or backend (backend returns all currently).
-      
-      const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/users`, {
+      // Build URL with optional role query param — backend now supports server-side filtering
+      const url = role
+        ? `${this.apiUrl}/api/institutes/institutes/${instituteId}/users?role=${encodeURIComponent(role)}`
+        : `${this.apiUrl}/api/institutes/institutes/${instituteId}/users`;
+
+      const response = await fetch(url, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -95,13 +96,7 @@ class InstituteService {
         throw new Error(`Failed to fetch users: ${response.statusText}`);
       }
 
-      const users = await response.json();
-      
-      // Optional client-side filtering if backend doesn't support it yet
-      if (role) {
-          return users.filter((u: any) => u.role?.name === role || u.role === role);
-      }
-      return users;
+      return await response.json();
     } catch (error) {
       console.error("InstituteService.getInstituteUsers Error:", error);
       return [];
@@ -462,6 +457,34 @@ class InstituteService {
 
     if (!response.ok) {
       throw new Error("Failed to delete module content");
+    }
+  }
+
+  async getTeacherCount(instituteId: string): Promise<number> {
+    const token = authService.getToken();
+    if (!token) return 0;
+
+    try {
+      const response = await fetch(
+        `${this.apiUrl}/api/institutes/auth/institutes/${instituteId}/teachers/count`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch teacher count: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data.count ?? 0;
+    } catch (error) {
+      console.error("InstituteService.getTeacherCount Error:", error);
+      return 0;
     }
   }
 }
