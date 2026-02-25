@@ -7,9 +7,12 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  OneToMany,
 } from 'typeorm';
 import { Institute } from './institute.entity';
 import { Teacher } from './teacher.entity';
+
+import { CourseModule } from './course-module.entity';
 
 @Entity('courses')
 export class Course {
@@ -40,6 +43,9 @@ export class Course {
 
   @ManyToMany(() => Teacher, (teacher) => teacher.courses)
   teachers: Teacher[];
+
+  @OneToMany(() => CourseModule, (module) => module.course)
+  modules: CourseModule[];
 
   @CreateDateColumn()
   createdAt: Date;

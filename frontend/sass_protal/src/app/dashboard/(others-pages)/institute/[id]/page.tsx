@@ -36,9 +36,7 @@ function InstituteCustomizeContent() {
   const [assignRole, setAssignRole] = useState("instructor");
   const [rolesList, setRolesList] = useState<any[]>([
     { id: 'default-1', name: 'instructor' },
-    { id: 'default-2', name: 'student' },
-    { id: 'default-3', name: 'assistant' },
-    { id: 'default-4', name: 'coordinator' }
+    { id: 'default-2', name: 'student' }
   ]);
   const [isAssigning, setIsAssigning] = useState(false);
   const [assignedUsers, setAssignedUsers] = useState<any[]>([]);
@@ -84,8 +82,8 @@ function InstituteCustomizeContent() {
     const fetchRoles = async () => {
       try {
         const roles = await authService.getRoles();
-        // Filter roles to only include 'instructor' and 'teacher'
-        const allowedRoles = ['instructor', 'teacher'];
+        // Filter roles to only include 'instructor'
+        const allowedRoles = ['instructor'];
         const filteredRoles = roles.filter((r: any) => allowedRoles.includes(r.name));
         
         setRolesList(filteredRoles);
@@ -110,7 +108,7 @@ function InstituteCustomizeContent() {
       const users = await authService.getInstituteUsers(instituteId);
       
       // Filter users to only show those with allowed roles
-      const allowedRoles = ['instructor', 'teacher'];
+      const allowedRoles = ['instructor'];
       const filteredUsers = Array.isArray(users) 
         ? users.filter((u: any) => u.role?.name && allowedRoles.includes(u.role.name))
         : [];

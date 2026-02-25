@@ -8,6 +8,8 @@ import { InstituteRole } from '../../modules/auth/entities/institute-role.entity
 import { Student } from '../../modules/auth/entities/student.entity';
 import { Teacher } from '../../modules/auth/entities/teacher.entity';
 import { Course } from '../../modules/auth/entities/course.entity';
+import { CourseModule } from '../../modules/auth/entities/course-module.entity';
+import { ModuleContent } from '../../modules/auth/entities/module-content.entity';
 
 @Module({
   imports: [
@@ -20,7 +22,7 @@ import { Course } from '../../modules/auth/entities/course.entity';
         username: configService.get<string>('DB_USERNAME', 'postgres'),
         password: configService.get<string>('DB_PASSWORD', 'postgres'),
         database: configService.get<string>('DB_DATABASE', 'api_gateway'),
-        entities: [Institute, InstituteUser, InstituteRole, Student, Teacher, Course],
+        entities: [Institute, InstituteUser, InstituteRole, Student, Teacher, Course, CourseModule, ModuleContent],
         synchronize: true, // Auto-sync for dev
         logging: configService.get<string>('NODE_ENV') === 'development',
         migrations: [__dirname + '/migrations/*.ts'],

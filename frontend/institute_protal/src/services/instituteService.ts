@@ -14,12 +14,34 @@ export interface Course {
   coverImage?: string;
   batchNumber: string;
   description?: string;
+  instituteId?: string;
   assignedTeacher?: {
     id: string;
     firstName: string;
     lastName: string;
     email: string;
   };
+  modules?: CourseModule[];
+}
+
+export interface CourseModule {
+  id: string;
+  title: string;
+  description?: string;
+  order: number;
+  courseId: string;
+}
+
+export type ContentType = 'pdf' | 'video' | 'document' | 'quiz' | 'link';
+
+export interface ModuleContent {
+  id: string;
+  title: string;
+  description?: string;
+  type: ContentType;
+  url?: string;
+  order: number;
+  moduleId: string;
 }
 
 class InstituteService {
@@ -272,6 +294,174 @@ class InstituteService {
 
     if (!response.ok) {
       throw new Error("Failed to delete course");
+    }
+  }
+
+  // Course Module Management Methods
+  async getCourseModules(instituteId: string, courseId: string): Promise<CourseModule[]> {
+    const token = authService.getToken();
+    if (!token) return [];
+
+    try {
+      const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/${courseId}/modules`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch course modules: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("InstituteService.getCourseModules Error:", error);
+      return [];
+    }
+  }
+
+  async createCourseModule(instituteId: string, courseId: string, moduleData: any): Promise<CourseModule> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+
+    const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/${courseId}/modules`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(moduleData),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || "Failed to create module");
+    }
+
+    return await response.json();
+  }
+
+  async updateCourseModule(instituteId: string, courseId: string, moduleId: string, moduleData: any): Promise<CourseModule> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+
+    const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/${courseId}/modules/${moduleId}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(moduleData),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || "Failed to update module");
+    }
+
+    return await response.json();
+  }
+
+  async deleteCourseModule(instituteId: string, courseId: string, moduleId: string): Promise<void> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+
+    const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/${courseId}/modules/${moduleId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to delete module");
+    }
+  }
+
+  // Module Content Management Methods
+  async getModuleContents(instituteId: string, courseId: string, moduleId: string): Promise<ModuleContent[]> {
+    const token = authService.getToken();
+    if (!token) return [];
+
+    try {
+      const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/${courseId}/modules/${moduleId}/contents`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch module contents: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("InstituteService.getModuleContents Error:", error);
+      return [];
+    }
+  }
+
+  async createModuleContent(instituteId: string, courseId: string, moduleId: string, contentData: any): Promise<ModuleContent> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+
+    const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/${courseId}/modules/${moduleId}/contents`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(contentData),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || "Failed to create module content");
+    }
+
+    return await response.json();
+  }
+
+  async updateModuleContent(instituteId: string, courseId: string, moduleId: string, contentId: string, contentData: any): Promise<ModuleContent> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+
+    const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/${courseId}/modules/${moduleId}/contents/${contentId}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(contentData),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || "Failed to update module content");
+    }
+
+    return await response.json();
+  }
+
+  async deleteModuleContent(instituteId: string, courseId: string, moduleId: string, contentId: string): Promise<void> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+
+    const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/${courseId}/modules/${moduleId}/contents/${contentId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to delete module content");
     }
   }
 }
