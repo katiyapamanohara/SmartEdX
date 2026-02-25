@@ -12,6 +12,7 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import * as admin from 'firebase-admin';
 import { LoginDto } from './dto/login.dto';
+import { Repository, In } from 'typeorm';
 import { RegisterDto } from './dto/register.dto';
 import { FirebaseLoginDto, FirebaseRegisterDto } from './dto/firebase-auth.dto';
 import { CompleteOnboardingDto } from './dto/complete-onboarding.dto';
@@ -19,8 +20,9 @@ import { CreateInstituteDto } from './dto/create-institute.dto';
 import { UpdateInstituteDto } from './dto/update-institute.dto';
 import { UpdateMyProfileDto } from './dto/update-my-profile.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
-import { InstituteRepository, InstituteUserRepository, InstituteRoleRepository, TeacherRepository } from '../../infra/database/repositories';
+import { InstituteRepository, InstituteUserRepository, InstituteRoleRepository, TeacherRepository, StudentRepository, CourseRepository } from '../../infra/database/repositories';
 import { AssignUserDto } from './dto/assign-user.dto';
+import { Course } from './entities/course.entity';
 import { MinioService } from '../../infra/storage/minio.service';
 
 @Injectable()
@@ -32,6 +34,8 @@ export class AuthService {
     private readonly instituteRepository: InstituteRepository,
     private readonly instituteUserRepository: InstituteUserRepository,
     private readonly teacherRepository: TeacherRepository,
+    private readonly studentRepository: StudentRepository,
+    private readonly courseRepository: CourseRepository,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly minioService: MinioService,
@@ -443,6 +447,21 @@ export class AuthService {
   }
 
   async getInstituteUsers(instituteId: string, role?: string) {
+    if (role === 'student') {
+      const students = await this.studentRepository.findByInstituteId(instituteId);
+      return students.map(s => ({
+        id: s.user.id,
+        firstName: s.user.firstName,
+        lastName: s.user.lastName,
+        profilePicture: s.user.profilePicture,
+        email: s.user.email,
+        isActive: s.user.isActive,
+        role: s.user.role,
+        courses: s.courses,
+        batchNumber: s.batchNumber,
+      }));
+    }
+
     const instituteUsers = await this.instituteUserRepository.findByInstituteId(instituteId);
 
     const allowedRoles = ['instructor', 'teacher', 'student'];
@@ -502,6 +521,11 @@ export class AuthService {
     // Check if user already exists in this institute
     const existingUser = await this.instituteUserRepository.findByEmailAndInstituteId(email, instituteId);
     if (existingUser) {
+      if (role === 'student') {
+        // If it's a student, we treat this as an "upsert" (update their courses)
+        this.logger.log(`User ${email} already exists. Updating student enrolments.`);
+        return this.updateInstituteUser(instituteId, existingUser.id, createDto);
+      }
       throw new ConflictException('User with this email already exists in this institute');
     }
 
@@ -527,12 +551,43 @@ export class AuthService {
         const teacher = await this.teacherRepository.create({
             userId: newUser.id,
             instituteId: instituteId,
-            // Initialize with defaults or leave empty
             designation: 'Lecture Staff',
             joiningDate: new Date(),
         });
         await this.teacherRepository.save(teacher);
         this.logger.log(`Created teacher record for user ${newUser.id}`);
+    } else if (role === 'student') {
+        // Find courses with the same batch number in this institute
+        let assignedCourses: Course[] = [];
+        if (createDto.batchNumber) {
+            assignedCourses = await this.courseRepository.findByBatchNumberAndInstituteId(
+                createDto.batchNumber,
+                instituteId
+            );
+        }
+
+        // Add manual courses if provided
+        if (createDto.courseIds && createDto.courseIds.length > 0) {
+            const manualCourses = await this.courseRepository.findAll({
+                where: { id: In(createDto.courseIds), instituteId }
+            });
+            
+            // Merge and avoid duplicates
+            const courseIdSet = new Set(assignedCourses.map(c => c.id));
+            manualCourses.forEach(c => {
+                if (!courseIdSet.has(c.id)) assignedCourses.push(c);
+            });
+        }
+
+        const student = await this.studentRepository.create({
+            userId: newUser.id,
+            instituteId: instituteId,
+            admissionNumber: createDto.admissionNumber,
+            batchNumber: createDto.batchNumber,
+            courses: assignedCourses,
+        });
+        await this.studentRepository.save(student);
+        this.logger.log(`Created student record for user ${newUser.id} with ${assignedCourses.length} auto-assigned courses`);
     }
 
     return newUser;
@@ -562,7 +617,36 @@ export class AuthService {
       user.roleId = roleEntity.id;
     }
 
-    return await this.instituteUserRepository.save(user);
+    const updatedUser = await this.instituteUserRepository.save(user);
+
+    // If student courses need updating
+    if (updateDto.courseIds) {
+        let student = await this.studentRepository.findOne({
+            where: { userId: user.id },
+            relations: ['courses']
+        });
+        
+        const newCourses = await this.courseRepository.findAll({
+            where: { id: In(updateDto.courseIds), instituteId }
+        });
+
+        if (student) {
+            student.courses = newCourses;
+            await this.studentRepository.save(student);
+        } else if (user.role?.name === 'student') {
+            // Create student record if it doesn't exist
+            student = await this.studentRepository.create({
+                userId: user.id,
+                instituteId: instituteId,
+                courses: newCourses,
+                batchNumber: updateDto.batchNumber,
+                admissionNumber: updateDto.admissionNumber,
+            });
+            await this.studentRepository.save(student);
+        }
+    }
+
+    return updatedUser;
   }
   async getTeacherDetails(instituteId: string, userId: string) {
     const teacher = await this.teacherRepository.findOne({

@@ -14,6 +14,7 @@ import { InstituteRepository } from './institute.repository';
 import { InstituteUserRepository } from './institute-user.repository';
 import { InstituteRoleRepository } from './institute-role.repository';
 import { TeacherRepository } from './teacher.repository';
+import { StudentRepository } from './student.repository';
 import { CourseRepository } from './course.repository';
 import { CourseModuleRepository } from './course-module.repository';
 import { ModuleContentRepository } from './module-content.repository';
@@ -24,7 +25,7 @@ import { ModuleContentRepository } from './module-content.repository';
  */
 @Module({
   imports: [TypeOrmModule.forFeature([Institute, InstituteUser, InstituteRole, Student, Teacher, Course, CourseModule, ModuleContent])],
-  providers: [InstituteRepository, InstituteUserRepository, InstituteRoleRepository, TeacherRepository, CourseRepository, CourseModuleRepository, ModuleContentRepository],
-  exports: [InstituteRepository, InstituteUserRepository, InstituteRoleRepository, TeacherRepository, CourseRepository, CourseModuleRepository, ModuleContentRepository],
+  providers: [InstituteRepository, InstituteUserRepository, InstituteRoleRepository, TeacherRepository, StudentRepository, CourseRepository, CourseModuleRepository, ModuleContentRepository],
+  exports: [InstituteRepository, InstituteUserRepository, InstituteRoleRepository, TeacherRepository, StudentRepository, CourseRepository, CourseModuleRepository, ModuleContentRepository],
 })
 export class RepositoriesModule {}
