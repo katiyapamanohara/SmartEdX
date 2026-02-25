@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import { Course, instituteService } from "@/services/instituteService";
 import CourseList from "./components/CourseList";
 import CourseModal from "./components/CourseModal";
-import { FiPlus } from "react-icons/fi";
+import { FiPlus, FiSearch } from "react-icons/fi";
 
 const CoursesPage = () => {
   const params = useParams();
@@ -14,6 +14,8 @@ const CoursesPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [searchCode, setSearchCode] = useState("");
+  const [searchBatch, setSearchBatch] = useState("");
 
   useEffect(() => {
     if (instituteId) {
@@ -79,6 +81,12 @@ const CoursesPage = () => {
     }
   };
 
+  const filteredCourses = courses.filter((course) => {
+    const matchCode = course.code.toLowerCase().includes(searchCode.toLowerCase());
+    const matchBatch = (course.batchNumber || "").toLowerCase().includes(searchBatch.toLowerCase());
+    return matchCode && matchBatch;
+  });
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -92,15 +100,38 @@ const CoursesPage = () => {
         </div>
         <button
           onClick={handleCreateCourse}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm"
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm whitespace-nowrap"
         >
           <FiPlus className="w-5 h-5" />
           <span>Create Course</span>
         </button>
       </div>
 
+      <div className="flex flex-col sm:flex-row gap-4 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="flex-1 relative">
+          <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search by course code..."
+            value={searchCode}
+            onChange={(e) => setSearchCode(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow"
+          />
+        </div>
+        <div className="flex-1 relative">
+          <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search by batch number..."
+            value={searchBatch}
+            onChange={(e) => setSearchBatch(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow"
+          />
+        </div>
+      </div>
+
       <CourseList
-        courses={courses}
+        courses={filteredCourses}
         isLoading={isLoading}
         onEdit={handleEditCourse}
         onDelete={handleDeleteCourse}

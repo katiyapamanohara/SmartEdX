@@ -17,6 +17,10 @@ import { MinioModule } from '../../infra/storage/minio.module';
 import { InstituteUserController } from './institute-user.controller';
 import { CourseController } from './course.controller';
 import { CourseService } from './course.service';
+import { CourseModuleController } from './course-module.controller';
+import { CourseModuleService } from './course-module.service';
+import { ModuleContentController } from './module-content.controller';
+import { ModuleContentService } from './module-content.service';
 
 @Module({
   imports: [
@@ -35,10 +39,12 @@ import { CourseService } from './course.service';
       inject: [ConfigService],
     }),
   ],
-  controllers: [AuthController, InstituteUserController, CourseController],
+  controllers: [AuthController, InstituteUserController, CourseController, CourseModuleController, ModuleContentController],
   providers: [
     AuthService,
     CourseService,
+    CourseModuleService,
+    ModuleContentService,
     JwtStrategy,
     FirebaseAuthStrategy,
     JwtAuthGuard,

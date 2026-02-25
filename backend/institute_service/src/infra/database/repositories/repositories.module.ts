@@ -7,20 +7,24 @@ import { InstituteRole } from '../../../modules/auth/entities/institute-role.ent
 import { Student } from '../../../modules/auth/entities/student.entity';
 import { Teacher } from '../../../modules/auth/entities/teacher.entity';
 import { Course } from '../../../modules/auth/entities/course.entity';
+import { CourseModule } from '../../../modules/auth/entities/course-module.entity';
+import { ModuleContent } from '../../../modules/auth/entities/module-content.entity';
 
 import { InstituteRepository } from './institute.repository';
 import { InstituteUserRepository } from './institute-user.repository';
 import { InstituteRoleRepository } from './institute-role.repository';
 import { TeacherRepository } from './teacher.repository';
 import { CourseRepository } from './course.repository';
+import { CourseModuleRepository } from './course-module.repository';
+import { ModuleContentRepository } from './module-content.repository';
 
 /**
  * Repositories Module
  * Centralizes all repository providers for dependency injection
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([Institute, InstituteUser, InstituteRole, Student, Teacher, Course])],
-  providers: [InstituteRepository, InstituteUserRepository, InstituteRoleRepository, TeacherRepository, CourseRepository],
-  exports: [InstituteRepository, InstituteUserRepository, InstituteRoleRepository, TeacherRepository, CourseRepository],
+  imports: [TypeOrmModule.forFeature([Institute, InstituteUser, InstituteRole, Student, Teacher, Course, CourseModule, ModuleContent])],
+  providers: [InstituteRepository, InstituteUserRepository, InstituteRoleRepository, TeacherRepository, CourseRepository, CourseModuleRepository, ModuleContentRepository],
+  exports: [InstituteRepository, InstituteUserRepository, InstituteRoleRepository, TeacherRepository, CourseRepository, CourseModuleRepository, ModuleContentRepository],
 })
 export class RepositoriesModule {}

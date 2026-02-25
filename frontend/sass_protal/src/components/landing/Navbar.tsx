@@ -18,8 +18,13 @@ export function Navbar() {
       if (isAuth) {
         try {
           // Verify token is valid by fetching profile
-          await authService.getProfile();
-          setIsAuthenticated(true);
+          const profile = await authService.getProfile();
+          if (!profile) {
+            authService.logout();
+            setIsAuthenticated(false);
+          } else {
+            setIsAuthenticated(true);
+          }
         } catch (error) {
           setIsAuthenticated(false);
           // Optional: clear invalid token

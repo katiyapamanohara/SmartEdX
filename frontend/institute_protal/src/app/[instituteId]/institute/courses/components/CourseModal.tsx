@@ -68,13 +68,9 @@ const CourseModal: React.FC<CourseModalProps> = ({
   const fetchTeachers = async () => {
     setLoading(true);
     try {
-      // Fetch users with role 'teacher' or 'instructor'
-      // Optimally backend should support filtering, for now fetching all and filtering
       const users = await instituteService.getInstituteUsers(instituteId);
       const teacherUsers = users.filter(
-        (u: any) =>
-          u.role.name.toLowerCase() === "teacher" ||
-          u.role.name.toLowerCase() === "instructor"
+        (u: any) => u.role?.name?.toLowerCase() === "teacher"
       );
       setTeachers(teacherUsers);
     } catch (error) {
