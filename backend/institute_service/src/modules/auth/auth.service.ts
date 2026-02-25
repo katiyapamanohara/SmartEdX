@@ -396,28 +396,28 @@ export class AuthService {
     return instituteUser;
   }
 
-  async getInstituteUsers(instituteId: string) {
+  async getInstituteUsers(instituteId: string, role?: string) {
     const instituteUsers = await this.instituteUserRepository.findByInstituteId(instituteId);
-    
-    // Map to a cleaner format for the frontend
-    // Filter users to only show those with allowed roles
-    const allowedRoles = ['instructor', 'teacher'];
+
+    const allowedRoles = ['instructor', 'teacher', 'student'];
+
     return instituteUsers
-      .filter(iu => iu.role?.name && allowedRoles.includes(iu.role.name))
-      .map(iu => {
-      // Prioritize InstituteUser fields (new decoupled model), fallback to User fields (legacy/linked model)
-      return {
-        id: iu.id, // Always use InstituteUser ID for management actions
-        
+      .filter(iu => {
+        const roleName = iu.role?.name;
+        if (!roleName || !allowedRoles.includes(roleName)) return false;
+        // If a specific role is requested, filter to that role only
+        if (role) return roleName === role;
+        return true;
+      })
+      .map(iu => ({
+        id: iu.id,
         firstName: iu.firstName,
         lastName: iu.lastName,
-        profilePicture: iu.profilePicture, // Add profile picture
+        profilePicture: iu.profilePicture,
         email: iu.email,
-        isActive: iu.isActive, // Use local active state
+        isActive: iu.isActive,
         role: iu.role,
-       
-      };
-    });
+      }));
   }
 
   async deleteInstituteUser(instituteId: string, instituteUserId: string) {
@@ -563,5 +563,10 @@ export class AuthService {
       department: teacher.department,
    
     };
+  }
+
+  async getTeacherCount(instituteId: string): Promise<{ count: number }> {
+    const count = await this.teacherRepository.countByInstituteId(instituteId);
+    return { count };
   }
 }

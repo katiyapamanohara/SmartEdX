@@ -13,8 +13,15 @@ export class TeacherRepository extends BaseRepository<Teacher> {
     super(teacherRepository);
   }
 
-  // Add specific teacher methods here if needed
   async findByUserId(userId: string): Promise<Teacher | null> {
     return this.findOne({ where: { user: { id: userId } } as any });
+  }
+
+  async findByInstituteId(instituteId: string): Promise<Teacher[]> {
+    return this.teacherRepository.find({ where: { instituteId } });
+  }
+
+  async countByInstituteId(instituteId: string): Promise<number> {
+    return this.teacherRepository.count({ where: { instituteId } });
   }
 }
