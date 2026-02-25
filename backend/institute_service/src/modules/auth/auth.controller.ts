@@ -18,6 +18,7 @@ import { Public } from '../../core/decorators/public.decorator';
 import { CurrentUser } from '../../core/decorators/current-user.decorator';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { SeedService } from './services/seed.service';
+import { UpdateMyProfileDto } from './dto/update-my-profile.dto';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -90,6 +91,27 @@ export class AuthController {
     };
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get current user profile' })
+  @ApiResponse({ status: 200, description: 'Returns current user profile' })
+  async getMyProfile(@CurrentUser() user: any) {
+    return this.authService.getMyProfile(user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('me')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Update current user profile' })
+  @ApiBody({ type: UpdateMyProfileDto })
+  @ApiResponse({ status: 200, description: 'Profile updated successfully' })
+  async updateMyProfile(
+    @CurrentUser() user: any,
+    @Body() updateDto: UpdateMyProfileDto,
+  ) {
+    return this.authService.updateMyProfile(user.userId, updateDto);
+  }
 
   // Admin Management Endpoints
 
