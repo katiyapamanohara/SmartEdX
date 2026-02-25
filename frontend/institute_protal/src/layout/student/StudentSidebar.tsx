@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState,useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useParams } from "next/navigation";
@@ -9,6 +9,14 @@ import {
   ChevronDownIcon,
   GridIcon,
   HorizontaLDots,
+  BoxIconLine,
+  TaskIcon,
+  DocsIcon,
+  PieChartIcon,
+  VideoIcon,
+  ChatIcon,
+  InfoIcon,
+  UserCircleIcon,
 } from "../../icons/index";
 
 type NavItem = {
@@ -19,12 +27,47 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
- {
+  {
     icon: <GridIcon />,
     name: "Dashboard",
-     path: "/",
+    path: "/student",
   },
-
+  {
+    icon: <BoxIconLine />,
+    name: "My Courses",
+    path: "/student/my-courses",
+  },
+  {
+    icon: <TaskIcon />,
+    name: "Assignments",
+    path: "/student/assignments",
+  },
+  {
+    icon: <DocsIcon />,
+    name: "Exams",
+    path: "/student/exams",
+  },
+  {
+    icon: <PieChartIcon />,
+    name: "Performance",
+    path: "/student/performance",
+  },
+  {
+    icon: <VideoIcon />,
+    name: "Live Classes",
+    path: "/student/live-classes",
+  },
+  {
+    icon: <ChatIcon />,
+    name: "Messages",
+    path: "/student/messages",
+  },
+  {
+    icon: <InfoIcon />,
+    name: "Support",
+    path: "/student/support",
+  },
+ 
 ];
 
 

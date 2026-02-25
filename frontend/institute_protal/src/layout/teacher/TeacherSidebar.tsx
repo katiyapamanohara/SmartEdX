@@ -9,6 +9,15 @@ import {
   ChevronDownIcon,
   GridIcon,
   HorizontaLDots,
+  GroupIcon,
+  BoxIconLine,
+  TaskIcon,
+  VideoIcon,
+  PieChartIcon,
+  ChatIcon,
+  DocsIcon,
+  PlugInIcon,
+  UserIcon,
 } from "../../icons/index";
 
 type NavItem = {
@@ -19,12 +28,51 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
- {
+  {
     icon: <GridIcon />,
     name: "Dashboard",
-     path: "/",
+    path: "/teacher",
   },
-
+  {
+    icon: <BoxIconLine />,
+    name: "Courses",
+    path: "/teacher/courses",
+  },
+  {
+    icon: <TaskIcon />,
+    name: "Assessments",
+    path: "/teacher/assessments",
+  },
+  {
+    icon: <GroupIcon />,
+    name: "Students",
+    path: "/teacher/students",
+  },
+  {
+    icon: <VideoIcon />,
+    name: "Live Classes",
+    path: "/teacher/live-classes",
+  },
+  {
+    icon: <PieChartIcon />,
+    name: "Integrity Monitor",
+    path: "/teacher/integrity-monitor",
+  },
+  {
+    icon: <ChatIcon />,
+    name: "Messages",
+    path: "/teacher/messages",
+  },
+  {
+    icon: <DocsIcon />,
+    name: "Reports",
+    path: "/teacher/reports",
+  },
+  {
+    icon: <PlugInIcon />,
+    name: "Settings",
+    path: "/teacher/settings",
+  },
 ];
 
 
