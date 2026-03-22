@@ -18,6 +18,9 @@ export class CreateModuleContentDto {
   @IsUrl()
   url?: string;
 
+  @IsOptional()
+  quizData?: any;
+
   @IsNumber()
   @IsOptional()
   order?: number;

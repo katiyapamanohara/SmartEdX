@@ -1,7 +1,7 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ModuleContent, ContentType, instituteService } from "@/services/instituteService";
+import { ModuleContent, instituteService } from "@/services/instituteService";
 import ContentList from "./components/ContentList";
 import ContentModal from "./components/ContentModal";
 import { FiPlus, FiArrowLeft } from "react-icons/fi";
@@ -60,15 +60,24 @@ const ContentsPage = () => {
 
   const handleModalSubmit = async (contentData: any) => {
     try {
+      const { pdfFile, ...rest } = contentData;
       if (editingContent) {
         const updated = await instituteService.updateModuleContent(
-          instituteId, courseId, moduleId, editingContent.id, contentData
+          instituteId, courseId, moduleId, editingContent.id, rest
         );
         setContents(contents.map((c) => (c.id === editingContent.id ? updated : c)));
       } else {
-        const created = await instituteService.createModuleContent(
-          instituteId, courseId, moduleId, contentData
-        );
+        let created;
+        if ((rest.type === "pdf" || rest.type === "document" || rest.type === "video") && pdfFile) {
+          created = await instituteService.uploadFileContent(
+            instituteId, courseId, moduleId, pdfFile,
+            { title: rest.title, type: rest.type, description: rest.description, order: rest.order }
+          );
+        } else {
+          created = await instituteService.createModuleContent(
+            instituteId, courseId, moduleId, rest
+          );
+        }
         setContents([...contents, created]);
       }
     } catch (error) {

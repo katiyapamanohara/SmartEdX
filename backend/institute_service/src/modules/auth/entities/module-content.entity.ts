@@ -38,6 +38,9 @@ export class ModuleContent {
   @Column({ nullable: true })
   url: string; // URL for the video, pdf, or external link
 
+  @Column({ type: 'jsonb', nullable: true })
+  quizData: any; // Quiz questions and settings (for type=quiz)
+
   @Column({ default: 0 })
   order: number;
 
