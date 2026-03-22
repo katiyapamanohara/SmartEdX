@@ -19,7 +19,8 @@ export class CourseService {
       id: teachers[0].userId,
       firstName: teachers[0].user.firstName,
       lastName: teachers[0].user.lastName,
-      email: teachers[0].user.email
+      email: teachers[0].user.email,
+      profilePicture: teachers[0].user.profilePicture ?? null,
     } : null;
 
     return {

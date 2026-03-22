@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Course, instituteService } from "@/services/instituteService";
 import { FiX } from "react-icons/fi";
+import AiDescriptionField from "@/components/common/AiDescriptionField";
 
 import { createPortal } from "react-dom";
 
@@ -228,23 +229,14 @@ const CourseModal: React.FC<CourseModalProps> = ({
             </div>
           </div>
 
-          <div>
-            <label
-              htmlFor="description"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-            >
-              Description
-            </label>
-            <textarea
-              id="description"
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              rows={3}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              placeholder="Brief description of the course..."
-            />
-          </div>
+          <AiDescriptionField
+            label="Description"
+            value={formData.description}
+            onChange={(val) => setFormData((prev) => ({ ...prev, description: val }))}
+            placeholder="Brief description of the course..."
+            rows={3}
+            context={formData.name ? `Course: ${formData.name}` : undefined}
+          />
 
           <div>
             <label

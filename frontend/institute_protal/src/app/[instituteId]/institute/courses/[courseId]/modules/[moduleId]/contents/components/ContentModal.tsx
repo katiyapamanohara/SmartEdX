@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { ModuleContent, ContentType, QuizQuestion } from "@/services/instituteService";
+import AiDescriptionField from "@/components/common/AiDescriptionField";
 import {
   FiX,
   FiFile,
@@ -960,17 +961,15 @@ const ContentModal: React.FC<ContentModalProps> = ({
           )}
 
           {/* ── Description ───────────────────────────────────────── */}
-          <div>
-            <Label>Description</Label>
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              rows={3}
-              placeholder={meta.descPlaceholder}
-              className={`${inputCls} resize-none`}
-            />
-          </div>
+          <AiDescriptionField
+            label="Description"
+            value={formData.description}
+            onChange={(val) => setFormData((prev) => ({ ...prev, description: val }))}
+            placeholder={meta.descPlaceholder}
+            rows={3}
+            context={formData.title ? `Content: ${formData.title}` : undefined}
+            textareaClassName={`${inputCls} resize-none`}
+          />
 
           {/* ── Order ─────────────────────────────────────────────── */}
           <div>

@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
 from routers.quiz import router as quiz_router
+from routers.description import router as description_router
 
 app = FastAPI(
     title="SmartEdX AI Core",
@@ -21,6 +22,7 @@ app.add_middleware(
 )
 
 app.include_router(quiz_router)
+app.include_router(description_router)
 
 
 @app.get("/health")

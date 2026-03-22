@@ -20,6 +20,7 @@ export interface Course {
     firstName: string;
     lastName: string;
     email: string;
+    profilePicture?: string;
   };
   modules?: CourseModule[];
 }

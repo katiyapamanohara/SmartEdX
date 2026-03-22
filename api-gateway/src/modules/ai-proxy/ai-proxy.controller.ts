@@ -31,6 +31,13 @@ export class AiProxyController {
     return this.aiProxyService.forwardFileUpload('api/quiz/generate', file, body, headers);
   }
 
+  // ── JSON: description generation ──────────────────────────────
+  @Post('description/generate')
+  @ApiOperation({ summary: 'Generate a description using AI' })
+  async generateDescription(@Body() body: any, @Headers() headers: any) {
+    return this.aiProxyService.forwardRequest('api/description/generate', 'POST', body, headers);
+  }
+
   // ── Catch-all for everything else (health, docs, etc.) ────────
   @All('*')
   @ApiOperation({ summary: 'Proxy all other AI Core requests' })

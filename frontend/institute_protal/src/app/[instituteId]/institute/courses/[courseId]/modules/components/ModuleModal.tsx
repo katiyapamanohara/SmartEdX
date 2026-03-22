@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { CourseModule, instituteService } from "@/services/instituteService";
 import { FiX } from "react-icons/fi";
 import { createPortal } from "react-dom";
+import AiDescriptionField from "@/components/common/AiDescriptionField";
 
 interface ModuleModalProps {
   isOpen: boolean;
@@ -129,23 +130,14 @@ const ModuleModal: React.FC<ModuleModalProps> = ({
             />
           </div>
 
-          <div>
-            <label
-              htmlFor="description"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-            >
-              Description
-            </label>
-            <textarea
-              id="description"
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              rows={4}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              placeholder="Detailed description of this content..."
-            />
-          </div>
+          <AiDescriptionField
+            label="Description"
+            value={formData.description}
+            onChange={(val) => setFormData((prev) => ({ ...prev, description: val }))}
+            placeholder="Detailed description of this content..."
+            rows={4}
+            context={formData.title ? `Content field: ${formData.title}` : undefined}
+          />
 
           <div className="pt-4 flex justify-end gap-3">
             <button
