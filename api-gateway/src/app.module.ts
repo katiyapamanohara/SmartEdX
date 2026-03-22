@@ -9,6 +9,7 @@ import { AuthProxyModule } from './modules/auth-proxy/auth-proxy.module';
 import { InstituteProxyModule } from './modules/institute-proxy/institute-proxy.module';
 import { StudentProxyModule } from './modules/student-proxy/student-proxy.module';
 import { TeacherProxyModule } from './modules/teacher-proxy/teacher-proxy.module';
+import { AiProxyModule } from './modules/ai-proxy/ai-proxy.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { TeacherProxyModule } from './modules/teacher-proxy/teacher-proxy.module
     InstituteProxyModule,
     StudentProxyModule,
     TeacherProxyModule,
+    AiProxyModule,
   ],
   controllers: [AppController],
   providers: [AppService],

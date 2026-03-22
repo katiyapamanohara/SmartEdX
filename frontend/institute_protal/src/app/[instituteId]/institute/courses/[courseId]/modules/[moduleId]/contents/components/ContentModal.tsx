@@ -13,6 +13,9 @@ import {
   FiPlus,
   FiTrash2,
   FiCheckCircle,
+  FiZap,
+  FiChevronDown,
+  FiChevronUp,
 } from "react-icons/fi";
 
 interface ContentModalProps {
@@ -119,6 +122,9 @@ const Hint = ({ text }: { text: string }) => (
   <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{text}</p>
 );
 
+// AI requests go through the API gateway at /api/ai/*
+const API_GATEWAY_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5001";
+
 // ─── Empty quiz question factory ─────────────────────────────────
 const newQuestion = (): QuizQuestion => ({
   id: crypto.randomUUID(),
@@ -127,6 +133,304 @@ const newQuestion = (): QuizQuestion => ({
   correctAnswer: 0,
   explanation: "",
 });
+
+// ─── AI Generate Panel ────────────────────────────────────────────
+const AIGeneratePanel = ({
+  onAddQuestions,
+}: {
+  onAddQuestions: (qs: QuizQuestion[]) => void;
+}) => {
+  const [open, setOpen] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [numQuestions, setNumQuestions] = useState(5);
+  const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">("medium");
+  const [loading, setLoading] = useState(false);
+  const [generated, setGenerated] = useState<QuizQuestion[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [aiError, setAiError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleGenerate = async () => {
+    if (!file) return;
+    setLoading(true);
+    setAiError(null);
+    setGenerated([]);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("num_questions", String(numQuestions));
+      form.append("difficulty", difficulty);
+      const res = await fetch(`${API_GATEWAY_URL}/api/ai/quiz/generate`, {
+        method: "POST",
+        body: form,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Generation failed");
+      }
+      const data = await res.json();
+      const qs: QuizQuestion[] = (data.questions as any[]).map((q) => ({
+        id: q.id ?? crypto.randomUUID(),
+        question: q.question,
+        options: q.options as [string, string, string, string],
+        correctAnswer: q.correctAnswer,
+        explanation: q.explanation ?? "",
+      }));
+      setGenerated(qs);
+      setSelected(new Set(qs.map((q) => q.id)));
+    } catch (e: any) {
+      setAiError(e.message ?? "Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleSelect = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const updateGenerated = (id: string, patch: Partial<QuizQuestion>) =>
+    setGenerated((prev) => prev.map((q) => (q.id === id ? { ...q, ...patch } : q)));
+
+  const updateOption = (id: string, idx: number, value: string) => {
+    const q = generated.find((q) => q.id === id)!;
+    const options = [...q.options] as [string, string, string, string];
+    options[idx] = value;
+    updateGenerated(id, { options });
+  };
+
+  const handleAdd = () => {
+    onAddQuestions(generated.filter((q) => selected.has(q.id)));
+    setGenerated([]);
+    setSelected(new Set());
+    setFile(null);
+    setOpen(false);
+  };
+
+  return (
+    <div className="border border-blue-200 dark:border-blue-800 rounded-xl overflow-hidden">
+      {/* Toggle header */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+      >
+        <span className="flex items-center gap-2 text-sm font-semibold">
+          <FiZap className="w-4 h-4" />
+          AI Generate from Document
+        </span>
+        {open ? <FiChevronUp className="w-4 h-4" /> : <FiChevronDown className="w-4 h-4" />}
+      </button>
+
+      {open && (
+        <div className="p-4 space-y-4 bg-white dark:bg-gray-900">
+          {/* File pick */}
+          <div>
+            <Label>Upload Document</Label>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pdf,.docx,.doc,.pptx,.ppt"
+              className="hidden"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            />
+            {file ? (
+              <div className="flex items-center gap-3 p-3 border border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                <FiFile className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0" />
+                <span className="text-sm text-green-800 dark:text-green-300 flex-1 truncate">{file.name}</span>
+                <button
+                  type="button"
+                  onClick={() => { setFile(null); if (fileRef.current) fileRef.current.value = ""; }}
+                  className="text-gray-400 hover:text-red-500"
+                >
+                  <FiX className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="w-full flex items-center justify-center gap-2 p-4 border-2 border-dashed border-blue-300 dark:border-blue-700 rounded-lg hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-colors text-sm text-gray-500 dark:text-gray-400"
+              >
+                <FiUpload className="w-4 h-4" />
+                Select PDF, Word, or PowerPoint file
+              </button>
+            )}
+            <Hint text="PDF, .docx, .doc, .pptx, .ppt supported" />
+          </div>
+
+          {/* Options row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Number of Questions</Label>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={numQuestions}
+                onChange={(e) => setNumQuestions(Math.min(20, Math.max(1, parseInt(e.target.value) || 1)))}
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <Label>Difficulty</Label>
+              <select
+                value={difficulty}
+                onChange={(e) => setDifficulty(e.target.value as "easy" | "medium" | "hard")}
+                className={inputCls}
+              >
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Generate button */}
+          <button
+            type="button"
+            disabled={!file || loading}
+            onClick={handleGenerate}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors text-sm font-medium"
+          >
+            {loading ? (
+              <>
+                <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                Generating…
+              </>
+            ) : (
+              <>
+                <FiZap className="w-4 h-4" />
+                Generate Quiz
+              </>
+            )}
+          </button>
+
+          {/* Error */}
+          {aiError && (
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 text-sm">
+              {aiError}
+            </div>
+          )}
+
+          {/* Generated questions list */}
+          {generated.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  Generated Questions ({generated.length})
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelected(
+                      selected.size === generated.length
+                        ? new Set()
+                        : new Set(generated.map((q) => q.id))
+                    )
+                  }
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  {selected.size === generated.length ? "Deselect all" : "Select all"}
+                </button>
+              </div>
+
+              {generated.map((q, qi) => (
+                <div
+                  key={q.id}
+                  className={`border rounded-xl p-3 space-y-2 transition-colors ${
+                    selected.has(q.id)
+                      ? "border-blue-300 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-900/10"
+                      : "border-gray-200 dark:border-gray-700 opacity-60"
+                  }`}
+                >
+                  {/* Select toggle */}
+                  <div className="flex items-start gap-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleSelect(q.id)}
+                      className={`mt-0.5 shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                        selected.has(q.id)
+                          ? "border-blue-500 bg-blue-500 text-white"
+                          : "border-gray-300 dark:border-gray-600"
+                      }`}
+                    >
+                      {selected.has(q.id) && <FiCheckCircle className="w-3 h-3" />}
+                    </button>
+                    <span className="text-xs font-semibold text-gray-400 shrink-0 mt-0.5">Q{qi + 1}</span>
+                    <textarea
+                      rows={2}
+                      value={q.question}
+                      onChange={(e) => updateGenerated(q.id, { question: e.target.value })}
+                      className={`${inputCls} resize-none flex-1`}
+                    />
+                  </div>
+
+                  {/* Options */}
+                  <div className="space-y-1.5 pl-7">
+                    {q.options.map((opt, oi) => (
+                      <div key={oi} className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => updateGenerated(q.id, { correctAnswer: oi })}
+                          className={`shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                            q.correctAnswer === oi
+                              ? "border-green-500 bg-green-500 text-white"
+                              : "border-gray-300 dark:border-gray-600 text-transparent hover:border-green-400"
+                          }`}
+                          title="Mark correct"
+                        >
+                          <FiCheckCircle className="w-3 h-3" />
+                        </button>
+                        <span className="text-xs font-bold text-gray-400 w-3">{String.fromCharCode(65 + oi)}</span>
+                        <input
+                          type="text"
+                          value={opt}
+                          onChange={(e) => updateOption(q.id, oi, e.target.value)}
+                          className={`${inputCls} text-xs py-1`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Explanation */}
+                  {q.explanation !== undefined && (
+                    <div className="pl-7">
+                      <input
+                        type="text"
+                        value={q.explanation}
+                        onChange={(e) => updateGenerated(q.id, { explanation: e.target.value })}
+                        placeholder="Explanation (optional)…"
+                        className={`${inputCls} text-xs py-1`}
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* Add to quiz */}
+              <button
+                type="button"
+                disabled={selected.size === 0}
+                onClick={handleAdd}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg transition-colors text-sm font-medium"
+              >
+                <FiPlus className="w-4 h-4" />
+                Add {selected.size} Selected Question{selected.size !== 1 ? "s" : ""} to Quiz
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ─── Quiz Builder ─────────────────────────────────────────────────
 const QuizBuilder = ({
@@ -148,6 +452,8 @@ const QuizBuilder = ({
     onChange({ questions, passingScore, timeLimit: v });
 
   const addQuestion = () => setQuestions([...questions, newQuestion()]);
+  const handleAiAdd = (qs: QuizQuestion[]) =>
+    setQuestions([...questions, ...qs]);
 
   const removeQuestion = (id: string) =>
     setQuestions(questions.filter((q) => q.id !== id));
@@ -164,6 +470,9 @@ const QuizBuilder = ({
 
   return (
     <div className="space-y-4">
+      {/* AI Generate Panel */}
+      <AIGeneratePanel onAddQuestions={handleAiAdd} />
+
       {/* Quiz settings */}
       <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
         <div>
