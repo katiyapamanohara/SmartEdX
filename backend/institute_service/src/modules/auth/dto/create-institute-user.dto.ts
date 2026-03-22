@@ -27,4 +27,18 @@ export class CreateInstituteUserDto {
   @IsString()
   @IsNotEmpty()
   role: string;
+
+  @ApiProperty({ example: '2024-A', required: false })
+  @IsString()
+  @IsOptional()
+  batchNumber?: string;
+
+  @ApiProperty({ example: 'ADM001', required: false })
+  @IsString()
+  @IsOptional()
+  admissionNumber?: string;
+
+  @ApiProperty({ example: ['uuid-1', 'uuid-2'], required: false })
+  @IsOptional()
+  courseIds?: string[];
 }

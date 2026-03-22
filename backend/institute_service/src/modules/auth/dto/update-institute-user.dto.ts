@@ -27,4 +27,8 @@ export class UpdateInstituteUserDto {
   @IsString()
   @IsOptional()
   role?: string;
+
+  @ApiPropertyOptional({ example: ['uuid-1', 'uuid-2'] })
+  @IsOptional()
+  courseIds?: string[];
 }

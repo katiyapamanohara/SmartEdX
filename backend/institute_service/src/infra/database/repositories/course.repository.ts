@@ -20,4 +20,10 @@ export class CourseRepository extends BaseRepository<Course> {
       order: { createdAt: 'DESC' },
     });
   }
+
+  async findByBatchNumberAndInstituteId(batchNumber: string, instituteId: string): Promise<Course[]> {
+    return this.courseRepository.find({
+      where: { batchNumber, instituteId },
+    });
+  }
 }

@@ -3,6 +3,7 @@ export * from './institute.repository';
 export * from './institute-user.repository';
 export * from './institute-role.repository';
 export * from './teacher.repository';
+export * from './student.repository';
 export * from './course.repository';
 export * from './course-module.repository';
 export * from './module-content.repository';

@@ -1,10 +1,11 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ModuleContent, ContentType, instituteService } from "@/services/instituteService";
+import { ModuleContent, Course, CourseModule, instituteService } from "@/services/instituteService";
 import ContentList from "./components/ContentList";
 import ContentModal from "./components/ContentModal";
-import { FiPlus, FiArrowLeft } from "react-icons/fi";
+import QuizViewModal from "./components/QuizViewModal";
+import { FiPlus, FiArrowLeft, FiBook, FiLayers } from "react-icons/fi";
 
 const ContentsPage = () => {
   const params = useParams();
@@ -14,20 +15,29 @@ const ContentsPage = () => {
   const moduleId = params?.moduleId as string;
 
   const [contents, setContents] = useState<ModuleContent[]>([]);
+  const [course, setCourse] = useState<Course | null>(null);
+  const [module, setModule] = useState<CourseModule | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingContent, setEditingContent] = useState<ModuleContent | null>(null);
+  const [viewingQuiz, setViewingQuiz] = useState<ModuleContent | null>(null);
 
   useEffect(() => {
     if (instituteId && courseId && moduleId) {
-      fetchContents();
+      fetchAll();
     }
   }, [instituteId, courseId, moduleId]);
 
-  const fetchContents = async () => {
+  const fetchAll = async () => {
     setIsLoading(true);
     try {
-      const data = await instituteService.getModuleContents(instituteId, courseId, moduleId);
+      const [courses, modules, data] = await Promise.all([
+        instituteService.getCourses(instituteId),
+        instituteService.getCourseModules(instituteId, courseId),
+        instituteService.getModuleContents(instituteId, courseId, moduleId),
+      ]);
+      setCourse(courses.find((c) => c.id === courseId) ?? null);
+      setModule(modules.find((m) => m.id === moduleId) ?? null);
       setContents(data);
     } catch (error) {
       console.error("Failed to fetch contents", error);
@@ -35,6 +45,7 @@ const ContentsPage = () => {
       setIsLoading(false);
     }
   };
+
 
   const handleCreateContent = () => {
     setEditingContent(null);
@@ -60,15 +71,24 @@ const ContentsPage = () => {
 
   const handleModalSubmit = async (contentData: any) => {
     try {
+      const { pdfFile, ...rest } = contentData;
       if (editingContent) {
         const updated = await instituteService.updateModuleContent(
-          instituteId, courseId, moduleId, editingContent.id, contentData
+          instituteId, courseId, moduleId, editingContent.id, rest
         );
         setContents(contents.map((c) => (c.id === editingContent.id ? updated : c)));
       } else {
-        const created = await instituteService.createModuleContent(
-          instituteId, courseId, moduleId, contentData
-        );
+        let created;
+        if ((rest.type === "pdf" || rest.type === "document" || rest.type === "video") && pdfFile) {
+          created = await instituteService.uploadFileContent(
+            instituteId, courseId, moduleId, pdfFile,
+            { title: rest.title, type: rest.type, description: rest.description, order: rest.order }
+          );
+        } else {
+          created = await instituteService.createModuleContent(
+            instituteId, courseId, moduleId, rest
+          );
+        }
         setContents([...contents, created]);
       }
     } catch (error) {
@@ -79,18 +99,32 @@ const ContentsPage = () => {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-4 mb-2">
+      <div className="flex items-start gap-4 mb-2">
         <button
           onClick={() => router.back()}
-          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors text-gray-600 dark:text-gray-400"
+          className="p-2 mt-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors text-gray-600 dark:text-gray-400 shrink-0"
         >
           <FiArrowLeft className="w-5 h-5" />
         </button>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Module Contents</h1>
-          <p className="text-gray-500 dark:text-gray-400">
-            Manage PDFs, videos, documents, quizzes and links
-          </p>
+        <div className="flex-1 min-w-0">
+          {/* Breadcrumb */}
+          <div className="flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500 mb-1 flex-wrap">
+            <FiBook className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">{course?.name ?? "Course"}</span>
+            <span>/</span>
+            <FiLayers className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">{module?.title ?? "Module"}</span>
+          </div>
+          {/* Title */}
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white truncate">
+            {module?.title ?? "Module Contents"}
+          </h1>
+          {/* Course description */}
+          {course?.description && (
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
+              {course.description}
+            </p>
+          )}
         </div>
       </div>
 
@@ -112,6 +146,7 @@ const ContentsPage = () => {
         isLoading={isLoading}
         onEdit={handleEditContent}
         onDelete={handleDeleteContent}
+        onViewQuiz={setViewingQuiz}
       />
 
       <ContentModal
@@ -119,6 +154,12 @@ const ContentsPage = () => {
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleModalSubmit}
         initialData={editingContent}
+      />
+
+      <QuizViewModal
+        isOpen={viewingQuiz !== null}
+        onClose={() => setViewingQuiz(null)}
+        content={viewingQuiz}
       />
     </div>
   );

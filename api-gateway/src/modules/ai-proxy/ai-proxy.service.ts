@@ -5,17 +5,16 @@ import { firstValueFrom } from 'rxjs';
 import * as FormData from 'form-data';
 
 @Injectable()
-export class InstituteProxyService {
-  private readonly logger = new Logger(InstituteProxyService.name);
-  private readonly instituteServiceUrl: string;
+export class AiProxyService {
+  private readonly logger = new Logger(AiProxyService.name);
+  private readonly aiCoreUrl: string;
 
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
   ) {
-    this.instituteServiceUrl =
-      this.configService.get<string>('INSTITUTE_SERVICE_URL') ||
-      'http://localhost:5003';
+    this.aiCoreUrl =
+      this.configService.get<string>('AI_CORE_URL') || 'http://localhost:8001';
   }
 
   async forwardRequest(
@@ -24,8 +23,8 @@ export class InstituteProxyService {
     body?: any,
     headers?: any,
   ): Promise<any> {
-    const url = `${this.instituteServiceUrl}/api/${path}`;
-    this.logger.log(`Forwarding ${method} request to: ${url}`);
+    const url = `${this.aiCoreUrl}/${path}`;
+    this.logger.log(`Forwarding ${method} ${url}`);
 
     try {
       const response = await firstValueFrom(
@@ -33,26 +32,23 @@ export class InstituteProxyService {
           method,
           url,
           data: body,
-          headers: {
-            ...this.filterHeaders(headers),
-            'x-gateway-secret': this.configService.get<string>('GATEWAY_SECRET'),
-          },
-          validateStatus: (status) => status < 400,
+          headers: this.filterHeaders(headers),
+          validateStatus: (status) => status < 500,
         }),
       );
 
-      this.logger.log(`Response status: ${response.status}`);
+      if (response.status >= 400) {
+        throw new HttpException(response.data, response.status);
+      }
+
       return response.data;
     } catch (error) {
+      if (error instanceof HttpException) throw error;
       if (error.response) {
-        this.logger.error(
-          `Institute service error: ${error.response.status} - ${JSON.stringify(error.response.data)}`,
-        );
+        this.logger.error(`AI Core error: ${error.response.status} - ${JSON.stringify(error.response.data)}`);
         throw new HttpException(error.response.data, error.response.status);
       }
-      this.logger.error(
-        `Error forwarding request to ${url}: ${error.message}`,
-      );
+      this.logger.error(`Error forwarding to ${url}: ${error.message}`);
       throw error;
     }
   }
@@ -63,8 +59,8 @@ export class InstituteProxyService {
     body: any,
     headers?: any,
   ): Promise<any> {
-    const url = `${this.instituteServiceUrl}/api/${path}`;
-    this.logger.log(`Forwarding file upload to: ${url}`);
+    const url = `${this.aiCoreUrl}/${path}`;
+    this.logger.log(`Forwarding file upload to ${url}`);
 
     const formData = new FormData();
     formData.append('file', file.buffer, {
@@ -73,12 +69,8 @@ export class InstituteProxyService {
       knownLength: file.size,
     });
 
-    // Forward any extra text fields (title, type, description, order)
-    for (const [key, value] of Object.entries(body)) {
-      if (value !== undefined && value !== null) {
-        formData.append(key, String(value));
-      }
-    }
+    if (body.num_questions) formData.append('num_questions', String(body.num_questions));
+    if (body.difficulty) formData.append('difficulty', body.difficulty);
 
     try {
       const response = await firstValueFrom(
@@ -89,7 +81,6 @@ export class InstituteProxyService {
           headers: {
             ...formData.getHeaders(),
             ...(headers?.authorization ? { authorization: headers.authorization } : {}),
-            'x-gateway-secret': this.configService.get<string>('GATEWAY_SECRET'),
           },
           maxContentLength: Infinity,
           maxBodyLength: Infinity,
@@ -101,14 +92,11 @@ export class InstituteProxyService {
         throw new HttpException(response.data, response.status);
       }
 
-      this.logger.log(`File upload response status: ${response.status}`);
       return response.data;
     } catch (error) {
       if (error instanceof HttpException) throw error;
       if (error.response) {
-        this.logger.error(
-          `Institute service file upload error: ${error.response.status} - ${JSON.stringify(error.response.data)}`,
-        );
+        this.logger.error(`AI Core upload error: ${error.response.status} - ${JSON.stringify(error.response.data)}`);
         throw new HttpException(error.response.data, error.response.status);
       }
       this.logger.error(`Error forwarding file upload to ${url}: ${error.message}`);
@@ -117,19 +105,10 @@ export class InstituteProxyService {
   }
 
   private filterHeaders(headers: any): any {
-    const allowedHeaders = [
-      'authorization',
-      'content-type',
-      'x-requested-with',
-      'accept',
-      'user-agent',
-    ];
-    
+    const allowed = ['authorization', 'content-type', 'accept', 'user-agent'];
     return Object.keys(headers).reduce((acc, key) => {
-      if (allowedHeaders.includes(key.toLowerCase())) {
-        acc[key] = headers[key];
-      }
+      if (allowed.includes(key.toLowerCase())) acc[key] = headers[key];
       return acc;
-    }, {});
+    }, {} as any);
   }
 }

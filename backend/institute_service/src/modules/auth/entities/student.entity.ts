@@ -7,9 +7,12 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
+  ManyToMany,
+  JoinTable,
 } from 'typeorm';
 import { InstituteUser } from './institute-user.entity';
 import { Institute } from './institute.entity';
+import { Course } from './course.entity';
 
 @Entity('students')
 export class Student {
@@ -40,6 +43,17 @@ export class Student {
 
   @Column()
   userId: string;
+
+  @Column({ nullable: true })
+  batchNumber: string;
+
+  @ManyToMany(() => Course, (course) => course.students)
+  @JoinTable({
+    name: 'student_courses',
+    joinColumn: { name: 'studentId', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'courseId', referencedColumnName: 'id' }
+  })
+  courses: Course[];
  
   @ManyToOne(() => Institute)
   @JoinColumn({ name: 'instituteId' })

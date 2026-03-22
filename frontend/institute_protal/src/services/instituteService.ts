@@ -34,12 +34,27 @@ export interface CourseModule {
 
 export type ContentType = 'pdf' | 'video' | 'document' | 'quiz' | 'link';
 
+export interface QuizQuestion {
+  id: string;
+  question: string;
+  options: [string, string, string, string];
+  correctAnswer: number;
+  explanation?: string;
+}
+
+export interface QuizData {
+  questions: QuizQuestion[];
+  passingScore: number;
+  timeLimit: number;
+}
+
 export interface ModuleContent {
   id: string;
   title: string;
   description?: string;
   type: ContentType;
   url?: string;
+  quizData?: QuizData;
   order: number;
   moduleId: string;
 }
@@ -417,6 +432,40 @@ class InstituteService {
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.message || "Failed to create module content");
+    }
+
+    return await response.json();
+  }
+
+  async uploadFileContent(
+    instituteId: string,
+    courseId: string,
+    moduleId: string,
+    file: File,
+    metadata: { title: string; type: string; description?: string; order?: number },
+  ): Promise<ModuleContent> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("title", metadata.title);
+    formData.append("type", metadata.type);
+    if (metadata.description) formData.append("description", metadata.description);
+    if (metadata.order !== undefined) formData.append("order", String(metadata.order));
+
+    const response = await fetch(
+      `${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/${courseId}/modules/${moduleId}/contents/upload-file`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || "Failed to upload file");
     }
 
     return await response.json();

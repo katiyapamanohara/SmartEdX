@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { TrashBinIcon, EyeIcon } from "@/icons";
+import { TrashBinIcon, EyeIcon, PencilIcon } from "@/icons";
 import { FiX } from "react-icons/fi";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -25,6 +25,8 @@ type Student = {
   profilePicture?: string;
   role?: any;
   isActive: boolean;
+  courses?: any[];
+  batchNumber?: string;
 };
 
 // ─── Students Table ───────────────────────────────────────────────────────────
@@ -35,12 +37,14 @@ function StudentsTable({
   onDelete,
   onToggleStatus,
   onView,
+  onEdit,
 }: {
   students: Student[];
   loading: boolean;
   onDelete: (id: string) => void;
   onToggleStatus: (id: string) => void;
   onView: (student: Student) => void;
+  onEdit: (student: Student) => void;
 }) {
   const [actionLoading, setActionLoading] = useState<{ [k: string]: string | null }>({});
 
@@ -105,13 +109,18 @@ function StudentsTable({
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center overflow-hidden shrink-0">
                           {s.profilePicture ? (
-                            <Image width={40} height={40} src={s.profilePicture} alt={`${s.firstName} ${s.lastName}`} className="object-cover w-full h-full" />
+                            <Image width={40} height={40} src={s.profilePicture} alt={s.email} className="object-cover w-full h-full" />
                           ) : (
-                            <span className="text-gray-500 text-sm font-bold">{s.firstName?.charAt(0)}{s.lastName?.charAt(0)}</span>
+                            <span className="text-gray-500 text-sm font-bold">
+                              {s.firstName ? s.firstName.charAt(0) : s.email.charAt(0).toUpperCase()}
+                              {s.lastName ? s.lastName.charAt(0) : ""}
+                            </span>
                           )}
                         </div>
                         <div>
-                          <span className="block font-medium text-gray-800 text-theme-sm dark:text-white/90">{s.firstName} {s.lastName}</span>
+                          <span className="block font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                            {s.firstName || s.lastName ? `${s.firstName} ${s.lastName}`.trim() : s.email.split('@')[0]}
+                          </span>
                           <span className="block text-gray-500 text-theme-xs dark:text-gray-400">Student</span>
                         </div>
                       </div>
@@ -139,6 +148,9 @@ function StudentsTable({
                       <div className="flex items-center justify-end gap-2">
                         <button onClick={() => onView(s)} className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 rounded-full transition-colors" title="View Details">
                           <EyeIcon className="w-5 h-5" />
+                        </button>
+                        <button onClick={() => onEdit(s)} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-full transition-colors" title="Edit Student">
+                          <PencilIcon className="w-5 h-5" />
                         </button>
                         <button
                           onClick={() => confirmDelete(s.id)}
@@ -175,27 +187,47 @@ function AddStudentModal({
   onClose,
   onSubmit,
   initialData,
+  availableCourses,
 }: {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: any) => Promise<void>;
   initialData?: Student | null;
+  availableCourses: any[];
 }) {
   const [email, setEmail] = useState("");
+  const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => { setMounted(true); return () => setMounted(false); }, []);
   useEffect(() => {
-    if (isOpen) setEmail(initialData?.email ?? "");
+    if (isOpen) {
+      setEmail(initialData?.email ?? "");
+      setSelectedCourseIds(initialData?.courses?.map((c: any) => c.id) ?? []);
+    }
   }, [isOpen, initialData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    try { await onSubmit({ email }); onClose(); }
-    catch (err) { console.error(err); }
-    finally { setSubmitting(false); }
+    try {
+      await onSubmit({ 
+        email, 
+        courseIds: selectedCourseIds 
+      });
+      onClose();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const toggleCourse = (id: string) => {
+    setSelectedCourseIds(prev => 
+      prev.includes(id) ? prev.filter(cid => cid !== id) : [...prev, id]
+    );
   };
 
   if (!isOpen || !mounted) return null;
@@ -222,6 +254,34 @@ function AddStudentModal({
               placeholder="Enter student email"
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Assign Courses</label>
+            <div className="max-h-40 overflow-y-auto space-y-2 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+              {availableCourses.length === 0 ? (
+                <p className="text-xs text-gray-500 text-center py-2">No courses available</p>
+              ) : (
+                availableCourses.map(course => (
+                  <label key={course.id} className="flex items-center gap-3 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      checked={selectedCourseIds.includes(course.id)}
+                      onChange={() => toggleCourse(course.id)}
+                      className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-blue-600 transition-colors">
+                        {course.name}
+                      </span>
+                      {course.batchNumber && (
+                        <span className="text-[10px] text-gray-500">Batch: {course.batchNumber}</span>
+                      )}
+                    </div>
+                  </label>
+                ))
+              )}
+            </div>
           </div>
           <div className="pt-4 flex justify-end gap-3">
             <button type="button" onClick={onClose} className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
@@ -284,11 +344,15 @@ function StudentDetailsModal({
               {student.profilePicture ? (
                 <Image width={80} height={80} src={student.profilePicture} alt="avatar" className="object-cover w-full h-full" />
               ) : (
-                <span className="text-2xl font-bold text-gray-500">{student.firstName?.charAt(0)}{student.lastName?.charAt(0)}</span>
+                <span className="text-2xl font-bold text-gray-500">
+                  {student.firstName ? student.firstName.charAt(0) : student.email.charAt(0).toUpperCase()}
+                </span>
               )}
             </div>
             <div className="text-center">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{student.firstName} {student.lastName}</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {student.firstName || student.lastName ? `${student.firstName} ${student.lastName}`.trim() : student.email.split('@')[0]}
+              </h3>
               <p className="text-sm text-gray-500 dark:text-gray-400">{student.email}</p>
             </div>
             <div className="w-full space-y-2 border-t border-gray-100 dark:border-gray-700 pt-4">
@@ -303,6 +367,21 @@ function StudentDetailsModal({
                 <span className={`font-medium ${student.isActive ? "text-green-500" : "text-red-500"}`}>
                   {student.isActive ? "Active" : "Inactive"}
                 </span>
+              </div>
+              <div className="border-t border-gray-100 dark:border-gray-700 pt-4 mt-2">
+                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Enrolled Courses</span>
+                <div className="mt-2 space-y-1">
+                  {student.courses && student.courses.length > 0 ? (
+                    student.courses.map((c: any) => (
+                      <div key={c.id} className="flex items-center gap-2 py-1 px-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10">
+                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                        <span className="text-xs text-gray-700 dark:text-gray-300">{c.name}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-gray-500 italic">No courses assigned</p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -327,6 +406,7 @@ const StudentsPage = () => {
 
   const [students, setStudents] = useState<Student[]>([]);
   const [filtered, setFiltered] = useState<Student[]>([]);
+  const [allCourses, setAllCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -335,26 +415,30 @@ const StudentsPage = () => {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [viewStudent, setViewStudent] = useState<Student | null>(null);
 
-  const fetchStudents = async () => {
+  const fetchInitialData = async () => {
     setLoading(true);
     try {
-      const data = await instituteService.getInstituteUsers(instituteId, "student");
-      setStudents(data ?? []);
-      setFiltered(data ?? []);
+      const [studentsData, coursesData] = await Promise.all([
+        instituteService.getInstituteUsers(instituteId, "student"),
+        instituteService.getCourses(instituteId)
+      ]);
+      setStudents(studentsData ?? []);
+      setFiltered(studentsData ?? []);
+      setAllCourses(coursesData ?? []);
     } catch (e) {
-      console.error("Failed to fetch students", e);
+      console.error("Failed to fetch data", e);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { if (instituteId) fetchStudents(); }, [instituteId]);
+  useEffect(() => { if (instituteId) fetchInitialData(); }, [instituteId]);
 
   useEffect(() => {
     const term = searchTerm.toLowerCase();
     setFiltered(
       students.filter(
-        (s) =>
+        (s: Student) =>
           s.firstName?.toLowerCase().includes(term) ||
           s.lastName?.toLowerCase().includes(term) ||
           s.email?.toLowerCase().includes(term)
@@ -370,23 +454,28 @@ const StudentsPage = () => {
     } else {
       await instituteService.createInstituteUser(instituteId, { ...data, role: "student" });
     }
-    fetchStudents();
+    fetchInitialData();
   };
 
   const handleDelete = async (id: string) => {
     await instituteService.deleteInstituteUser(instituteId, id);
-    fetchStudents();
+    fetchInitialData();
   };
 
   const handleToggleStatus = async (id: string) => {
     await instituteService.toggleInstituteUserStatus(instituteId, id);
-    setStudents((prev) => prev.map((s) => (s.id === id ? { ...s, isActive: !s.isActive } : s)));
-    fetchStudents();
+    setStudents((prev: Student[]) => prev.map((s: Student) => (s.id === id ? { ...s, isActive: !s.isActive } : s)));
+    fetchInitialData();
   };
 
   const handleView = (student: Student) => {
     setViewStudent(student);
     setIsDetailsModalOpen(true);
+  };
+
+  const handleEdit = (student: Student) => {
+    setSelectedStudent(student);
+    setIsAddModalOpen(true);
   };
 
   return (
@@ -429,6 +518,7 @@ const StudentsPage = () => {
         onDelete={handleDelete}
         onToggleStatus={handleToggleStatus}
         onView={handleView}
+        onEdit={handleEdit}
       />
 
       {/* Modals */}
@@ -437,6 +527,7 @@ const StudentsPage = () => {
         onClose={() => setIsAddModalOpen(false)}
         onSubmit={handleSave}
         initialData={selectedStudent}
+        availableCourses={allCourses}
       />
       <StudentDetailsModal
         isOpen={isDetailsModalOpen}
