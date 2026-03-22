@@ -81,7 +81,7 @@ const ModuleModal: React.FC<ModuleModalProps> = ({
       <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-800 modal-content">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-            {initialData ? "Edit Module" : "Create New Module"}
+            {initialData ? "Edit Content" : "Add Content Field"}
           </h2>
           <button
             onClick={onClose}
@@ -97,7 +97,7 @@ const ModuleModal: React.FC<ModuleModalProps> = ({
               htmlFor="title"
               className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
             >
-              Module Title
+              Content Title
             </label>
             <input
               type="text"
@@ -143,7 +143,7 @@ const ModuleModal: React.FC<ModuleModalProps> = ({
               onChange={handleChange}
               rows={4}
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              placeholder="Detailed description of the module contents..."
+              placeholder="Detailed description of this content..."
             />
           </div>
 
@@ -185,7 +185,7 @@ const ModuleModal: React.FC<ModuleModalProps> = ({
                   Saving...
                 </>
               ) : (
-                "Save Module"
+                "Save Content"
               )}
             </button>
           </div>
