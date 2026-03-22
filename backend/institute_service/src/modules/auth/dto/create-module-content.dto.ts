@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsUrl, IsEnum, IsNumber } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsUrl, IsEnum, IsNumber, ValidateIf } from 'class-validator';
 import { ContentType } from '../entities/module-content.entity';
 
 export class CreateModuleContentDto {
@@ -14,7 +14,8 @@ export class CreateModuleContentDto {
   @IsNotEmpty()
   type: ContentType;
 
-  @IsOptional()
+  // Only validate URL format when a non-empty value is actually provided
+  @ValidateIf((o) => o.url !== undefined && o.url !== null && o.url !== '')
   @IsUrl()
   url?: string;
 

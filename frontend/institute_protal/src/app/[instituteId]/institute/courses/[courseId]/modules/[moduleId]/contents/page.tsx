@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { ModuleContent, instituteService } from "@/services/instituteService";
 import ContentList from "./components/ContentList";
 import ContentModal from "./components/ContentModal";
+import QuizViewModal from "./components/QuizViewModal";
 import { FiPlus, FiArrowLeft } from "react-icons/fi";
 
 const ContentsPage = () => {
@@ -17,6 +18,7 @@ const ContentsPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingContent, setEditingContent] = useState<ModuleContent | null>(null);
+  const [viewingQuiz, setViewingQuiz] = useState<ModuleContent | null>(null);
 
   useEffect(() => {
     if (instituteId && courseId && moduleId) {
@@ -121,6 +123,7 @@ const ContentsPage = () => {
         isLoading={isLoading}
         onEdit={handleEditContent}
         onDelete={handleDeleteContent}
+        onViewQuiz={setViewingQuiz}
       />
 
       <ContentModal
@@ -128,6 +131,12 @@ const ContentsPage = () => {
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleModalSubmit}
         initialData={editingContent}
+      />
+
+      <QuizViewModal
+        isOpen={viewingQuiz !== null}
+        onClose={() => setViewingQuiz(null)}
+        content={viewingQuiz}
       />
     </div>
   );

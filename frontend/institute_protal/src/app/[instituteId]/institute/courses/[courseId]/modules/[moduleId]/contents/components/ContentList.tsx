@@ -1,12 +1,13 @@
 import React from "react";
 import { ModuleContent, ContentType } from "@/services/instituteService";
-import { FiEdit2, FiTrash2, FiFile, FiVideo, FiLink, FiFileText, FiHelpCircle } from "react-icons/fi";
+import { FiEdit2, FiTrash2, FiFile, FiVideo, FiLink, FiFileText, FiHelpCircle, FiEye } from "react-icons/fi";
 
 interface ContentListProps {
   contents: ModuleContent[];
   isLoading: boolean;
   onEdit: (content: ModuleContent) => void;
   onDelete: (contentId: string) => void;
+  onViewQuiz?: (content: ModuleContent) => void;
 }
 
 const contentTypeConfig: Record<ContentType, { icon: React.ReactNode; label: string; color: string }> = {
@@ -42,6 +43,7 @@ const ContentList: React.FC<ContentListProps> = ({
   isLoading,
   onEdit,
   onDelete,
+  onViewQuiz,
 }) => {
   if (isLoading) {
     return (
@@ -102,6 +104,15 @@ const ContentList: React.FC<ContentListProps> = ({
               </div>
             </div>
             <div className="flex items-center gap-3 flex-shrink-0">
+              {content.type === "quiz" && onViewQuiz && (
+                <button
+                  onClick={() => onViewQuiz(content)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-green-700 dark:text-green-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
+                >
+                  <FiEye className="w-4 h-4" />
+                  View
+                </button>
+              )}
               <button
                 onClick={() => onEdit(content)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white dark:bg-gray-800 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
