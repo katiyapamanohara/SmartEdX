@@ -26,4 +26,27 @@ export class CourseRepository extends BaseRepository<Course> {
       where: { batchNumber, instituteId },
     });
   }
+
+  async findByStudentUserId(userId: string, instituteId: string): Promise<Course[]> {
+    return this.courseRepository
+      .createQueryBuilder('course')
+      .innerJoin('course.students', 'student', 'student.userId = :userId', { userId })
+      .leftJoinAndSelect('course.teachers', 'teacher')
+      .leftJoinAndSelect('teacher.user', 'teacherUser')
+      .leftJoinAndSelect('course.modules', 'module')
+      .where('course.instituteId = :instituteId', { instituteId })
+      .orderBy('course.createdAt', 'DESC')
+      .getMany();
+  }
+
+  async findByTeacherUserId(userId: string, instituteId: string): Promise<Course[]> {
+    return this.courseRepository
+      .createQueryBuilder('course')
+      .innerJoin('course.teachers', 'teacher', 'teacher.userId = :userId', { userId })
+      .leftJoinAndSelect('course.teachers', 'allTeachers')
+      .leftJoinAndSelect('allTeachers.user', 'teacherUser')
+      .where('course.instituteId = :instituteId', { instituteId })
+      .orderBy('course.createdAt', 'DESC')
+      .getMany();
+  }
 }

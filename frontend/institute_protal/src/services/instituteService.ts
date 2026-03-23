@@ -15,6 +15,7 @@ export interface Course {
   batchNumber: string;
   description?: string;
   instituteId?: string;
+  moduleCount?: number;
   assignedTeacher?: {
     id: string;
     firstName: string;
@@ -245,6 +246,54 @@ class InstituteService {
       return await response.json();
     } catch (error) {
       console.error("InstituteService.getCourses Error:", error);
+      return [];
+    }
+  }
+
+  async getMyEnrolledCourses(instituteId: string): Promise<Course[]> {
+    const token = authService.getToken();
+    if (!token) return [];
+
+    try {
+      const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/my-enrolled-courses`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch enrolled courses: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("InstituteService.getMyEnrolledCourses Error:", error);
+      return [];
+    }
+  }
+
+  async getMyTeacherCourses(instituteId: string): Promise<Course[]> {
+    const token = authService.getToken();
+    if (!token) return [];
+
+    try {
+      const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/my-courses`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch my courses: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("InstituteService.getMyTeacherCourses Error:", error);
       return [];
     }
   }

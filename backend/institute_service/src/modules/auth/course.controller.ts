@@ -4,6 +4,7 @@ import { CourseService } from './course.service';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { CurrentUser } from '../../core/decorators/current-user.decorator';
 
 @ApiTags('Courses')
 @Controller('institutes/:id/courses')
@@ -28,6 +29,26 @@ export class CourseController {
   @ApiParam({ name: 'id', description: 'Institute ID' })
   async getCourses(@Param('id') instituteId: string) {
     return this.courseService.getCourses(instituteId);
+  }
+
+  @Get('my-courses')
+  @ApiOperation({ summary: 'Get courses assigned to the logged-in teacher' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  async getMyCourses(
+    @Param('id') instituteId: string,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.courseService.getMyCoursesForTeacher(instituteId, userId);
+  }
+
+  @Get('my-enrolled-courses')
+  @ApiOperation({ summary: 'Get courses the logged-in student is enrolled in' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  async getMyEnrolledCourses(
+    @Param('id') instituteId: string,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.courseService.getMyCoursesForStudent(instituteId, userId);
   }
 
   @Patch(':courseId')

@@ -57,6 +57,19 @@ export class CourseService {
     return courses.map(course => this.mapCourseToResponse(course));
   }
 
+  async getMyCoursesForStudent(instituteId: string, userId: string) {
+    const courses = await this.courseRepository.findByStudentUserId(userId, instituteId);
+    return courses.map(course => ({
+      ...this.mapCourseToResponse(course),
+      moduleCount: course.modules?.length ?? 0,
+    }));
+  }
+
+  async getMyCoursesForTeacher(instituteId: string, userId: string) {
+    const courses = await this.courseRepository.findByTeacherUserId(userId, instituteId);
+    return courses.map(course => this.mapCourseToResponse(course));
+  }
+
   async getCourseById(instituteId: string, courseId: string) {
     const course = await this.courseRepository.findOne({
       where: { id: courseId, instituteId } as any,

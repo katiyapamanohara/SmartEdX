@@ -2,7 +2,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { instituteService, Course } from "@/services/instituteService";
-import { authService } from "@/services/authService";
 import { BoxIconLine } from "@/icons";
 
 export default function TeacherCoursesPage() {
@@ -16,9 +15,8 @@ export default function TeacherCoursesPage() {
     (async () => {
       setLoading(true);
       try {
-        const user = authService.getUser();
-        const all = await instituteService.getCourses(instituteId);
-        setCourses(all.filter((c) => c.assignedTeacher?.id === user?.id));
+        const data = await instituteService.getMyTeacherCourses(instituteId);
+        setCourses(data);
       } catch (e) {
         console.error(e);
       } finally {
