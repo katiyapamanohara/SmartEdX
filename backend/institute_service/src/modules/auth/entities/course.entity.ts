@@ -35,7 +35,7 @@ export class Course {
   @Column({ nullable: true })
   description: string;
 
-  @ManyToOne(() => Institute, (institute) => institute.courses)
+  @ManyToOne(() => Institute, (institute) => institute.courses, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'instituteId' })
   institute: Institute;
 

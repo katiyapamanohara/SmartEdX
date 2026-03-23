@@ -55,7 +55,7 @@ export class Student {
   })
   courses: Course[];
  
-  @ManyToOne(() => Institute)
+  @ManyToOne(() => Institute, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'instituteId' })
   institute: Institute;
 
