@@ -27,6 +27,10 @@ export class AiProxyService {
     this.logger.log(`Forwarding ${method} ${url}`);
 
     try {
+      // Chat/LLM endpoints can take up to 2 minutes — use a generous timeout
+      const isLlmPath = path.includes('chat') || path.includes('description') || path.includes('quiz');
+      const timeoutMs = isLlmPath ? 120_000 : 30_000;
+
       const response = await firstValueFrom(
         this.httpService.request({
           method,
@@ -34,6 +38,7 @@ export class AiProxyService {
           data: body,
           headers: this.filterHeaders(headers),
           validateStatus: (status) => status < 500,
+          timeout: timeoutMs,
         }),
       );
 

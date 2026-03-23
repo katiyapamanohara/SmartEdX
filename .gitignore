@@ -15,6 +15,7 @@ coverage/
 dist/
 build/
 out/
+.claude
 
 # Environment variables
 .env
