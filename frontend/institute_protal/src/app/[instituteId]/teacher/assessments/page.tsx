@@ -126,42 +126,137 @@ function QuizViewModal({
   return typeof window !== "undefined" ? createPortal(modal, document.body) : null;
 }
 
+const OPTION_LETTERS_ROW = ["A", "B", "C", "D"];
+
 // ─── Quiz row ─────────────────────────────────────────────────────
 function QuizRow({ entry, onView }: { entry: QuizEntry; onView: () => void }) {
+  const [expanded, setExpanded] = useState(false);
   const quiz = entry.content.quizData;
-  const qCount = quiz?.questions?.length ?? 0;
+  const questions: QuizQuestion[] = quiz?.questions ?? [];
+  const qCount = questions.length;
+
   return (
-    <div className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 border-b border-gray-100 dark:border-gray-700/50 last:border-0 transition-colors group">
-      <div className="w-10 h-10 shrink-0 rounded-lg flex items-center justify-center bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400">
-        <FiHelpCircle className="w-5 h-5" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-medium text-gray-800 dark:text-white text-sm leading-snug">{entry.content.title}</p>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-          {entry.module.title}
-        </p>
-        <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-          <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-            <FiHelpCircle className="w-3 h-3" /> {qCount} question{qCount !== 1 ? "s" : ""}
+    <div className="border-b border-gray-100 dark:border-gray-700/50 last:border-0">
+      {/* Row header — click to expand */}
+      <div
+        className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors cursor-pointer group"
+        onClick={() => setExpanded((p) => !p)}
+      >
+        <div className={`w-10 h-10 shrink-0 rounded-lg flex items-center justify-center transition-colors ${expanded ? "bg-green-500 text-white" : "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"}`}>
+          <FiHelpCircle className="w-5 h-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-gray-800 dark:text-white text-sm leading-snug">{entry.content.title}</p>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            <span className="text-xs text-gray-500 dark:text-gray-400">{entry.course.name}</span>
+            {entry.course.batchNumber && (
+              <>
+                <span className="text-gray-300 dark:text-gray-600">·</span>
+                <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                  Batch {entry.course.batchNumber}
+                </span>
+              </>
+            )}
+            <span className="text-gray-300 dark:text-gray-600">·</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">{entry.module.title}</span>
+          </div>
+          <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+            <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+              <FiHelpCircle className="w-3 h-3" /> {qCount} question{qCount !== 1 ? "s" : ""}
+            </span>
+            {quiz?.timeLimit && quiz.timeLimit > 0 && (
+              <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                <FiClock className="w-3 h-3" /> {quiz.timeLimit} min
+              </span>
+            )}
+            {quiz?.passingScore !== undefined && (
+              <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                <FiAward className="w-3 h-3" /> Pass: {quiz.passingScore}%
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={(e) => { e.stopPropagation(); onView(); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors opacity-0 group-hover:opacity-100"
+          >
+            <FiEye className="w-3.5 h-3.5" /> View
+          </button>
+          <span className={`transition-transform duration-200 text-gray-400 ${expanded ? "rotate-180" : ""}`}>
+            <FiChevronDown className="w-4 h-4" />
           </span>
-          {quiz?.timeLimit && quiz.timeLimit > 0 && (
-            <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-              <FiClock className="w-3 h-3" /> {quiz.timeLimit} min
-            </span>
-          )}
-          {quiz?.passingScore !== undefined && (
-            <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-              <FiAward className="w-3 h-3" /> Pass: {quiz.passingScore}%
-            </span>
-          )}
         </div>
       </div>
-      <button
-        onClick={onView}
-        className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors opacity-0 group-hover:opacity-100"
-      >
-        <FiEye className="w-3.5 h-3.5" /> View
-      </button>
+
+      {/* Expanded quiz details */}
+      {expanded && (
+        <div className="px-5 pb-5 space-y-3 bg-gray-50 dark:bg-gray-800/60 border-t border-gray-100 dark:border-gray-700">
+          {/* Stats bar */}
+          {quiz && (
+            <div className="flex items-center gap-5 pt-3 pb-1 flex-wrap">
+              <span className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-400">
+                <FiHelpCircle className="w-3.5 h-3.5 text-green-500" />
+                <span className="text-gray-900 dark:text-white font-bold">{qCount}</span> question{qCount !== 1 ? "s" : ""}
+              </span>
+              {quiz.passingScore !== undefined && (
+                <span className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-400">
+                  <FiAward className="w-3.5 h-3.5 text-amber-500" />
+                  Pass: <span className="text-gray-900 dark:text-white font-bold">{quiz.passingScore}%</span>
+                </span>
+              )}
+              {quiz.timeLimit > 0 && (
+                <span className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-400">
+                  <FiClock className="w-3.5 h-3.5 text-blue-500" />
+                  <span className="text-gray-900 dark:text-white font-bold">{quiz.timeLimit}</span> min
+                </span>
+              )}
+              {entry.content.description && (
+                <p className="w-full text-xs text-gray-500 dark:text-gray-400 italic">{entry.content.description}</p>
+              )}
+            </div>
+          )}
+
+          {/* Questions */}
+          {questions.length === 0 ? (
+            <p className="text-xs text-gray-400 dark:text-gray-500 py-2">No questions added yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {questions.map((q, qi) => (
+                <div key={q.id} className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden bg-white dark:bg-gray-900">
+                  <div className="flex items-start gap-2.5 px-4 py-3 bg-gray-50 dark:bg-gray-800/50">
+                    <span className="shrink-0 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold flex items-center justify-center">
+                      {qi + 1}
+                    </span>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white leading-snug">{q.question}</p>
+                  </div>
+                  <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                    {q.options.map((opt, oi) => {
+                      const correct = oi === q.correctAnswer;
+                      return (
+                        <div key={oi} className={`flex items-center gap-3 px-4 py-2 ${correct ? "bg-green-50 dark:bg-green-900/20" : "bg-white dark:bg-gray-900"}`}>
+                          <span className={`shrink-0 w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center ${correct ? "bg-green-500 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-500"}`}>
+                            {OPTION_LETTERS_ROW[oi]}
+                          </span>
+                          <span className={`text-xs flex-1 ${correct ? "text-green-800 dark:text-green-300 font-medium" : "text-gray-700 dark:text-gray-300"}`}>{opt}</span>
+                          {correct && <FiCheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {q.explanation && (
+                    <div className="px-4 py-2 bg-blue-50 dark:bg-blue-900/10 border-t border-blue-100 dark:border-blue-800">
+                      <p className="text-xs text-blue-700 dark:text-blue-300">
+                        <span className="font-semibold">Explanation: </span>{q.explanation}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -180,9 +275,21 @@ function CourseGroup({ course, quizzes, onViewQuiz }: { course: Course; quizzes:
         </span>
         <div className="flex-1 min-w-0">
           <h3 className="font-bold text-gray-900 dark:text-white text-sm leading-snug">{course.name}</h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400">{course.code}</p>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            {course.code && (
+              <span className="text-xs text-gray-500 dark:text-gray-400">{course.code}</span>
+            )}
+            {course.batchNumber && (
+              <>
+                {course.code && <span className="text-gray-300 dark:text-gray-600">·</span>}
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                  Batch {course.batchNumber}
+                </span>
+              </>
+            )}
+          </div>
         </div>
-        <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+        <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 shrink-0">
           {quizzes.length} quiz{quizzes.length !== 1 ? "zes" : ""}
         </span>
       </div>
