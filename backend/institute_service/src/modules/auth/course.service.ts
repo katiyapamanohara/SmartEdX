@@ -161,6 +161,43 @@ export class CourseService {
     });
   }
 
+  async createAssessmentWithModuleForTeacher(
+    instituteId: string,
+    courseId: string,
+    userId: string,
+    dto: { moduleId?: string; moduleName?: string; title: string; description?: string; quizData: any },
+  ) {
+    const course = await this.courseRepository.findOne({
+      where: { id: courseId, instituteId } as any,
+      relations: ['teachers'],
+    });
+    if (!course) throw new NotFoundException('Course not found');
+    const isAssigned = course.teachers?.some((t) => t.userId === userId);
+    if (!isAssigned) throw new ForbiddenException('You are not assigned to this course');
+
+    let resolvedModuleId = dto.moduleId;
+
+    if (!resolvedModuleId) {
+      const name = (dto.moduleName ?? '').trim() || 'Assessments';
+      const existing = await this.courseModuleRepository.findByCourseId(courseId);
+      const newMod = await this.courseModuleRepository.create({ title: name, courseId, order: existing.length });
+      resolvedModuleId = newMod.id;
+    } else {
+      const mod = await this.courseModuleRepository.findById(resolvedModuleId);
+      if (!mod || mod.courseId !== courseId) throw new NotFoundException('Module not found in this course');
+    }
+
+    const existingContents = await this.moduleContentRepository.findByModuleId(resolvedModuleId);
+    return this.moduleContentRepository.create({
+      title: dto.title,
+      description: dto.description,
+      type: ContentType.QUIZ,
+      quizData: dto.quizData,
+      moduleId: resolvedModuleId,
+      order: existingContents.length,
+    });
+  }
+
   async getCourseWithModulesForTeacher(instituteId: string, courseId: string, userId: string) {
     const course = await this.courseRepository.findCourseWithModulesForTeacher(courseId, userId, instituteId);
     if (!course) {

@@ -336,6 +336,31 @@ class InstituteService {
     return await response.json();
   }
 
+  async createTeacherAssessmentSmart(
+    instituteId: string,
+    courseId: string,
+    data: { moduleId?: string; moduleName?: string; title: string; description?: string; quizData: any }
+  ): Promise<ModuleContent> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+
+    const response = await fetch(
+      `${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/${courseId}/teacher-assessment`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }
+    );
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || "Failed to create assessment");
+    }
+
+    return await response.json();
+  }
+
   async getCourseForTeacher(instituteId: string, courseId: string): Promise<{ course: Course; modules: (CourseModule & { contents: ModuleContent[] })[] } | null> {
     const token = authService.getToken();
     if (!token) return null;

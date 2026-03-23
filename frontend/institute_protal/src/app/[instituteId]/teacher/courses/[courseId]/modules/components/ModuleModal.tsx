@@ -24,7 +24,6 @@ const ModuleModal: React.FC<ModuleModalProps> = ({
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    order: 0,
   });
   const [submitting, setSubmitting] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -40,13 +39,11 @@ const ModuleModal: React.FC<ModuleModalProps> = ({
         setFormData({
           title: initialData.title,
           description: initialData.description || "",
-          order: initialData.order || 0,
         });
       } else {
         setFormData({
           title: "",
           description: "",
-          order: 0,
         });
       }
     }
@@ -56,10 +53,7 @@ const ModuleModal: React.FC<ModuleModalProps> = ({
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: name === "order" ? parseInt(value) || 0 : value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -78,7 +72,7 @@ const ModuleModal: React.FC<ModuleModalProps> = ({
   if (!isOpen || !mounted) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[999999] flex items-center justify-center overflow-y-auto overflow-x-hidden bg-black/50 p-4 backdrop-blur-sm transition-all">
+    <div className="fixed inset-0 z-999999 flex items-center justify-center overflow-y-auto overflow-x-hidden bg-black/50 p-4 backdrop-blur-sm transition-all">
       <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-800 modal-content">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -109,24 +103,6 @@ const ModuleModal: React.FC<ModuleModalProps> = ({
               required
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
               placeholder="e.g. Introduction to Variables"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="order"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-            >
-              Sequence Order
-            </label>
-            <input
-              type="number"
-              id="order"
-              name="order"
-              value={formData.order}
-              onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              placeholder="e.g. 1"
             />
           </div>
 

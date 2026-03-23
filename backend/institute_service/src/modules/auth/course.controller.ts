@@ -154,6 +154,18 @@ export class CourseController {
     return this.courseService.createAssessmentForTeacher(instituteId, courseId, moduleId, userId, body);
   }
 
+  @Post(':courseId/teacher-assessment')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Teacher creates a quiz assessment, optionally creating the module inline' })
+  async createTeacherAssessmentSmart(
+    @Param('id') instituteId: string,
+    @Param('courseId') courseId: string,
+    @CurrentUser('userId') userId: string,
+    @Body() body: { moduleId?: string; moduleName?: string; title: string; description?: string; quizData: any },
+  ) {
+    return this.courseService.createAssessmentWithModuleForTeacher(instituteId, courseId, userId, body);
+  }
+
   @Get(':courseId/for-teacher')
   @ApiOperation({ summary: 'Get a course with all modules and contents for the assigned teacher' })
   @ApiParam({ name: 'id', description: 'Institute ID' })
