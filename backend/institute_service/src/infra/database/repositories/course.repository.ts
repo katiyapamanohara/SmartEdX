@@ -27,6 +27,34 @@ export class CourseRepository extends BaseRepository<Course> {
     });
   }
 
+  async findCourseWithModulesForTeacher(courseId: string, userId: string, instituteId: string): Promise<Course | null> {
+    return this.courseRepository
+      .createQueryBuilder('course')
+      .innerJoin('course.teachers', 'teacher', 'teacher.userId = :userId', { userId })
+      .leftJoinAndSelect('course.teachers', 'allTeachers')
+      .leftJoinAndSelect('allTeachers.user', 'teacherUser')
+      .leftJoinAndSelect('course.modules', 'module')
+      .leftJoinAndSelect('module.contents', 'content')
+      .where('course.id = :courseId', { courseId })
+      .andWhere('course.instituteId = :instituteId', { instituteId })
+      .orderBy('module.order', 'ASC')
+      .addOrderBy('content.order', 'ASC')
+      .getOne();
+  }
+
+  async findCoursesWithQuizzesByTeacher(userId: string, instituteId: string): Promise<Course[]> {
+    return this.courseRepository
+      .createQueryBuilder('course')
+      .innerJoin('course.teachers', 'teacher', 'teacher.userId = :userId', { userId })
+      .leftJoinAndSelect('course.modules', 'module')
+      .leftJoinAndSelect('module.contents', 'content', 'content.type = :type', { type: 'quiz' })
+      .where('course.instituteId = :instituteId', { instituteId })
+      .orderBy('course.createdAt', 'DESC')
+      .addOrderBy('module.order', 'ASC')
+      .addOrderBy('content.order', 'ASC')
+      .getMany();
+  }
+
   async findByStudentUserId(userId: string, instituteId: string): Promise<Course[]> {
     return this.courseRepository
       .createQueryBuilder('course')
