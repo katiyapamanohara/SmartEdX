@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import { ChatIcon, PaperPlaneIcon } from "@/icons";
 import { messageService, MessageContact, Message } from "@/services/messageService";
 import { authService } from "@/services/authService";
-import { useMessageStream } from "@/hooks/useMessageStream";
+import { useMessageSocket } from "@/hooks/useMessageSocket";
 
 function Avatar({
   name,
@@ -182,7 +182,7 @@ export default function TeacherMessagesPage() {
     );
   }, []);
 
-  useMessageStream(instituteId, token, handleNewMessage, handleMessageSent);
+  useMessageSocket(token, handleNewMessage, handleMessageSent);
 
   const handleSelectContact = async (contact: MessageContact) => {
     setSelectedContact(contact);

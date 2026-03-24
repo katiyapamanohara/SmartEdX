@@ -4,7 +4,85 @@ import { useParams } from "next/navigation";
 import { ChatIcon, PaperPlaneIcon } from "@/icons";
 import { messageService, MessageContact, Message } from "@/services/messageService";
 import { authService } from "@/services/authService";
-import { useMessageStream } from "@/hooks/useMessageStream";
+import { useMessageSocket } from "@/hooks/useMessageSocket";
+
+function TeacherDetailsModal({
+  contact,
+  onClose,
+}: {
+  contact: MessageContact;
+  onClose: () => void;
+}) {
+  const fullName = `${contact.firstName} ${contact.lastName}`;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-sm mx-4 overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Top banner */}
+        <div className="h-20 bg-gradient-to-r from-brand-500 to-brand-600" />
+        <div className="px-6 pb-6">
+          <div className="-mt-10 mb-4 flex items-end justify-between">
+            {contact.profilePicture ? (
+              <img
+                src={contact.profilePicture}
+                alt={fullName}
+                className="w-20 h-20 rounded-full object-cover border-4 border-white dark:border-gray-900 shrink-0"
+              />
+            ) : (
+              <div className="w-20 h-20 rounded-full bg-brand-100 dark:bg-brand-500/20 border-4 border-white dark:border-gray-900 flex items-center justify-center text-brand-600 dark:text-brand-400 font-bold text-2xl shrink-0">
+                {fullName.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors mb-2"
+              aria-label="Close"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">{fullName}</h2>
+          <p className="text-sm text-brand-500 font-medium capitalize mb-4">{contact.role}</p>
+
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+              <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              <span className="break-all">{contact.email}</span>
+            </div>
+
+            {contact.courses.length > 0 && (
+              <div className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-300">
+                <svg className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+                <div>
+                  <p className="font-medium text-gray-700 dark:text-gray-200 mb-1">Courses</p>
+                  <ul className="flex flex-col gap-1">
+                    {contact.courses.map((c) => (
+                      <li key={c.id} className="text-xs bg-gray-100 dark:bg-white/8 rounded-lg px-2 py-1 text-gray-600 dark:text-gray-300">
+                        {c.name}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function Avatar({ name, picture, size = 9 }: { name: string; picture?: string; size?: number }) {
   const sizeClass = `w-${size} h-${size}`;
@@ -34,6 +112,7 @@ export default function StudentMessagesPage() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [showTeacherDetails, setShowTeacherDetails] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const selectedContactRef = useRef<MessageContact | null>(null);
@@ -90,7 +169,7 @@ export default function StudentMessagesPage() {
     );
   }, []);
 
-  useMessageStream(instituteId, token, handleNewMessage, handleMessageSent);
+  useMessageSocket(token, handleNewMessage, handleMessageSent);
 
   const handleSelectContact = async (contact: MessageContact) => {
     setSelectedContact(contact);
@@ -233,14 +312,23 @@ export default function StudentMessagesPage() {
                   picture={selectedContact.profilePicture}
                   size={9}
                 />
-                <div>
+                <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-800 dark:text-white text-sm">
                     {selectedContact.firstName} {selectedContact.lastName}
                   </p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-gray-400 truncate">
                     {selectedContact.courses.map((c) => c.name).join(", ")}
                   </p>
                 </div>
+                <button
+                  onClick={() => setShowTeacherDetails(true)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-brand-500 hover:bg-brand-50 dark:hover:bg-brand-500/10 transition-colors shrink-0"
+                  title="View teacher details"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </button>
               </div>
 
               {/* Messages */}
@@ -326,6 +414,13 @@ export default function StudentMessagesPage() {
           )}
         </div>
       </div>
+
+      {showTeacherDetails && selectedContact && (
+        <TeacherDetailsModal
+          contact={selectedContact}
+          onClose={() => setShowTeacherDetails(false)}
+        />
+      )}
     </div>
   );
 }

@@ -1,17 +1,16 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
+import { Injectable, ForbiddenException, Inject, forwardRef } from '@nestjs/common';
 import { MessageRepository } from '../../infra/database/repositories/message.repository';
 import { CourseRepository } from '../../infra/database/repositories/course.repository';
-import { InstituteUserRepository } from '../../infra/database/repositories/institute-user.repository';
 import { CreateMessageDto } from './dto/create-message.dto';
-import { MessageEventService } from './message-event.service';
+import { MessageGateway } from './message.gateway';
 
 @Injectable()
 export class MessageService {
   constructor(
     private readonly messageRepository: MessageRepository,
     private readonly courseRepository: CourseRepository,
-    private readonly instituteUserRepository: InstituteUserRepository,
-    private readonly messageEventService: MessageEventService,
+    @Inject(forwardRef(() => MessageGateway))
+    private readonly messageGateway: MessageGateway,
   ) {}
 
   /**
@@ -84,10 +83,9 @@ export class MessageService {
     instituteId: string,
     currentUserId: string,
     otherUserId: string,
-    role: string,
   ) {
     // Validate that the users are connected via a course
-    const isConnected = await this.areUsersConnected(instituteId, currentUserId, otherUserId, role);
+    const isConnected = await this.areUsersConnected(instituteId, currentUserId, otherUserId);
     if (!isConnected) {
       throw new ForbiddenException('You can only message users from your assigned courses');
     }
@@ -114,9 +112,8 @@ export class MessageService {
     instituteId: string,
     senderId: string,
     dto: CreateMessageDto,
-    role: string,
   ) {
-    const isConnected = await this.areUsersConnected(instituteId, senderId, dto.recipientId, role);
+    const isConnected = await this.areUsersConnected(instituteId, senderId, dto.recipientId);
     if (!isConnected) {
       throw new ForbiddenException('You can only message users from your assigned courses');
     }
@@ -138,10 +135,10 @@ export class MessageService {
       createdAt: message.createdAt,
     };
 
-    // Push real-time event to recipient via SSE
-    this.messageEventService.emit(dto.recipientId, { type: 'new_message', ...payload, isMine: false });
+    // Push real-time event to recipient via WebSocket
+    this.messageGateway.emitNewMessage(dto.recipientId, { ...payload, isMine: false });
     // Confirm delivery to sender for multi-tab sync
-    this.messageEventService.emit(senderId, { type: 'message_sent', ...payload, isMine: true });
+    this.messageGateway.emitMessageSent(senderId, { ...payload, isMine: true });
 
     return {
       id: message.id,
@@ -174,25 +171,18 @@ export class MessageService {
     instituteId: string,
     userId1: string,
     userId2: string,
-    role: string,
   ): Promise<boolean> {
-    if (role === 'student') {
-      // userId1 is student, userId2 should be a teacher in their course
-      const courses = await this.courseRepository.findByStudentUserId(userId1, instituteId);
-      for (const course of courses) {
-        for (const teacher of course.teachers || []) {
-          if (teacher.userId === userId2) return true;
-        }
-      }
-    } else if (role === 'teacher' || role === 'instructor') {
-      // userId1 is teacher, userId2 should be a student in their course
-      const courses = await this.courseRepository.findByTeacherUserIdWithStudents(userId1, instituteId);
-      for (const course of courses) {
-        for (const student of course.students || []) {
-          if (student.userId === userId2) return true;
-        }
-      }
-    }
-    return false;
+    // Check if they share a course (student <-> teacher relationship via enrolled courses)
+    const coursesForUser1 = await this.courseRepository.findByStudentUserId(userId1, instituteId);
+    const sharedAsStudent1 = coursesForUser1.some((course) =>
+      course.teachers?.some((t) => t.userId === userId2),
+    );
+    if (sharedAsStudent1) return true;
+
+    const coursesForUser2 = await this.courseRepository.findByStudentUserId(userId2, instituteId);
+    const sharedAsStudent2 = coursesForUser2.some((course) =>
+      course.teachers?.some((t) => t.userId === userId1),
+    );
+    return sharedAsStudent2;
   }
 }
