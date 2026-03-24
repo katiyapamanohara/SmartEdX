@@ -167,7 +167,12 @@ export default function StudentRecordingsPage() {
 
   const watermarkIdentity = useMemo(() => {
     const user = authService.getUser();
-    return user?.email || "student";
+    const email = user?.email || "";
+    const id = user?.id || "";
+    if (email && id) return `ID: ${id} | Email: ${email}`;
+    if (email) return `Email: ${email}`;
+    if (id) return `ID: ${id}`;
+    return "unknown";
   }, []);
 
   const showProtectionNotice = useCallback((message: string) => {

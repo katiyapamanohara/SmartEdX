@@ -136,6 +136,7 @@ class AuthService {
 
       const data: AuthResponse = await response.json();
       this.setCookie("access_token", data.access_token);
+      this.setCookie("user", JSON.stringify(data.user));
 
       return data;
     } catch (error) {
