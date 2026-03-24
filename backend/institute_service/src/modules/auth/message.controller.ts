@@ -1,8 +1,11 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, Sse, SkipThrottle } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
+import { Observable } from 'rxjs';
 import { MessageService } from './message.service';
+import { MessageEventService } from './message-event.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { SseAuthGuard } from './guards/sse-auth.guard';
 import { CurrentUser } from '../../core/decorators/current-user.decorator';
 
 @ApiTags('Messages')
@@ -10,7 +13,10 @@ import { CurrentUser } from '../../core/decorators/current-user.decorator';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth('JWT-auth')
 export class MessageController {
-  constructor(private readonly messageService: MessageService) {}
+  constructor(
+    private readonly messageService: MessageService,
+    private readonly messageEventService: MessageEventService,
+  ) {}
 
   @Get('contacts')
   @ApiOperation({ summary: 'Get list of contactable users (teachers for students, students for teachers)' })
@@ -56,5 +62,18 @@ export class MessageController {
     @CurrentUser('userId') userId: string,
   ) {
     return this.messageService.getUnreadCounts(instituteId, userId);
+  }
+
+  /**
+   * SSE stream — browser connects here and receives real-time message events.
+   * Uses SseAuthGuard because EventSource cannot set Authorization headers;
+   * the token is passed as ?token= query parameter instead.
+   */
+  @Sse('stream')
+  @UseGuards(SseAuthGuard)
+  @ApiOperation({ summary: 'SSE stream for real-time message events' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  stream(@CurrentUser('userId') userId: string): Observable<{ data: string }> {
+    return this.messageEventService.streamForUser(userId);
   }
 }

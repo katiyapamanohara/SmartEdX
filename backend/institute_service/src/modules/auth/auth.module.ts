@@ -25,6 +25,8 @@ import { RecordingController } from './recording.controller';
 import { RecordingService } from './recording.service';
 import { MessageController } from './message.controller';
 import { MessageService } from './message.service';
+import { MessageEventService } from './message-event.service';
+import { SseAuthGuard } from './guards/sse-auth.guard';
 
 @Module({
   imports: [
@@ -51,6 +53,8 @@ import { MessageService } from './message.service';
     ModuleContentService,
     RecordingService,
     MessageService,
+    MessageEventService,
+    SseAuthGuard,
     JwtStrategy,
     FirebaseAuthStrategy,
     JwtAuthGuard,

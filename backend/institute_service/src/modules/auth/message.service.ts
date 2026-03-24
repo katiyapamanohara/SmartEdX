@@ -1,8 +1,9 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, ForbiddenException } from '@nestjs/common';
 import { MessageRepository } from '../../infra/database/repositories/message.repository';
 import { CourseRepository } from '../../infra/database/repositories/course.repository';
 import { InstituteUserRepository } from '../../infra/database/repositories/institute-user.repository';
 import { CreateMessageDto } from './dto/create-message.dto';
+import { MessageEventService } from './message-event.service';
 
 @Injectable()
 export class MessageService {
@@ -10,6 +11,7 @@ export class MessageService {
     private readonly messageRepository: MessageRepository,
     private readonly courseRepository: CourseRepository,
     private readonly instituteUserRepository: InstituteUserRepository,
+    private readonly messageEventService: MessageEventService,
   ) {}
 
   /**
@@ -126,6 +128,20 @@ export class MessageService {
       instituteId,
       isRead: false,
     });
+
+    const payload = {
+      id: message.id,
+      content: message.content,
+      senderId: message.senderId,
+      recipientId: message.recipientId,
+      isRead: message.isRead,
+      createdAt: message.createdAt,
+    };
+
+    // Push real-time event to recipient via SSE
+    this.messageEventService.emit(dto.recipientId, { type: 'new_message', ...payload, isMine: false });
+    // Confirm delivery to sender for multi-tab sync
+    this.messageEventService.emit(senderId, { type: 'message_sent', ...payload, isMine: true });
 
     return {
       id: message.id,

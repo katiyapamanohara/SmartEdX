@@ -4,16 +4,13 @@ import { useParams } from "next/navigation";
 import { ChatIcon, PaperPlaneIcon } from "@/icons";
 import { messageService, MessageContact, Message } from "@/services/messageService";
 import { authService } from "@/services/authService";
+import { useMessageStream } from "@/hooks/useMessageStream";
 
 function Avatar({ name, picture, size = 9 }: { name: string; picture?: string; size?: number }) {
   const sizeClass = `w-${size} h-${size}`;
   if (picture) {
     return (
-      <img
-        src={picture}
-        alt={name}
-        className={`${sizeClass} rounded-full object-cover shrink-0`}
-      />
+      <img src={picture} alt={name} className={`${sizeClass} rounded-full object-cover shrink-0`} />
     );
   }
   return (
@@ -39,15 +36,16 @@ export default function StudentMessagesPage() {
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const selectedContactRef = useRef<MessageContact | null>(null);
+  const token = authService.getToken();
   const currentUserId = authService.getUserId();
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  useEffect(() => {
+    selectedContactRef.current = selectedContact;
+  }, [selectedContact]);
 
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   // Load contacts on mount
@@ -64,38 +62,45 @@ export default function StudentMessagesPage() {
     });
   }, [instituteId]);
 
-  const loadMessages = useCallback(
-    async (contactId: string) => {
-      const msgs = await messageService.getConversation(instituteId, contactId);
-      setMessages(msgs);
-      // Clear unread for this contact
-      setUnreadCounts((prev) => ({ ...prev, [contactId]: 0 }));
+  // WebSocket: handle incoming messages
+  const handleNewMessage = useCallback(
+    (msg: Message) => {
+      const active = selectedContactRef.current;
+      if (active && msg.senderId === active.id) {
+        // Append to open conversation
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+      } else {
+        // Increment unread badge for that contact
+        setUnreadCounts((prev) => ({
+          ...prev,
+          [msg.senderId]: (prev[msg.senderId] || 0) + 1,
+        }));
+      }
     },
-    [instituteId]
+    []
   );
 
-  // Select a contact
+  // WebSocket: replace optimistic message with confirmed one
+  const handleMessageSent = useCallback((msg: Message) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.id.startsWith("temp-") && m.content === msg.content ? msg : m))
+    );
+  }, []);
+
+  useMessageStream(instituteId, token, handleNewMessage, handleMessageSent);
+
   const handleSelectContact = async (contact: MessageContact) => {
     setSelectedContact(contact);
     setMessages([]);
     setLoadingMessages(true);
-    await loadMessages(contact.id);
+    const msgs = await messageService.getConversation(instituteId, contact.id);
+    setMessages(msgs);
+    setUnreadCounts((prev) => ({ ...prev, [contact.id]: 0 }));
     setLoadingMessages(false);
   };
-
-  // Poll for new messages every 3s when a conversation is open
-  useEffect(() => {
-    if (pollRef.current) clearInterval(pollRef.current);
-    if (!selectedContact) return;
-
-    pollRef.current = setInterval(() => {
-      loadMessages(selectedContact.id);
-    }, 3000);
-
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [selectedContact, loadMessages]);
 
   const handleSend = async () => {
     if (!input.trim() || !selectedContact || sending) return;
@@ -103,7 +108,6 @@ export default function StudentMessagesPage() {
     setInput("");
     setSending(true);
 
-    // Optimistic update
     const optimistic: Message = {
       id: `temp-${Date.now()}`,
       content: text,
@@ -116,12 +120,7 @@ export default function StudentMessagesPage() {
     setMessages((prev) => [...prev, optimistic]);
 
     const sent = await messageService.sendMessage(instituteId, selectedContact.id, text);
-    if (sent) {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === optimistic.id ? sent : m))
-      );
-    } else {
-      // Remove optimistic on failure
+    if (!sent) {
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
       setInput(text);
     }
@@ -138,16 +137,10 @@ export default function StudentMessagesPage() {
   const formatTime = (dateStr: string) => {
     const date = new Date(dateStr);
     const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) {
-      return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    } else if (diffDays === 1) {
-      return "Yesterday";
-    } else if (diffDays < 7) {
-      return date.toLocaleDateString([], { weekday: "short" });
-    }
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return date.toLocaleDateString([], { weekday: "short" });
     return date.toLocaleDateString([], { month: "short", day: "numeric" });
   };
 
@@ -183,14 +176,15 @@ export default function StudentMessagesPage() {
             ) : contacts.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full px-4 text-center gap-2">
                 <p className="text-sm text-gray-500 dark:text-gray-400">No teachers assigned yet.</p>
-                <p className="text-xs text-gray-400 dark:text-gray-500">Enroll in a course to start messaging.</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500">
+                  Enroll in a course to start messaging.
+                </p>
               </div>
             ) : (
               contacts.map((contact) => {
                 const fullName = `${contact.firstName} ${contact.lastName}`;
                 const isSelected = selectedContact?.id === contact.id;
                 const unread = unreadCounts[contact.id] || 0;
-
                 return (
                   <button
                     key={contact.id}
@@ -202,7 +196,13 @@ export default function StudentMessagesPage() {
                     <Avatar name={fullName} picture={contact.profilePicture} size={9} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
+                        <p
+                          className={`text-sm truncate ${
+                            unread > 0
+                              ? "font-bold text-gray-900 dark:text-white"
+                              : "font-medium text-gray-800 dark:text-gray-200"
+                          }`}
+                        >
                           {fullName}
                         </p>
                         {unread > 0 && (
@@ -275,7 +275,7 @@ export default function StudentMessagesPage() {
                             : "bg-gray-100 dark:bg-white/7 text-gray-800 dark:text-gray-200 rounded-bl-sm"
                         }`}
                       >
-                        <p className="text-sm leading-relaxed wrap-break-word">{msg.content}</p>
+                        <p className="text-sm leading-relaxed">{msg.content}</p>
                         <p
                           className={`text-[10px] mt-1 ${
                             msg.isMine ? "text-white/60 text-right" : "text-gray-400"
