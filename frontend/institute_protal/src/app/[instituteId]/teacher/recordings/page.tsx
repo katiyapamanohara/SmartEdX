@@ -300,6 +300,7 @@ export default function TeacherRecordingsPage() {
   const [assignCourseId, setAssignCourseId] = useState("");
   const [assignDeadline, setAssignDeadline] = useState("");
   const [assigning, setAssigning] = useState(false);
+  const [assignModalLoading, setAssignModalLoading] = useState(false);
 
   // ── Details modal ─────────────────────────────────────────────────────────────
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -472,6 +473,7 @@ export default function TeacherRecordingsPage() {
 
       const updated: Recording = await res.json();
       setRecordings((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      setSelectedRecording(updated);
       // Sync details modal if open for this recording
       if (detailsRecording?.id === updated.id) setDetailsRecording(updated);
       setAssignCourseId("");
@@ -676,6 +678,44 @@ export default function TeacherRecordingsPage() {
 
     return () => window.clearInterval(interval);
   }, [playRecording]);
+
+  // Fetch latest recording assignments when assign modal opens
+  useEffect(() => {
+    if (!showAssignModal || !selectedRecording || !instituteId) return;
+
+    let cancelled = false;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 5000);
+
+    (async () => {
+      setAssignModalLoading(true);
+      try {
+        const res = await fetch(`${getApiBase(instituteId)}/${selectedRecording.id}`, {
+          headers: authHeaders(),
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+
+        const latest: Recording = await res.json();
+        if (cancelled) return;
+
+        setSelectedRecording(latest);
+        setRecordings((prev) => prev.map((r) => (r.id === latest.id ? latest : r)));
+        if (detailsRecording?.id === latest.id) setDetailsRecording(latest);
+      } catch {
+        // Keep existing selectedRecording as fallback if refresh fails
+      } finally {
+        window.clearTimeout(timeoutId);
+        if (!cancelled) setAssignModalLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      window.clearTimeout(timeoutId);
+    };
+  }, [showAssignModal, selectedRecording?.id, instituteId, detailsRecording?.id]);
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
@@ -935,30 +975,56 @@ export default function TeacherRecordingsPage() {
             <div className="flex flex-col gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course</label>
-                <select
-                  value={assignCourseId}
-                  onChange={(e) => { setAssignCourseId(e.target.value); setAssignDeadline(""); }}
-                  className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent text-sm"
-                >
-                  <option value="">Choose a course...</option>
-                  {courses
-                    .filter((c) => !selectedRecording.assignments.some((a) => a.courseId === c.id))
-                    .map((course) => (
-                      <option key={course.id} value={course.id}>{course.name}</option>
-                    ))}
-                </select>
+                {(() => {
+                  const unassigned = courses.filter((c) => !(selectedRecording.assignments ?? []).some((a) => a.courseId === c.id));
+                  const allAssigned = !assignModalLoading && courses.length > 0 && unassigned.length === 0;
+                  return allAssigned ? (
+                    <div className="w-full px-4 py-2 rounded-lg border border-dashed border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/40 text-xs text-gray-500 dark:text-gray-400">
+                      All your courses are already assigned to this recording.
+                    </div>
+                  ) : (
+                    <select
+                      value={assignCourseId}
+                      onChange={(e) => { setAssignCourseId(e.target.value); setAssignDeadline(""); }}
+                      className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent text-sm"
+                      disabled={assignModalLoading}
+                    >
+                      <option value="">Choose a course...</option>
+                      {unassigned.map((course) => (
+                        <option key={course.id} value={course.id}>{course.name}</option>
+                      ))}
+                    </select>
+                  );
+                })()}
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {assignModalLoading
+                    ? "Refreshing assigned courses in background..."
+                    : "Only unassigned courses are shown."}
+                </p>
               </div>
 
-              {assignCourseId && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Deadline</label>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Deadline {assignCourseId && <span className="text-red-500">*</span>}
+                  {assignCourseId && (
+                    <span className="text-xs font-normal text-gray-500 dark:text-gray-400 ml-2">
+                      for {courses.find((c) => c.id === assignCourseId)?.name}
+                    </span>
+                  )}
+                </label>
+
+                {assignCourseId ? (
                   <CalendarPicker
                     value={assignDeadline}
                     onChange={setAssignDeadline}
-                    placeholder="Pick a deadline"
+                    placeholder="Pick a deadline for selected course"
                   />
-                </div>
-              )}
+                ) : (
+                  <div className="w-full px-4 py-2 rounded-lg border border-dashed border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/40 text-xs text-gray-500 dark:text-gray-400">
+                    Select a course first to set its deadline.
+                  </div>
+                )}
+              </div>
 
               <div className="flex gap-3 justify-end">
                 <button

@@ -27,7 +27,7 @@ export class RecordingService {
     const isActive = new Date(a.deadline) > new Date();
     return {
       id: a.id,
-      courseId: a.courseId,
+      courseId: a.course?.id ?? a.courseId,
       courseName: a.course?.name ?? '',
       deadline: a.deadline,
       status: isActive ? 'active' : 'expired',
