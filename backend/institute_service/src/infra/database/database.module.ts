@@ -13,6 +13,7 @@ import { ModuleContent } from '../../modules/auth/entities/module-content.entity
 import { Recording } from '../../modules/auth/entities/recording.entity';
 import { RecordingCategory } from '../../modules/auth/entities/recording-category.entity';
 import { RecordingCourseAssignment } from '../../modules/auth/entities/recording-course-assignment.entity';
+import { Message } from '../../modules/auth/entities/message.entity';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { RecordingCourseAssignment } from '../../modules/auth/entities/recording
           Institute, InstituteUser, InstituteRole, Student, Teacher,
           Course, CourseModule, ModuleContent,
           Recording, RecordingCategory, RecordingCourseAssignment,
+          Message,
         ],
         synchronize: true, // Auto-sync for dev
         logging: configService.get<string>('NODE_ENV') === 'development',

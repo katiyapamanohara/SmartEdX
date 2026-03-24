@@ -90,4 +90,15 @@ export class CourseRepository extends BaseRepository<Course> {
       .orderBy('course.createdAt', 'DESC')
       .getMany();
   }
+
+  async findByTeacherUserIdWithStudents(userId: string, instituteId: string): Promise<Course[]> {
+    return this.courseRepository
+      .createQueryBuilder('course')
+      .innerJoin('course.teachers', 'teacher', 'teacher.userId = :userId', { userId })
+      .leftJoinAndSelect('course.students', 'student')
+      .leftJoinAndSelect('student.user', 'studentUser')
+      .where('course.instituteId = :instituteId', { instituteId })
+      .orderBy('course.createdAt', 'DESC')
+      .getMany();
+  }
 }

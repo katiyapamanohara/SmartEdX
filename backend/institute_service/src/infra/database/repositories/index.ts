@@ -10,4 +10,5 @@ export * from './module-content.repository';
 export * from './recording.repository';
 export * from './recording-category.repository';
 export * from './recording-course-assignment.repository';
+export * from './message.repository';
 export * from './repositories.module';

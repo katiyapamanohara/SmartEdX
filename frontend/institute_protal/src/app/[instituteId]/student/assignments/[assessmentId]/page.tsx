@@ -325,7 +325,7 @@ export default function StudentAssessmentAttemptPage() {
                         bgColor = "bg-red-50 dark:bg-red-900/20";
                         label = (
                           <span className="ml-auto text-xs font-medium text-red-600 dark:text-red-400">
-                            Your answer ✗
+                            Student marked wrong answer ✗
                           </span>
                         );
                       }

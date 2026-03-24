@@ -21,6 +21,8 @@ import {
   FiChevronDown,
   FiPlus,
   FiChevronRight,
+  FiUsers,
+  FiChevronUp,
 } from "react-icons/fi";
 
 // ─── Types ────────────────────────────────────────────────────────
@@ -126,10 +128,212 @@ function QuizViewModal({
   return typeof window !== "undefined" ? createPortal(modal, document.body) : null;
 }
 
+// ─── Student attempts modal ───────────────────────────────────────
+function StudentAttemptsModal({
+  isOpen,
+  onClose,
+  content,
+  instituteId,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  content: ModuleContent | null;
+  instituteId: string;
+}) {
+  const [students, setStudents] = useState<Record<string, string>>({});
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [loadingStudents, setLoadingStudents] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !instituteId) return;
+    setLoadingStudents(true);
+    instituteService.getInstituteUsers(instituteId, "student")
+      .then((users) => {
+        const map: Record<string, string> = {};
+        for (const u of users) {
+          map[u.id] = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || u.email || u.id;
+        }
+        setStudents(map);
+      })
+      .catch(console.error)
+      .finally(() => setLoadingStudents(false));
+  }, [isOpen, instituteId]);
+
+  if (!isOpen || !content) return null;
+
+  const attempts = content.studentAttempts || {};
+  const attemptEntries = Object.entries(attempts) as [string, { score: number; answers: Record<string, number>; attemptedAt: string }][];
+  const questions: QuizQuestion[] = content.quizData?.questions ?? [];
+  const passingScore = content.quizData?.passingScore ?? 70;
+
+  const modal = (
+    <div className="fixed inset-0 z-999999 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-start justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+              <FiUsers className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Student Attempts</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{content.title}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800">
+            <FiX className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Summary bar */}
+        <div className="flex items-center gap-6 px-6 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 shrink-0 text-sm text-gray-600 dark:text-gray-400">
+          <span><span className="font-semibold text-gray-900 dark:text-white">{attemptEntries.length}</span> attempt{attemptEntries.length !== 1 ? "s" : ""}</span>
+          <span><span className="font-semibold text-gray-900 dark:text-white">{questions.length}</span> question{questions.length !== 1 ? "s" : ""}</span>
+          <span>Pass: <span className="font-semibold text-gray-900 dark:text-white">{passingScore}%</span></span>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-3">
+          {loadingStudents && (
+            <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-4">Loading student names…</p>
+          )}
+          {attemptEntries.length === 0 ? (
+            <div className="text-center py-16 text-gray-400 dark:text-gray-500">
+              <FiUsers className="w-10 h-10 mx-auto mb-3 opacity-40" />
+              <p className="text-sm">No students have attempted this quiz yet.</p>
+            </div>
+          ) : (
+            attemptEntries.map(([userId, attempt]) => {
+              const name = students[userId] || userId;
+              const passed = attempt.score >= passingScore;
+              const isOpen = expanded === userId;
+              const correctCount = questions.filter((q) => attempt.answers?.[q.id] === q.correctAnswer).length;
+
+              return (
+                <div key={userId} className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  {/* Student row */}
+                  <button
+                    className="w-full flex items-center gap-4 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors text-left"
+                    onClick={() => setExpanded(isOpen ? null : userId)}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center shrink-0 text-xs font-bold text-gray-600 dark:text-gray-300 uppercase">
+                      {name.charAt(0)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{name}</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">
+                        {correctCount}/{questions.length} correct
+                        {attempt.attemptedAt ? ` · ${new Date(attempt.attemptedAt).toLocaleDateString()}` : ""}
+                      </p>
+                    </div>
+                    <span className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                      passed
+                        ? "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400"
+                        : "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400"
+                    }`}>
+                      {passed ? "Passed" : "Failed"} · {attempt.score}%
+                    </span>
+                    {isOpen ? <FiChevronUp className="w-4 h-4 text-gray-400 shrink-0" /> : <FiChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
+                  </button>
+
+                  {/* Per-question breakdown */}
+                  {isOpen && (
+                    <div className="border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 px-4 py-4 space-y-3">
+                      {questions.length === 0 ? (
+                        <p className="text-xs text-gray-400">No questions.</p>
+                      ) : questions.map((q, qi) => {
+                        const studentPick = attempt.answers?.[q.id];
+                        const isCorrect = studentPick === q.correctAnswer;
+                        const unanswered = studentPick === undefined;
+
+                        return (
+                          <div key={q.id} className={`rounded-lg border overflow-hidden ${
+                            unanswered ? "border-gray-200 dark:border-gray-700"
+                            : isCorrect ? "border-green-300 dark:border-green-700"
+                            : "border-red-300 dark:border-red-700"
+                          }`}>
+                            {/* Question header */}
+                            <div className="flex items-start gap-2 px-3 py-2 bg-white dark:bg-gray-900">
+                              <span className="shrink-0 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold flex items-center justify-center mt-0.5">
+                                {qi + 1}
+                              </span>
+                              <p className="text-xs font-medium text-gray-900 dark:text-white flex-1 leading-snug">{q.question}</p>
+                              {unanswered ? (
+                                <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500">Skipped</span>
+                              ) : isCorrect ? (
+                                <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-medium">Correct</span>
+                              ) : (
+                                <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-medium">Wrong</span>
+                              )}
+                            </div>
+
+                            {/* Options */}
+                            <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                              {q.options.map((opt, oi) => {
+                                const isStudentChoice = studentPick === oi;
+                                const isCorrectAnswer = q.correctAnswer === oi;
+                                let bg = "bg-white dark:bg-gray-900";
+                                let letter = "bg-gray-100 dark:bg-gray-700 text-gray-500";
+                                let label: string | null = null;
+
+                                if (isCorrectAnswer && isStudentChoice) {
+                                  bg = "bg-green-50 dark:bg-green-900/20";
+                                  letter = "bg-green-500 text-white";
+                                  label = "✓ Correct";
+                                } else if (isCorrectAnswer) {
+                                  bg = "bg-green-50 dark:bg-green-900/20";
+                                  letter = "bg-green-500 text-white";
+                                  label = "Correct answer";
+                                } else if (isStudentChoice) {
+                                  bg = "bg-red-50 dark:bg-red-900/20";
+                                  letter = "bg-red-400 text-white";
+                                  label = "Student picked ✗";
+                                }
+
+                                return (
+                                  <div key={oi} className={`flex items-center gap-2 px-3 py-2 ${bg}`}>
+                                    <span className={`shrink-0 w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center ${letter}`}>
+                                      {OPTION_LETTERS[oi]}
+                                    </span>
+                                    <span className={`text-xs flex-1 ${isCorrectAnswer ? "text-green-800 dark:text-green-300 font-medium" : isStudentChoice ? "text-red-700 dark:text-red-300" : "text-gray-700 dark:text-gray-300"}`}>
+                                      {opt}
+                                    </span>
+                                    {label && (
+                                      <span className={`text-xs font-medium shrink-0 ${isCorrectAnswer ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>
+                                        {label}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end shrink-0">
+          <button onClick={onClose} className="px-5 py-2 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg font-medium">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return typeof window !== "undefined" ? createPortal(modal, document.body) : null;
+}
+
 const OPTION_LETTERS_ROW = ["A", "B", "C", "D"];
 
 // ─── Quiz row ─────────────────────────────────────────────────────
-function QuizRow({ entry, onView }: { entry: QuizEntry; onView: () => void }) {
+function QuizRow({ entry, onView, onViewAttempts }: { entry: QuizEntry; onView: () => void; onViewAttempts: () => void; instituteId: string }) {
   const [expanded, setExpanded] = useState(false);
   const quiz = entry.content.quizData;
   const questions: QuizQuestion[] = quiz?.questions ?? [];
@@ -177,6 +381,15 @@ function QuizRow({ entry, onView }: { entry: QuizEntry; onView: () => void }) {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {Object.keys(entry.content.studentAttempts || {}).length > 0 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onViewAttempts(); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+            >
+              <FiUsers className="w-3.5 h-3.5" />
+              {Object.keys(entry.content.studentAttempts || {}).length} student{Object.keys(entry.content.studentAttempts || {}).length !== 1 ? "s" : ""}
+            </button>
+          )}
           <button
             onClick={(e) => { e.stopPropagation(); onView(); }}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors opacity-0 group-hover:opacity-100"
@@ -262,7 +475,7 @@ function QuizRow({ entry, onView }: { entry: QuizEntry; onView: () => void }) {
 }
 
 // ─── Course group accordion ───────────────────────────────────────
-function CourseGroup({ course, quizzes, onViewQuiz }: { course: Course; quizzes: QuizEntry[]; onViewQuiz: (e: QuizEntry) => void }) {
+function CourseGroup({ course, quizzes, onViewQuiz, onViewAttempts, instituteId }: { course: Course; quizzes: QuizEntry[]; onViewQuiz: (e: QuizEntry) => void; onViewAttempts: (e: QuizEntry) => void; instituteId: string }) {
   const [open, setOpen] = useState(true);
   return (
     <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
@@ -296,7 +509,13 @@ function CourseGroup({ course, quizzes, onViewQuiz }: { course: Course; quizzes:
       {open && (
         <div className="border-t border-gray-100 dark:border-gray-700">
           {quizzes.map((entry) => (
-            <QuizRow key={entry.content.id} entry={entry} onView={() => onViewQuiz(entry)} />
+            <QuizRow
+              key={entry.content.id}
+              entry={entry}
+              instituteId={instituteId}
+              onView={() => onViewQuiz(entry)}
+              onViewAttempts={() => onViewAttempts(entry)}
+            />
           ))}
         </div>
       )}
@@ -313,6 +532,7 @@ export default function TeacherAssessmentsPage() {
   const [allCourses, setAllCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewingQuiz, setViewingQuiz] = useState<QuizEntry | null>(null);
+  const [viewingAttempts, setViewingAttempts] = useState<QuizEntry | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
   useEffect(() => {
@@ -416,7 +636,9 @@ export default function TeacherAssessmentsPage() {
               key={course.id}
               course={course}
               quizzes={quizzes}
+              instituteId={instituteId}
               onViewQuiz={setViewingQuiz}
+              onViewAttempts={setViewingAttempts}
             />
           ))}
         </div>
@@ -426,6 +648,13 @@ export default function TeacherAssessmentsPage() {
         isOpen={viewingQuiz !== null}
         onClose={() => setViewingQuiz(null)}
         content={viewingQuiz?.content ?? null}
+      />
+
+      <StudentAttemptsModal
+        isOpen={viewingAttempts !== null}
+        onClose={() => setViewingAttempts(null)}
+        content={viewingAttempts?.content ?? null}
+        instituteId={instituteId}
       />
 
       <CreateAssessmentModal

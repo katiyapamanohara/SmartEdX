@@ -189,12 +189,12 @@ export default function StudentAssignmentsPage() {
                     }`}>
                       {(attemptScores[item.id] ?? 0) >= item.passingScore ? "Passed" : "Failed"} · {attemptScores[item.id] ?? 0}%
                     </span>
-                    <button
-                      disabled
-                      className="cursor-not-allowed rounded-lg border border-gray-200 px-3 py-1 text-xs font-medium text-gray-400 dark:border-gray-700 dark:text-gray-500"
+                    <Link
+                      href={`/${instituteId}/student/assignments/${item.id}`}
+                      className="rounded-lg border border-gray-200 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
                     >
-                      Already Attempted
-                    </button>
+                      View Review
+                    </Link>
                   </div>
                 ) : (
                   <Link
