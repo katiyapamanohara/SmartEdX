@@ -13,6 +13,8 @@ import { Recording } from '../../../modules/auth/entities/recording.entity';
 import { RecordingCategory } from '../../../modules/auth/entities/recording-category.entity';
 import { RecordingCourseAssignment } from '../../../modules/auth/entities/recording-course-assignment.entity';
 import { Message } from '../../../modules/auth/entities/message.entity';
+import { LiveSession } from '../../../modules/auth/entities/live-session.entity';
+import { LiveParticipant } from '../../../modules/auth/entities/live-participant.entity';
 
 import { InstituteRepository } from './institute.repository';
 import { InstituteUserRepository } from './institute-user.repository';
@@ -26,6 +28,8 @@ import { RecordingRepository } from './recording.repository';
 import { RecordingCategoryRepository } from './recording-category.repository';
 import { RecordingCourseAssignmentRepository } from './recording-course-assignment.repository';
 import { MessageRepository } from './message.repository';
+import { LiveSessionRepository } from './live-session.repository';
+import { LiveParticipantRepository } from './live-participant.repository';
 
 /**
  * Repositories Module
@@ -38,6 +42,8 @@ import { MessageRepository } from './message.repository';
       Course, CourseModule, ModuleContent,
       Recording, RecordingCategory, RecordingCourseAssignment,
       Message,
+      LiveSession,
+      LiveParticipant,
     ]),
   ],
   providers: [
@@ -46,6 +52,8 @@ import { MessageRepository } from './message.repository';
     CourseModuleRepository, ModuleContentRepository,
     RecordingRepository, RecordingCategoryRepository, RecordingCourseAssignmentRepository,
     MessageRepository,
+    LiveSessionRepository,
+    LiveParticipantRepository,
   ],
   exports: [
     InstituteRepository, InstituteUserRepository, InstituteRoleRepository,
@@ -53,6 +61,8 @@ import { MessageRepository } from './message.repository';
     CourseModuleRepository, ModuleContentRepository,
     RecordingRepository, RecordingCategoryRepository, RecordingCourseAssignmentRepository,
     MessageRepository,
+    LiveSessionRepository,
+    LiveParticipantRepository,
   ],
 })
 export class RepositoriesModule {}

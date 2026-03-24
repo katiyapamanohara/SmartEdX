@@ -26,6 +26,9 @@ import { RecordingService } from './recording.service';
 import { MessageController } from './message.controller';
 import { MessageService } from './message.service';
 import { MessageGateway } from './message.gateway';
+import { LiveClassController } from './live-class.controller';
+import { LiveClassService } from './live-class.service';
+import { LiveGateway } from './live.gateway';
 
 @Module({
   imports: [
@@ -44,7 +47,7 @@ import { MessageGateway } from './message.gateway';
       inject: [ConfigService],
     }),
   ],
-  controllers: [AuthController, InstituteUserController, CourseController, CourseModuleController, ModuleContentController, RecordingController, MessageController],
+  controllers: [AuthController, InstituteUserController, CourseController, CourseModuleController, ModuleContentController, RecordingController, MessageController, LiveClassController],
   providers: [
     AuthService,
     CourseService,
@@ -53,6 +56,8 @@ import { MessageGateway } from './message.gateway';
     RecordingService,
     MessageService,
     MessageGateway,
+    LiveClassService,
+    LiveGateway,
     JwtStrategy,
     FirebaseAuthStrategy,
     JwtAuthGuard,
