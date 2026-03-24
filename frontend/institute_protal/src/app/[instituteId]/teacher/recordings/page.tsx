@@ -318,6 +318,18 @@ export default function TeacherRecordingsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategoryId, setFilterCategoryId] = useState("All");
 
+  // ── Category rename ───────────────────────────────────────────────────────────
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategoryName, setEditingCategoryName] = useState("");
+
+  // ── Change recording category ─────────────────────────────────────────────────
+  const [showChangeCatModal, setShowChangeCatModal] = useState(false);
+  const [changeCatRecording, setChangeCatRecording] = useState<Recording | null>(null);
+  const [changeCatId, setChangeCatId] = useState("");
+  const [changeCatCreating, setChangeCatCreating] = useState(false);
+  const [changeCatNewName, setChangeCatNewName] = useState("");
+  const [changeCatSaving, setChangeCatSaving] = useState(false);
+
   // ── Fetch helpers ─────────────────────────────────────────────────────────────
 
   const fetchRecordings = useCallback(async (search?: string, categoryId?: string) => {
@@ -525,6 +537,94 @@ export default function TeacherRecordingsPage() {
       setRecordings((prev) => prev.filter((r) => r.id !== recordingId));
     } catch {
       alert("Network error — could not delete recording");
+    }
+  }
+
+  // ── Rename category ───────────────────────────────────────────────────────────
+
+  async function handleRenameCategory(categoryId: string, newName: string) {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    try {
+      const res = await fetch(`${getApiBase(instituteId)}/categories/${categoryId}`, {
+        method: "PATCH",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.message ?? "Failed to rename category");
+        return;
+      }
+      const updated: RecordingCategory = await res.json();
+      setCategories((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      setRecordings((prev) =>
+        prev.map((r) =>
+          r.category?.id === updated.id ? { ...r, category: updated } : r
+        )
+      );
+    } catch {
+      alert("Network error — could not rename category");
+    } finally {
+      setEditingCategoryId(null);
+      setEditingCategoryName("");
+    }
+  }
+
+  // ── Change recording category ─────────────────────────────────────────────────
+
+  async function handleChangeRecordingCategory() {
+    if (!changeCatRecording) return;
+    try {
+      setChangeCatSaving(true);
+      const res = await fetch(`${getApiBase(instituteId)}/${changeCatRecording.id}`, {
+        method: "PATCH",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ categoryId: changeCatId || null }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.message ?? "Failed to change category");
+        return;
+      }
+      const updated: Recording = await res.json();
+      setRecordings((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      setShowChangeCatModal(false);
+      setChangeCatRecording(null);
+      setChangeCatId("");
+      setChangeCatCreating(false);
+      setChangeCatNewName("");
+    } catch {
+      alert("Network error — could not change category");
+    } finally {
+      setChangeCatSaving(false);
+    }
+  }
+
+  async function handleCreateCategoryForChange() {
+    const trimmed = changeCatNewName.trim();
+    if (!trimmed) return;
+
+    try {
+      const res = await fetch(`${getApiBase(instituteId)}/categories`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.message ?? "Failed to create category");
+        return;
+      }
+
+      const created: RecordingCategory = await res.json();
+      setCategories((prev) => [...prev, created]);
+      setChangeCatId(created.id);
+      setChangeCatNewName("");
+      setChangeCatCreating(false);
+    } catch {
+      alert("Network error — could not create category");
     }
   }
 
@@ -754,27 +854,61 @@ export default function TeacherRecordingsPage() {
 
         {categories.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
-            {["All", ...categories.map((c) => c.name)].map((cat, idx) => {
-              const catId = cat === "All" ? "All" : categories[idx - 1]?.id ?? "";
-              return (
-                <button
-                  key={cat}
-                  onClick={() => setFilterCategoryId(cat === "All" ? "All" : catId)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors whitespace-nowrap ${
-                    (cat === "All" ? filterCategoryId === "All" : filterCategoryId === catId)
-                      ? "bg-brand-500 text-white border-brand-500"
-                      : "bg-white dark:bg-white/3 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-600 hover:border-brand-400 hover:text-brand-500"
-                  }`}
-                >
-                  {cat}
-                  {cat !== "All" && (
-                    <span className="ml-1 opacity-70">
-                      ({recordings.filter((r) => r.categoryId === catId).length})
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+            {/* All pill */}
+            <button
+              onClick={() => setFilterCategoryId("All")}
+              className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors whitespace-nowrap ${
+                filterCategoryId === "All"
+                  ? "bg-brand-500 text-white border-brand-500"
+                  : "bg-white dark:bg-white/3 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-600 hover:border-brand-400 hover:text-brand-500"
+              }`}
+            >
+              All
+            </button>
+
+            {/* Category pills with inline rename */}
+            {categories.map((cat) => (
+              <div key={cat.id} className="flex items-center gap-1 group">
+                {editingCategoryId === cat.id ? (
+                  <form
+                    onSubmit={(e) => { e.preventDefault(); handleRenameCategory(cat.id, editingCategoryName); }}
+                    className="flex items-center gap-1"
+                  >
+                    <input
+                      autoFocus
+                      value={editingCategoryName}
+                      onChange={(e) => setEditingCategoryName(e.target.value)}
+                      onBlur={() => { if (editingCategoryName.trim() && editingCategoryName.trim() !== cat.name) handleRenameCategory(cat.id, editingCategoryName); else { setEditingCategoryId(null); setEditingCategoryName(""); } }}
+                      onKeyDown={(e) => { if (e.key === "Escape") { setEditingCategoryId(null); setEditingCategoryName(""); } }}
+                      className="px-2 py-1 text-xs rounded-full border border-brand-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none w-28"
+                    />
+                  </form>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setFilterCategoryId(cat.id)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors whitespace-nowrap ${
+                        filterCategoryId === cat.id
+                          ? "bg-brand-500 text-white border-brand-500"
+                          : "bg-white dark:bg-white/3 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-600 hover:border-brand-400 hover:text-brand-500"
+                      }`}
+                    >
+                      {cat.name}
+                      <span className="ml-1 opacity-70">({recordings.filter((r) => r.categoryId === cat.id).length})</span>
+                    </button>
+                    <button
+                      onClick={() => { setEditingCategoryId(cat.id); setEditingCategoryName(cat.name); }}
+                      className="opacity-0 group-hover:opacity-100 p-0.5 text-gray-400 hover:text-brand-500 transition-all"
+                      title="Rename category"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </button>
+                  </>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -1108,6 +1242,98 @@ export default function TeacherRecordingsPage() {
         </div>
       )}
 
+      {/* ── Change Category Modal ────────────────────────────────────────────── */}
+      {showChangeCatModal && changeCatRecording && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-sm p-6">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Change Category</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">{changeCatRecording.title}</p>
+
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
+                {!changeCatCreating ? (
+                  <div className="flex gap-2">
+                    <select
+                      value={changeCatId}
+                      onChange={(e) => setChangeCatId(e.target.value)}
+                      className="flex-1 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent text-sm"
+                    >
+                      <option value="">No category</option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setChangeCatCreating(true)}
+                      className="px-3 py-2 text-xs font-medium rounded-lg border border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-brand-500 hover:text-brand-500 transition-colors whitespace-nowrap"
+                    >
+                      + New
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      autoFocus
+                      type="text"
+                      value={changeCatNewName}
+                      onChange={(e) => setChangeCatNewName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleCreateCategoryForChange();
+                        if (e.key === "Escape") {
+                          setChangeCatCreating(false);
+                          setChangeCatNewName("");
+                        }
+                      }}
+                      placeholder="Category name..."
+                      className="flex-1 px-4 py-2 rounded-lg border border-brand-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-transparent text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreateCategoryForChange}
+                      disabled={!changeCatNewName.trim()}
+                      className="px-3 py-2 text-xs font-semibold rounded-lg bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Add
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setChangeCatCreating(false); setChangeCatNewName(""); }}
+                      className="px-3 py-2 text-xs font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => {
+                    setShowChangeCatModal(false);
+                    setChangeCatRecording(null);
+                    setChangeCatId("");
+                    setChangeCatCreating(false);
+                    setChangeCatNewName("");
+                  }}
+                  className="px-4 py-2 text-sm font-medium rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleChangeRecordingCategory}
+                  disabled={changeCatSaving || changeCatId === (changeCatRecording.categoryId ?? "")}
+                  className="px-4 py-2 text-sm font-medium rounded-lg bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {changeCatSaving ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Video Player Modal ───────────────────────────────────────────────── */}
       {playRecording && (
         <div
@@ -1310,16 +1536,20 @@ export default function TeacherRecordingsPage() {
 
                 {/* Badges overlay — always visible */}
                 <div className="absolute top-2 left-2 flex items-center gap-1.5 flex-wrap">
-                  {recording.category && (
-                    <span
-                      className={`px-2 py-0.5 text-xs font-semibold rounded-full backdrop-blur-sm ${categoryColor(
-                        recording.category.id,
-                        categories
-                      )}`}
-                    >
-                      {recording.category.name}
-                    </span>
-                  )}
+                  <button
+                    onClick={() => { setChangeCatRecording(recording); setChangeCatId(recording.categoryId ?? ""); setShowChangeCatModal(true); }}
+                    title="Change category"
+                    className={`group/catbadge flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full backdrop-blur-sm transition-opacity hover:opacity-80 ${
+                      recording.category
+                        ? categoryColor(recording.category.id, categories)
+                        : "bg-black/40 text-white/70 border border-white/20"
+                    }`}
+                  >
+                    {recording.category ? recording.category.name : "No category"}
+                    <svg className="w-2.5 h-2.5 opacity-70 group-hover/catbadge:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </button>
                   {recording.duration && recording.duration !== "0:00" && (
                     <span className="px-2 py-0.5 bg-black/60 text-white text-xs font-semibold rounded-full backdrop-blur-sm">
                       {recording.duration}

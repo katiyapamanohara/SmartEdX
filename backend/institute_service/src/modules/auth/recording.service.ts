@@ -58,6 +58,15 @@ export class RecordingService {
     return this.categoryRepo.createForInstitute(dto.name.trim(), instituteId);
   }
 
+  async renameCategory(instituteId: string, categoryId: string, name: string) {
+    const cat = await this.categoryRepo.findOne({ where: { id: categoryId, instituteId } as any });
+    if (!cat) throw new NotFoundException('Category not found');
+    const existing = await this.categoryRepo.findOne({ where: { name: name.trim(), instituteId } as any });
+    if (existing && existing.id !== categoryId) throw new BadRequestException(`Category "${name.trim()}" already exists`);
+    cat.name = name.trim();
+    return this.categoryRepo.save(cat);
+  }
+
   async deleteCategory(instituteId: string, categoryId: string) {
     const cat = await this.categoryRepo.findOne({ where: { id: categoryId, instituteId } as any });
     if (!cat) throw new NotFoundException('Category not found');

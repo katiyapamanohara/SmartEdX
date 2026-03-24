@@ -57,6 +57,18 @@ export class RecordingController {
     return this.recordingService.createCategory(instituteId, dto);
   }
 
+  @Patch('categories/:categoryId')
+  @ApiOperation({ summary: 'Rename a recording category' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiParam({ name: 'categoryId', description: 'Category ID' })
+  renameCategory(
+    @Param('id') instituteId: string,
+    @Param('categoryId') categoryId: string,
+    @Body() body: { name: string },
+  ) {
+    return this.recordingService.renameCategory(instituteId, categoryId, body.name);
+  }
+
   @Delete('categories/:categoryId')
   @ApiOperation({ summary: 'Delete a recording category' })
   @ApiParam({ name: 'id', description: 'Institute ID' })
