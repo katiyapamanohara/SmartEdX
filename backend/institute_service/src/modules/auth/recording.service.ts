@@ -24,7 +24,11 @@ export class RecordingService {
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   private mapAssignment(a: any) {
-    const isActive = new Date(a.deadline) > new Date();
+    // deadline is stored as a date-only string "YYYY-MM-DD" (PostgreSQL date type).
+    // Parsing it directly gives UTC midnight, making deadlines set to "today" appear
+    // expired immediately. Use end-of-day (23:59:59) so the full day counts as active.
+    const deadlineEndOfDay = new Date(`${a.deadline}T23:59:59`);
+    const isActive = deadlineEndOfDay > new Date();
     return {
       id: a.id,
       courseId: a.course?.id ?? a.courseId,

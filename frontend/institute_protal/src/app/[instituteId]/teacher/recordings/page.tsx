@@ -506,7 +506,11 @@ export default function TeacherRecordingsPage() {
         `${getApiBase(instituteId)}/${recordingId}/assignments/${assignmentId}`,
         { method: "DELETE", headers: authHeaders() }
       );
-      if (!res.ok) return;
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.message ?? "Failed to remove assignment");
+        return;
+      }
       setRecordings((prev) =>
         prev.map((r) =>
           r.id !== recordingId
