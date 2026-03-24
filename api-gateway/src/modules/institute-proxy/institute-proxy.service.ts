@@ -24,7 +24,7 @@ export class InstituteProxyService {
     body?: any,
     headers?: any,
   ): Promise<any> {
-    const url = `${this.instituteServiceUrl}/api/${path}`;
+    const url = `${this.instituteServiceUrl}/api/institutes/${path}`;
     this.logger.log(`Forwarding ${method} request to: ${url}`);
 
     try {
@@ -63,15 +63,17 @@ export class InstituteProxyService {
     body: any,
     headers?: any,
   ): Promise<any> {
-    const url = `${this.instituteServiceUrl}/api/${path}`;
+    const url = `${this.instituteServiceUrl}/api/institutes/${path}`;
     this.logger.log(`Forwarding file upload to: ${url}`);
 
     const formData = new FormData();
-    formData.append('file', file.buffer, {
-      filename: file.originalname,
-      contentType: file.mimetype,
-      knownLength: file.size,
-    });
+    if (file) {
+      formData.append('file', file.buffer, {
+        filename: file.originalname,
+        contentType: file.mimetype,
+        knownLength: file.size,
+      });
+    }
 
     // Forward any extra text fields (title, type, description, order)
     for (const [key, value] of Object.entries(body)) {

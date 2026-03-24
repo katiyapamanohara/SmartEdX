@@ -15,11 +15,13 @@ export interface Course {
   batchNumber: string;
   description?: string;
   instituteId?: string;
+  moduleCount?: number;
   assignedTeacher?: {
     id: string;
     firstName: string;
     lastName: string;
     email: string;
+    profilePicture?: string;
   };
   modules?: CourseModule[];
 }
@@ -57,6 +59,13 @@ export interface ModuleContent {
   quizData?: QuizData;
   order: number;
   moduleId: string;
+  createdAt?: string;
+  studentAttempts?: Record<string, any>;
+}
+
+export interface StudentAssessmentGroup {
+  course: Course;
+  quizzes: { content: ModuleContent; module: Pick<CourseModule, 'id' | 'title' | 'order'> }[];
 }
 
 class InstituteService {
@@ -244,6 +253,237 @@ class InstituteService {
       return await response.json();
     } catch (error) {
       console.error("InstituteService.getCourses Error:", error);
+      return [];
+    }
+  }
+
+  // ─── Teacher module CRUD ─────────────────────────────────────────
+  async createTeacherModule(instituteId: string, courseId: string, data: { title: string; description?: string; order?: number }): Promise<CourseModule> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+    const res = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/${courseId}/teacher-modules`, {
+      method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(data),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || "Failed"); }
+    return res.json();
+  }
+
+  async updateTeacherModule(instituteId: string, courseId: string, moduleId: string, data: Partial<{ title: string; description: string; order: number }>): Promise<CourseModule> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+    const res = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/${courseId}/teacher-modules/${moduleId}`, {
+      method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(data),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || "Failed"); }
+    return res.json();
+  }
+
+  async deleteTeacherModule(instituteId: string, courseId: string, moduleId: string): Promise<void> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+    const res = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/${courseId}/teacher-modules/${moduleId}`, {
+      method: "DELETE", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+    if (!res.ok) throw new Error("Failed to delete module");
+  }
+
+  // ─── Teacher content CRUD ─────────────────────────────────────────
+  async createTeacherContent(instituteId: string, courseId: string, moduleId: string, data: any): Promise<ModuleContent> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+    const res = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/${courseId}/teacher-modules/${moduleId}/contents`, {
+      method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(data),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || "Failed"); }
+    return res.json();
+  }
+
+  async updateTeacherContent(instituteId: string, courseId: string, moduleId: string, contentId: string, data: any): Promise<ModuleContent> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+    const res = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/${courseId}/teacher-modules/${moduleId}/contents/${contentId}`, {
+      method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(data),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || "Failed"); }
+    return res.json();
+  }
+
+  async deleteTeacherContent(instituteId: string, courseId: string, moduleId: string, contentId: string): Promise<void> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+    const res = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/${courseId}/teacher-modules/${moduleId}/contents/${contentId}`, {
+      method: "DELETE", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+    if (!res.ok) throw new Error("Failed to delete content");
+  }
+
+  async createTeacherAssessment(
+    instituteId: string,
+    courseId: string,
+    moduleId: string,
+    data: { title: string; description?: string; quizData: any }
+  ): Promise<ModuleContent> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+
+    const response = await fetch(
+      `${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/${courseId}/modules/${moduleId}/teacher-quiz`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }
+    );
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || "Failed to create assessment");
+    }
+
+    return await response.json();
+  }
+
+  async createTeacherAssessmentSmart(
+    instituteId: string,
+    courseId: string,
+    data: { moduleId?: string; moduleName?: string; title: string; description?: string; quizData: any }
+  ): Promise<ModuleContent> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+
+    const response = await fetch(
+      `${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/${courseId}/teacher-assessment`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }
+    );
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || "Failed to create assessment");
+    }
+
+    return await response.json();
+  }
+
+  async getCourseForTeacher(instituteId: string, courseId: string): Promise<{ course: Course; modules: (CourseModule & { contents: ModuleContent[] })[] } | null> {
+    const token = authService.getToken();
+    if (!token) return null;
+
+    try {
+      const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/${courseId}/for-teacher`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch course: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("InstituteService.getCourseForTeacher Error:", error);
+      return null;
+    }
+  }
+
+  async getMyTeacherAssessments(instituteId: string): Promise<{ course: Course; quizzes: { content: ModuleContent; module: Pick<CourseModule, 'id' | 'title' | 'order'> }[] }[]> {
+    const token = authService.getToken();
+    if (!token) return [];
+
+    try {
+      const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/my-assessments`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch assessments: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("InstituteService.getMyTeacherAssessments Error:", error);
+      return [];
+    }
+  }
+
+  async getMyStudentAssessments(instituteId: string): Promise<StudentAssessmentGroup[]> {
+    const token = authService.getToken();
+    if (!token) return [];
+
+    try {
+      const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/student-assessments`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch student assessments: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('InstituteService.getMyStudentAssessments Error:', error);
+      return [];
+    }
+  }
+
+  async getMyEnrolledCourses(instituteId: string): Promise<Course[]> {
+    const token = authService.getToken();
+    if (!token) return [];
+
+    try {
+      const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/my-enrolled-courses`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch enrolled courses: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("InstituteService.getMyEnrolledCourses Error:", error);
+      return [];
+    }
+  }
+
+  async getMyTeacherCourses(instituteId: string): Promise<Course[]> {
+    const token = authService.getToken();
+    if (!token) return [];
+
+    try {
+      const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/my-courses`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch my courses: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("InstituteService.getMyTeacherCourses Error:", error);
       return [];
     }
   }

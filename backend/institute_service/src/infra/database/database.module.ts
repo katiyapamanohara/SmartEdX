@@ -10,6 +10,10 @@ import { Teacher } from '../../modules/auth/entities/teacher.entity';
 import { Course } from '../../modules/auth/entities/course.entity';
 import { CourseModule } from '../../modules/auth/entities/course-module.entity';
 import { ModuleContent } from '../../modules/auth/entities/module-content.entity';
+import { Recording } from '../../modules/auth/entities/recording.entity';
+import { RecordingCategory } from '../../modules/auth/entities/recording-category.entity';
+import { RecordingCourseAssignment } from '../../modules/auth/entities/recording-course-assignment.entity';
+import { Message } from '../../modules/auth/entities/message.entity';
 
 @Module({
   imports: [
@@ -22,7 +26,12 @@ import { ModuleContent } from '../../modules/auth/entities/module-content.entity
         username: configService.get<string>('DB_USERNAME', 'postgres'),
         password: configService.get<string>('DB_PASSWORD', 'postgres'),
         database: configService.get<string>('DB_DATABASE', 'api_gateway'),
-        entities: [Institute, InstituteUser, InstituteRole, Student, Teacher, Course, CourseModule, ModuleContent],
+        entities: [
+          Institute, InstituteUser, InstituteRole, Student, Teacher,
+          Course, CourseModule, ModuleContent,
+          Recording, RecordingCategory, RecordingCourseAssignment,
+          Message,
+        ],
         synchronize: true, // Auto-sync for dev
         logging: configService.get<string>('NODE_ENV') === 'development',
         migrations: [__dirname + '/migrations/*.ts'],

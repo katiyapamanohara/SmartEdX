@@ -9,6 +9,10 @@ import { Teacher } from '../../../modules/auth/entities/teacher.entity';
 import { Course } from '../../../modules/auth/entities/course.entity';
 import { CourseModule } from '../../../modules/auth/entities/course-module.entity';
 import { ModuleContent } from '../../../modules/auth/entities/module-content.entity';
+import { Recording } from '../../../modules/auth/entities/recording.entity';
+import { RecordingCategory } from '../../../modules/auth/entities/recording-category.entity';
+import { RecordingCourseAssignment } from '../../../modules/auth/entities/recording-course-assignment.entity';
+import { Message } from '../../../modules/auth/entities/message.entity';
 
 import { InstituteRepository } from './institute.repository';
 import { InstituteUserRepository } from './institute-user.repository';
@@ -18,14 +22,37 @@ import { StudentRepository } from './student.repository';
 import { CourseRepository } from './course.repository';
 import { CourseModuleRepository } from './course-module.repository';
 import { ModuleContentRepository } from './module-content.repository';
+import { RecordingRepository } from './recording.repository';
+import { RecordingCategoryRepository } from './recording-category.repository';
+import { RecordingCourseAssignmentRepository } from './recording-course-assignment.repository';
+import { MessageRepository } from './message.repository';
 
 /**
  * Repositories Module
  * Centralizes all repository providers for dependency injection
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([Institute, InstituteUser, InstituteRole, Student, Teacher, Course, CourseModule, ModuleContent])],
-  providers: [InstituteRepository, InstituteUserRepository, InstituteRoleRepository, TeacherRepository, StudentRepository, CourseRepository, CourseModuleRepository, ModuleContentRepository],
-  exports: [InstituteRepository, InstituteUserRepository, InstituteRoleRepository, TeacherRepository, StudentRepository, CourseRepository, CourseModuleRepository, ModuleContentRepository],
+  imports: [
+    TypeOrmModule.forFeature([
+      Institute, InstituteUser, InstituteRole, Student, Teacher,
+      Course, CourseModule, ModuleContent,
+      Recording, RecordingCategory, RecordingCourseAssignment,
+      Message,
+    ]),
+  ],
+  providers: [
+    InstituteRepository, InstituteUserRepository, InstituteRoleRepository,
+    TeacherRepository, StudentRepository, CourseRepository,
+    CourseModuleRepository, ModuleContentRepository,
+    RecordingRepository, RecordingCategoryRepository, RecordingCourseAssignmentRepository,
+    MessageRepository,
+  ],
+  exports: [
+    InstituteRepository, InstituteUserRepository, InstituteRoleRepository,
+    TeacherRepository, StudentRepository, CourseRepository,
+    CourseModuleRepository, ModuleContentRepository,
+    RecordingRepository, RecordingCategoryRepository, RecordingCourseAssignmentRepository,
+    MessageRepository,
+  ],
 })
 export class RepositoriesModule {}

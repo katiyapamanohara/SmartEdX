@@ -42,8 +42,8 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new LoggingInterceptor());
 
-  // Global prefix
-  app.setGlobalPrefix('api');
+  // Global prefix — must match the gateway's URL construction: ${serviceUrl}/api/institutes/${path}
+  app.setGlobalPrefix('api/institutes');
 
   // Swagger configuration
   const config = new DocumentBuilder()

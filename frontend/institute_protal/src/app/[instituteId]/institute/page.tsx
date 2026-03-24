@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ApexOptions } from "apexcharts";
@@ -86,7 +86,7 @@ export default function InstituteDashboard() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 md:gap-6">
 
           {/* Total Students */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/3 md:p-6">
             <div className="flex items-center justify-center w-12 h-12 bg-gray-100 rounded-xl dark:bg-gray-800">
               <GroupIcon className="text-gray-800 size-6 dark:text-white/90" />
             </div>
@@ -104,7 +104,7 @@ export default function InstituteDashboard() {
           </div>
 
           {/* Total Lectures */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/3 md:p-6">
             <div className="flex items-center justify-center w-12 h-12 bg-gray-100 rounded-xl dark:bg-gray-800">
               <GroupIcon className="text-gray-800 size-6 dark:text-white/90" />
             </div>
@@ -122,7 +122,7 @@ export default function InstituteDashboard() {
           </div>
 
           {/* Total Courses */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/3 md:p-6">
             <div className="flex items-center justify-center w-12 h-12 bg-gray-100 rounded-xl dark:bg-gray-800">
               <BoxIconLine className="text-gray-800 dark:text-white/90" />
             </div>
@@ -144,9 +144,7 @@ export default function InstituteDashboard() {
 
       {/* ── Bar Chart — full width ── */}
       <div className="col-span-12">
-
-        {/* Monthly Bar Chart */}
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-5 pt-5 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6 sm:pt-6">
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-5 pt-5 dark:border-gray-800 dark:bg-white/3 sm:px-6 sm:pt-6">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">Monthly Revenue</h3>
           </div>
