@@ -90,12 +90,23 @@ class AuthService {
   // Get role from JWT token
   getRole(): string | null {
     if (typeof window === "undefined") return null;
-    
+
     const token = this.getToken();
     if (!token) return null;
 
     const decoded = this.decodeToken(token);
     return decoded?.role || null;
+  }
+
+  // Get user ID from JWT token (sub field)
+  getUserId(): string | null {
+    if (typeof window === "undefined") return null;
+
+    const token = this.getToken();
+    if (!token) return null;
+
+    const decoded = this.decodeToken(token);
+    return decoded?.sub || null;
   }
 
   async signInWithGoogle(instituteId: string): Promise<AuthResponse> {

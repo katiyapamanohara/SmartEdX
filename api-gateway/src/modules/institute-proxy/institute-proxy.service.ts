@@ -24,7 +24,7 @@ export class InstituteProxyService {
     body?: any,
     headers?: any,
   ): Promise<any> {
-    const url = `${this.instituteServiceUrl}/api/${path}`;
+    const url = `${this.instituteServiceUrl}/api/institutes/${path}`;
     this.logger.log(`Forwarding ${method} request to: ${url}`);
 
     try {
@@ -63,7 +63,7 @@ export class InstituteProxyService {
     body: any,
     headers?: any,
   ): Promise<any> {
-    const url = `${this.instituteServiceUrl}/api/${path}`;
+    const url = `${this.instituteServiceUrl}/api/institutes/${path}`;
     this.logger.log(`Forwarding file upload to: ${url}`);
 
     const formData = new FormData();

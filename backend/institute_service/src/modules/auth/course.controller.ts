@@ -51,6 +51,30 @@ export class CourseController {
     return this.courseService.getMyAssessmentsForTeacher(instituteId, userId);
   }
 
+  @Get('student-assessments')
+  @ApiOperation({ summary: 'Get all quiz assessments from courses enrolled by the logged-in student' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  async getMyStudentAssessments(
+    @Param('id') instituteId: string,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.courseService.getMyAssessmentsForStudent(instituteId, userId);
+  }
+
+  @Post('student-assessments/:contentId/submit')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Student submits quiz attempt with score' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiParam({ name: 'contentId', description: 'Quiz Content ID' })
+  async submitStudentQuizAttempt(
+    @Param('id') instituteId: string,
+    @Param('contentId') contentId: string,
+    @CurrentUser('userId') userId: string,
+    @Body() body: { score: number; answers?: Record<string, number> },
+  ) {
+    return this.courseService.recordStudentQuizAttempt(instituteId, contentId, userId, body.score, body.answers);
+  }
+
   @Get('my-enrolled-courses')
   @ApiOperation({ summary: 'Get courses the logged-in student is enrolled in' })
   @ApiParam({ name: 'id', description: 'Institute ID' })

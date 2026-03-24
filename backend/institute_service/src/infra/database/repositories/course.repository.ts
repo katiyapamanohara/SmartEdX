@@ -55,6 +55,19 @@ export class CourseRepository extends BaseRepository<Course> {
       .getMany();
   }
 
+  async findCoursesWithQuizzesByStudent(userId: string, instituteId: string): Promise<Course[]> {
+    return this.courseRepository
+      .createQueryBuilder('course')
+      .innerJoin('course.students', 'student', 'student.userId = :userId', { userId })
+      .leftJoinAndSelect('course.modules', 'module')
+      .leftJoinAndSelect('module.contents', 'content', 'content.type = :type', { type: 'quiz' })
+      .where('course.instituteId = :instituteId', { instituteId })
+      .orderBy('course.createdAt', 'DESC')
+      .addOrderBy('module.order', 'ASC')
+      .addOrderBy('content.order', 'ASC')
+      .getMany();
+  }
+
   async findByStudentUserId(userId: string, instituteId: string): Promise<Course[]> {
     return this.courseRepository
       .createQueryBuilder('course')

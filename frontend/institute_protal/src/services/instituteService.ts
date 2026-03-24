@@ -59,6 +59,13 @@ export interface ModuleContent {
   quizData?: QuizData;
   order: number;
   moduleId: string;
+  createdAt?: string;
+  studentAttempts?: Record<string, any>;
+}
+
+export interface StudentAssessmentGroup {
+  course: Course;
+  quizzes: { content: ModuleContent; module: Pick<CourseModule, 'id' | 'title' | 'order'> }[];
 }
 
 class InstituteService {
@@ -405,6 +412,30 @@ class InstituteService {
       return await response.json();
     } catch (error) {
       console.error("InstituteService.getMyTeacherAssessments Error:", error);
+      return [];
+    }
+  }
+
+  async getMyStudentAssessments(instituteId: string): Promise<StudentAssessmentGroup[]> {
+    const token = authService.getToken();
+    if (!token) return [];
+
+    try {
+      const response = await fetch(`${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/student-assessments`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch student assessments: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('InstituteService.getMyStudentAssessments Error:', error);
       return [];
     }
   }

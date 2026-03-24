@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { CourseRepository, TeacherRepository } from '../../infra/database/repositories';
 import { ModuleContentRepository } from '../../infra/database/repositories/module-content.repository';
 import { CourseModuleRepository } from '../../infra/database/repositories/course-module.repository';
@@ -245,6 +245,25 @@ export class CourseService {
       .filter((g) => g.quizzes.length > 0);
   }
 
+  async getMyAssessmentsForStudent(instituteId: string, userId: string) {
+    const courses = await this.courseRepository.findCoursesWithQuizzesByStudent(userId, instituteId);
+    return courses
+      .map((course) => {
+        const { modules, teachers, ...courseRest } = course as any;
+        const quizzes = (modules ?? []).flatMap((mod: any) =>
+          (mod.contents ?? []).map((content: any) => ({
+            content,
+            module: { id: mod.id, title: mod.title, order: mod.order },
+          })),
+        );
+        return {
+          course: { ...courseRest, assignedTeacher: this.mapCourseToResponse(course).assignedTeacher },
+          quizzes,
+        };
+      })
+      .filter((g) => g.quizzes.length > 0);
+  }
+
   async getMyCoursesForStudent(instituteId: string, userId: string) {
     const courses = await this.courseRepository.findByStudentUserId(userId, instituteId);
     return courses.map(course => ({
@@ -295,5 +314,43 @@ export class CourseService {
     const course = await this.getCourseById(instituteId, courseId);
     await this.courseRepository.delete(course.id);
     return { message: 'Course deleted successfully' };
+  }
+
+  async recordStudentQuizAttempt(
+    instituteId: string,
+    contentId: string,
+    userId: string,
+    score: number,
+    answers?: Record<string, number>,
+  ) {
+    // Find the content (quiz)
+    const content = await this.moduleContentRepository.findOne({ where: { id: contentId } } as any);
+    if (!content) {
+      throw new NotFoundException('Quiz content not found');
+    }
+
+    // Check if student already attempted
+    const existing = content.studentAttempts || {};
+    if (existing[userId]) {
+      throw new ConflictException('Quiz already attempted. Only one attempt is allowed.');
+    }
+
+    // Build a new object so TypeORM detects the JSONB change
+    const updatedAttempts = {
+      ...existing,
+      [userId]: {
+        score,
+        answers: answers ?? {},
+        attemptedAt: new Date().toISOString(),
+      },
+    };
+
+    // Use update() with the new object to force a direct SQL UPDATE
+    await this.moduleContentRepository.update(contentId, { studentAttempts: updatedAttempts } as any);
+    return {
+      success: true,
+      message: 'Quiz attempt recorded',
+      score,
+    };
   }
 }
