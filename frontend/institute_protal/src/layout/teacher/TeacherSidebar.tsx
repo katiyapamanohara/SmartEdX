@@ -5,6 +5,7 @@ import Image from "next/image";
 import { usePathname, useParams } from "next/navigation";
 import { useSidebar } from "../../context/SidebarContext";
 import { instituteService, Institute } from "@/services/instituteService";
+import { MdVideoLibrary } from "react-icons/md";
 import {
   ChevronDownIcon,
   GridIcon,
@@ -44,6 +45,11 @@ const navItems: NavItem[] = [
     path: "/teacher/assessments",
   },
   {
+    icon: <MdVideoLibrary className="w-6 h-6" />,
+    name: "Recordings",
+    path: "/teacher/recordings",
+  },
+  {
     icon: <GroupIcon />,
     name: "Students",
     path: "/teacher/students",
@@ -53,6 +59,7 @@ const navItems: NavItem[] = [
     name: "Live Classes",
     path: "/teacher/live-classes",
   },
+
   {
     icon: <PieChartIcon />,
     name: "Integrity Monitor",

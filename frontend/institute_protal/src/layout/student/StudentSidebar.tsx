@@ -58,6 +58,11 @@ const navItems: NavItem[] = [
     path: "/student/live-classes",
   },
   {
+    icon: <VideoIcon />,
+    name: "Recordings",
+    path: "/student/recordings",
+  },
+  {
     icon: <ChatIcon />,
     name: "Messages",
     path: "/student/messages",

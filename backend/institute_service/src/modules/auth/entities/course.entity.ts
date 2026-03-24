@@ -13,6 +13,7 @@ import { Institute } from './institute.entity';
 import { Teacher } from './teacher.entity';
 
 import { CourseModule } from './course-module.entity';
+import { Student } from './student.entity';
 
 @Entity('courses')
 export class Course {
@@ -34,7 +35,7 @@ export class Course {
   @Column({ nullable: true })
   description: string;
 
-  @ManyToOne(() => Institute, (institute) => institute.courses)
+  @ManyToOne(() => Institute, (institute) => institute.courses, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'instituteId' })
   institute: Institute;
 
@@ -46,6 +47,9 @@ export class Course {
 
   @OneToMany(() => CourseModule, (module) => module.course)
   modules: CourseModule[];
+
+  @ManyToMany(() => Student, (student) => student.courses)
+  students: Student[];
 
   @CreateDateColumn()
   createdAt: Date;

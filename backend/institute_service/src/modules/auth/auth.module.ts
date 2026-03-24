@@ -21,6 +21,11 @@ import { CourseModuleController } from './course-module.controller';
 import { CourseModuleService } from './course-module.service';
 import { ModuleContentController } from './module-content.controller';
 import { ModuleContentService } from './module-content.service';
+import { RecordingController } from './recording.controller';
+import { RecordingService } from './recording.service';
+import { MessageController } from './message.controller';
+import { MessageService } from './message.service';
+import { MessageGateway } from './message.gateway';
 
 @Module({
   imports: [
@@ -39,12 +44,15 @@ import { ModuleContentService } from './module-content.service';
       inject: [ConfigService],
     }),
   ],
-  controllers: [AuthController, InstituteUserController, CourseController, CourseModuleController, ModuleContentController],
+  controllers: [AuthController, InstituteUserController, CourseController, CourseModuleController, ModuleContentController, RecordingController, MessageController],
   providers: [
     AuthService,
     CourseService,
     CourseModuleService,
     ModuleContentService,
+    RecordingService,
+    MessageService,
+    MessageGateway,
     JwtStrategy,
     FirebaseAuthStrategy,
     JwtAuthGuard,

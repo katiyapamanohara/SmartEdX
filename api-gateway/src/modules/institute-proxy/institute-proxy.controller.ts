@@ -1,5 +1,6 @@
-import { Controller, All, Param, Req, Body, Headers, RequestMethod } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Controller, All, Post, Param, Req, Body, Headers, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiConsumes } from '@nestjs/swagger';
 import { InstituteProxyService } from './institute-proxy.service';
 import { Request } from 'express';
 
@@ -7,6 +8,38 @@ import { Request } from 'express';
 @Controller('api/institutes')
 export class InstituteProxyController {
   constructor(private readonly instituteProxyService: InstituteProxyService) {}
+
+  // ── Module content file upload (PDF / document / video) ────────
+  @Post('institutes/:id/courses/:courseId/modules/:moduleId/contents/upload-file')
+  @ApiOperation({ summary: 'Upload a file as module content (PDF, document, video)' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadContent(
+    @Param('id') id: string,
+    @Param('courseId') courseId: string,
+    @Param('moduleId') moduleId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: any,
+    @Headers() headers: any,
+  ) {
+    const path = `institutes/${id}/courses/${courseId}/modules/${moduleId}/contents/upload-file`;
+    return this.instituteProxyService.forwardFileUpload(path, file, body, headers);
+  }
+
+  // ── Recording file upload ─────────────────────────────────────────────────
+  @Post('institutes/:id/recordings')
+  @ApiOperation({ summary: 'Upload a recording video (multipart/form-data)' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadRecording(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: any,
+    @Headers() headers: any,
+  ) {
+    const path = `institutes/${id}/recordings`;
+    return this.instituteProxyService.forwardFileUpload(path, file, body, headers);
+  }
 
   @All('*')
   @ApiOperation({ summary: 'Proxy all institute requests' })

@@ -38,6 +38,12 @@ export class ModuleContent {
   @Column({ nullable: true })
   url: string; // URL for the video, pdf, or external link
 
+  @Column({ type: 'jsonb', nullable: true })
+  quizData: any; // Quiz questions and settings (for type=quiz)
+
+  @Column({ type: 'jsonb', default: '{}', nullable: true })
+  studentAttempts: any; // Track student quiz attempts: { studentId: { score, attemptedAt } }
+
   @Column({ default: 0 })
   order: number;
 

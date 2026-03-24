@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ModuleContentService } from './module-content.service';
 import { CreateModuleContentDto } from './dto/create-module-content.dto';
 import { UpdateModuleContentDto } from './dto/update-module-content.dto';
@@ -8,6 +9,17 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 @UseGuards(JwtAuthGuard)
 export class ModuleContentController {
   constructor(private readonly moduleContentService: ModuleContentService) {}
+
+  @Post('upload-file')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadFile(
+    @Param('courseId') courseId: string,
+    @Param('moduleId') moduleId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: any,
+  ) {
+    return this.moduleContentService.createWithFileUpload(courseId, moduleId, file, body);
+  }
 
   @Post()
   create(

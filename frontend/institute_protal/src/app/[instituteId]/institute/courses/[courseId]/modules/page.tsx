@@ -21,8 +21,10 @@ import {
   FiFileText,
   FiHelpCircle,
   FiExternalLink,
+  FiEye,
 } from "react-icons/fi";
 import ModuleModal from "./components/ModuleModal";
+import QuizViewModal from "./[moduleId]/contents/components/QuizViewModal";
 
 // ─── Type config ────────────────────────────────────────────────
 const TYPE_CONFIG: Record<ContentType, { icon: React.ReactNode; label: string; iconBg: string; iconColor: string }> = {
@@ -59,10 +61,10 @@ const TYPE_CONFIG: Record<ContentType, { icon: React.ReactNode; label: string; i
 };
 
 // ─── Single content row ─────────────────────────────────────────
-function ContentRow({ content }: { content: ModuleContent }) {
+function ContentRow({ content, onViewQuiz }: { content: ModuleContent; onViewQuiz: (c: ModuleContent) => void }) {
   const cfg = TYPE_CONFIG[content.type] ?? TYPE_CONFIG.document;
   return (
-    <div className="flex items-start gap-4 px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 border-b border-gray-100 dark:border-gray-700/50 last:border-0 transition-colors group ">
+    <div className="flex items-start gap-4 px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 border-b border-gray-100 dark:border-gray-700/50 last:border-0 transition-colors group">
       {/* Colored type icon */}
       <div className={`mt-0.5 w-10 h-10 flex-shrink-0 rounded-lg flex items-center justify-center ${cfg.iconBg} ${cfg.iconColor}`}>
         {cfg.icon}
@@ -91,8 +93,15 @@ function ContentRow({ content }: { content: ModuleContent }) {
           {cfg.label}
         </span>
       </div>
-      {/* Open button */}
-      {content.url && (
+      {/* Action button */}
+      {content.type === "quiz" ? (
+        <button
+          onClick={() => onViewQuiz(content)}
+          className="flex-shrink-0 hidden group-hover:flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors mt-0.5"
+        >
+          <FiEye className="w-3.5 h-3.5" /> View
+        </button>
+      ) : content.url ? (
         <a
           href={content.url}
           target="_blank"
@@ -101,7 +110,7 @@ function ContentRow({ content }: { content: ModuleContent }) {
         >
           Open
         </a>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -111,12 +120,13 @@ interface ModuleAccordionProps {
   module: CourseModule;
   instituteId: string;
   courseId: string;
-  forceOpen?: boolean;  // controlled by parent Expand/Collapse all
+  forceOpen?: boolean;
   onEditModule: (m: CourseModule) => void;
   onDeleteModule: (id: string) => void;
+  onViewQuiz: (c: ModuleContent) => void;
 }
 
-function ModuleAccordion({ module, instituteId, courseId, forceOpen = false, onEditModule, onDeleteModule }: ModuleAccordionProps) {
+function ModuleAccordion({ module, instituteId, courseId, forceOpen = false, onEditModule, onDeleteModule, onViewQuiz }: ModuleAccordionProps) {
   const [open, setOpen] = useState(forceOpen);
   const [contents, setContents] = useState<ModuleContent[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -196,12 +206,12 @@ function ModuleAccordion({ module, instituteId, courseId, forceOpen = false, onE
             </div>
           ) : contents.length === 0 ? (
             <div className="py-8 text-center text-sm text-gray-400 dark:text-gray-500">
-              No content yet for this module.
+              No content added yet.
             </div>
           ) : (
             <div>
               {contents.map((c) => (
-                <ContentRow key={c.id} content={c} />
+                <ContentRow key={c.id} content={c} onViewQuiz={onViewQuiz} />
               ))}
             </div>
           )}
@@ -233,6 +243,7 @@ export default function ModulesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingModule, setEditingModule] = useState<CourseModule | null>(null);
   const [allExpanded, setAllExpanded] = useState(false);
+  const [viewingQuiz, setViewingQuiz] = useState<ModuleContent | null>(null);
 
   useEffect(() => {
     if (instituteId && courseId) fetchData();
@@ -252,7 +263,7 @@ export default function ModulesPage() {
   };
 
   const handleDeleteModule = async (id: string) => {
-    if (!confirm("Delete this module?")) return;
+    if (!confirm("Delete this content?")) return;
     await instituteService.deleteCourseModule(instituteId, courseId, id);
     setModules((prev) => prev.filter((m) => m.id !== id));
   };
@@ -301,7 +312,7 @@ export default function ModulesPage() {
           onClick={() => { setEditingModule(null); setIsModalOpen(true); }}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
         >
-          <FiPlus className="w-4 h-4" /> Add Module
+          <FiPlus className="w-4 h-4" /> Add Content Field
         </button>
       </div>
 
@@ -313,7 +324,7 @@ export default function ModulesPage() {
         </div>
       ) : modules.length === 0 ? (
         <div className="py-16 text-center bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
-          <p className="text-gray-500">No modules yet. Click "Add Module" to get started.</p>
+          <p className="text-gray-500">No modules yet. Click "Add Content" to get started.</p>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
@@ -326,6 +337,7 @@ export default function ModulesPage() {
               forceOpen={allExpanded}
               onEditModule={(m) => { setEditingModule(m); setIsModalOpen(true); }}
               onDeleteModule={handleDeleteModule}
+              onViewQuiz={setViewingQuiz}
             />
           ))}
         </div>
@@ -338,6 +350,12 @@ export default function ModulesPage() {
         initialData={editingModule}
         instituteId={instituteId}
         courseId={courseId}
+      />
+
+      <QuizViewModal
+        isOpen={viewingQuiz !== null}
+        onClose={() => setViewingQuiz(null)}
+        content={viewingQuiz}
       />
     </div>
   );

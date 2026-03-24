@@ -41,7 +41,7 @@ export class Teacher {
   @Column()
   userId: string;
 
-  @ManyToOne(() => Institute)
+  @ManyToOne(() => Institute, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'instituteId' })
   institute: Institute;
 

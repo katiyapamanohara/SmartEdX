@@ -29,12 +29,34 @@ export class RedisCacheInterceptor implements NestInterceptor {
     const userId = request.user?.userId || 'public';
 
     // Invalidate cache for state-changing requests
-    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
       return next.handle().pipe(
         tap(async () => {
           try {
-            // Pattern to match all institute contexts for this user
-            const pattern = `Institute_users:*:${userId}:*`;
+            let pattern;
+            // If deleting an institute, clear all cache for that institute
+            // Match DELETE/PUT/PATCH/POST to /institutes/:id or /institutes/:id/recordings (and subpaths)
+            const recordingsRegex = /\/api\/institutes\/institutes\/([\w-]+)\/recordings(\/.*)?$/;
+            const instituteRegex = /\/api\/institutes\/institutes\/([\w-]+)$/;
+            let instituteId = null;
+            if (["DELETE", "PUT", "PATCH", "POST"].includes(method)) {
+              let match = request.url.match(recordingsRegex);
+              if (match) {
+                instituteId = match[1];
+              } else {
+                match = request.url.match(instituteRegex);
+                if (match) {
+                  instituteId = match[1];
+                }
+              }
+            }
+            if (instituteId) {
+              // Match all users, roles, and URLs for this institute
+              pattern = `Institute_users:${instituteId}:*`;
+            } else {
+              // Default: only for this user
+              pattern = `Institute_users:*:${userId}:*`;
+            }
             const stream = this.redisClient.scanStream({
               match: pattern,
             });
