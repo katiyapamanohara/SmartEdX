@@ -26,6 +26,21 @@ export class InstituteProxyController {
     return this.instituteProxyService.forwardFileUpload(path, file, body, headers);
   }
 
+  // ── Recording file upload ─────────────────────────────────────────────────
+  @Post('institutes/:id/recordings')
+  @ApiOperation({ summary: 'Upload a recording video (multipart/form-data)' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadRecording(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: any,
+    @Headers() headers: any,
+  ) {
+    const path = `institutes/${id}/recordings`;
+    return this.instituteProxyService.forwardFileUpload(path, file, body, headers);
+  }
+
   @All('*')
   @ApiOperation({ summary: 'Proxy all institute requests' })
   async proxy(

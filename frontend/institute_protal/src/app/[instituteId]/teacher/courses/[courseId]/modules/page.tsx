@@ -287,7 +287,7 @@ export default function TeacherModulesPage() {
           onClick={() => setModuleModal({ open: true, editing: null })}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
         >
-          <FiPlus className="w-4 h-4"/> Add Module
+          <FiPlus className="w-4 h-4"/> Add Content field
         </button>
       </div>
 
@@ -299,7 +299,7 @@ export default function TeacherModulesPage() {
         </div>
       ) : modules.length === 0 ? (
         <div className="py-16 text-center bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
-          <p className="text-gray-500">No modules yet. Click "Add Module" to get started.</p>
+          <p className="text-gray-500">No content yet. Click "Add Content" to get started.</p>
         </div>
       ) : (
         <div className="flex flex-col gap-3">

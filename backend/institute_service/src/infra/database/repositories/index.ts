@@ -7,4 +7,7 @@ export * from './student.repository';
 export * from './course.repository';
 export * from './course-module.repository';
 export * from './module-content.repository';
+export * from './recording.repository';
+export * from './recording-category.repository';
+export * from './recording-course-assignment.repository';
 export * from './repositories.module';
