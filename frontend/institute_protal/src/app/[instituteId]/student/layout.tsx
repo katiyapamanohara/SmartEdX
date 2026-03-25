@@ -1,6 +1,8 @@
 "use client";
 
 import { useSidebar } from "@/context/SidebarContext";
+import { LiveSessionProvider } from "@/context/LiveSessionContext";
+import LivePipWidget from "@/components/live/LivePipWidget";
 import StudentHeader from "@/layout/student/StudentHeader";
 import StudentSidebar from "@/layout/student/StudentSidebar";
 import StudentBackdrop from "@/layout/student/StudentBackdrop";
@@ -31,19 +33,16 @@ export default function StudentLayout({
     : "lg:ml-[90px]";
 
   return (
-    <div className="min-h-screen xl:flex">
-      {/* Sidebar and Backdrop */}
-      <StudentSidebar />
-      <StudentBackdrop />
-      {/* Main Content Area */}
-      <div
-        className={`flex-1 transition-all  duration-300 ease-in-out ${mainContentMargin}`}
-      >
-        {/* Header */}
-        <StudentHeader />
-        {/* Page Content */}
-        <div className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">{children}</div>
+    <LiveSessionProvider>
+      <div className="min-h-screen xl:flex">
+        <StudentSidebar />
+        <StudentBackdrop />
+        <div className={`flex-1 transition-all duration-300 ease-in-out ${mainContentMargin}`}>
+          <StudentHeader />
+          <div className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">{children}</div>
+        </div>
       </div>
-    </div>
+      <LivePipWidget />
+    </LiveSessionProvider>
   );
 }

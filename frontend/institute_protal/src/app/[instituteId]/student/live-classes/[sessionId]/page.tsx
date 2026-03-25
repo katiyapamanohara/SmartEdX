@@ -1,21 +1,7 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useLiveSocket, ChatMessage, LiveParticipant } from "@/hooks/useLiveSocket";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5001";
-
-function getToken(): string | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(/(^| )access_token=([^;]+)/);
-  return match ? match[2] : null;
-}
-function authHeaders(): Record<string, string> {
-  const token = getToken();
-  const h: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) h["Authorization"] = `Bearer ${token}`;
-  return h;
-}
+import { useLiveSession, ChatMessage, LiveParticipant } from "@/context/LiveSessionContext";
 
 interface RemoteVideo { socketId: string; stream: MediaStream; userId: string; email?: string; }
 
@@ -58,11 +44,6 @@ const HandRaisedIcon = () => (
 const MinimizeIcon = () => (
   <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
     <path d="M19 13H5v-2h14v2z"/>
-  </svg>
-);
-const ExpandIcon = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-    <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
   </svg>
 );
 
@@ -293,85 +274,42 @@ function SelfThumb({
 export default function StudentClassroomPage() {
   const { instituteId, sessionId } = useParams<{ instituteId: string; sessionId: string }>();
   const router = useRouter();
-  const token = getToken();
+  const ctx = useLiveSession();
 
-  const localStreamRef = useRef<MediaStream | null>(null);
-  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-
-  const [selfAvatar, setSelfAvatar] = useState<string | undefined>();
-  const [selfEmail, setSelfEmail] = useState<string | undefined>();
-  const [sessionInfo, setSessionInfo] = useState<{ title: string; teacherName?: string } | null>(null);
-  const [remoteVideos, setRemoteVideos] = useState<RemoteVideo[]>([]);
-  const [participants, setParticipants] = useState<LiveParticipant[]>([]);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [chatInput, setChatInput] = useState("");
-  const [handRaised, setHandRaised] = useState(false);
-  const [raisedHands, setRaisedHands] = useState<Set<string>>(new Set());
-  const [sidePanel, setSidePanel] = useState<"chat" | "people" | null>(null);
-  const [activePanelTab, setActivePanelTab] = useState<"chat" | "people">("chat");
-  const [sessionEnded, setSessionEnded] = useState(false);
-  const [isLeaving, setIsLeaving] = useState(false);
-  const [isMicMuted, setIsMicMuted] = useState(true);
-  const [unreadChat, setUnreadChat] = useState(0);
-  const [isMinimized, setIsMinimized] = useState(false);
-
+  // Join (or re-attach to) the session in the persistent context
   useEffect(() => {
-    fetch(`${API}/api/institutes/institutes/${instituteId}/live-classes/${sessionId}`, { headers: authHeaders() })
+    ctx.joinSession({
+      sessionId,
+      instituteId,
+      isTeacher: false,
+      title: "Live Class",
+    });
+    return () => { if (ctx.session) ctx.minimize(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, instituteId]);
+
+  // Fetch session info for title + teacherName
+  useEffect(() => {
+    const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5001";
+    const token = document.cookie.match(/(^| )access_token=([^;]+)/)?.[2];
+    fetch(`${API}/api/institutes/institutes/${instituteId}/live-classes/${sessionId}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
       .then((r) => r.json())
-      .then((d) => setSessionInfo({ title: d.title, teacherName: d.teacherName }))
-      .catch(() => {});
-    // Read profile from user cookie
-    try {
-      const userCookie = document.cookie.match(/(^| )user=([^;]+)/)?.[2];
-      if (userCookie) {
-        const u = JSON.parse(decodeURIComponent(userCookie));
-        if (u.profilePicture) setSelfAvatar(u.profilePicture);
-        if (u.email) setSelfEmail(u.email);
-      }
-    } catch { /* ignore */ }
-  }, [instituteId, sessionId]);
-
-  useEffect(() => {
-    navigator.mediaDevices.getUserMedia({ video: false, audio: true })
-      .then((stream) => {
-        stream.getAudioTracks().forEach((t) => { t.enabled = false; }); // muted by default
-        localStreamRef.current = stream;
-        setLocalStream(stream);
+      .then((d) => {
+        if (d.title) ctx.setSessionTitle(d.title);
       })
-      .catch(() => {}); // mic optional for viewers
-    return () => { localStreamRef.current?.getTracks().forEach((t) => t.stop()); };
-  }, []);
+      .catch(() => {});
+  }, [instituteId, sessionId]); // eslint-disable-line
 
-  const handleParticipantJoined = useCallback((p: LiveParticipant) => {
-    setParticipants((prev) => prev.find((x) => x.socketId === p.socketId) ? prev : [...prev, p]);
-  }, []);
-  const handleParticipantLeft = useCallback((_: string, socketId: string) => {
-    setParticipants((prev) => prev.filter((p) => p.socketId !== socketId));
-    setRemoteVideos((prev) => prev.filter((v) => v.socketId !== socketId));
-  }, []);
-  const handleRemoteStream = useCallback((socketId: string, stream: MediaStream, userId: string) => {
-    setRemoteVideos((prev) => [...prev.filter((v) => v.socketId !== socketId), { socketId, stream, userId }]);
-  }, []);
-  const handleRemoteStreamRemoved = useCallback((socketId: string) => {
-    setRemoteVideos((prev) => prev.filter((v) => v.socketId !== socketId));
-  }, []);
-  const handleChatMessage = useCallback((msg: ChatMessage) => {
-    setChatMessages((prev) => [...prev, msg]);
-    setSidePanel((p) => { if (p !== "chat") setUnreadChat((n) => n + 1); return p; });
-  }, []);
-  const handleHandRaised = useCallback((userId: string, _: string, raised: boolean) => {
-    setRaisedHands((prev) => { const n = new Set(prev); raised ? n.add(userId) : n.delete(userId); return n; });
-  }, []);
-  const handleRoomState = useCallback((p: LiveParticipant[]) => setParticipants(p), []);
-  const handleSessionEnded = useCallback(() => setSessionEnded(true), []);
-
-  const { sendChat, raiseHand } = useLiveSocket({
-    token, sessionId, isTeacher: false, localStreamRef,
-    onParticipantJoined: handleParticipantJoined, onParticipantLeft: handleParticipantLeft,
-    onRemoteStream: handleRemoteStream, onRemoteStreamRemoved: handleRemoteStreamRemoved,
-    onChatMessage: handleChatMessage, onHandRaised: handleHandRaised,
-    onRoomState: handleRoomState, onSessionEnded: handleSessionEnded,
-  });
+  const {
+    session, isMinimized, sessionEnded, localStream,
+    isMicMuted, selfEmail, selfAvatar,
+    participants, remoteVideos, raisedHands, handRaised,
+    chatMessages, chatInput, sidePanel, activePanelTab, unreadChat,
+    minimize, leaveSession, toggleMic, toggleHandRaised,
+    sendChat, setChatInput, togglePanel, setActivePanelTab, clearUnread,
+  } = ctx;
 
   const handleSendChat = (e: React.FormEvent) => {
     e.preventDefault();
@@ -379,34 +317,6 @@ export default function StudentClassroomPage() {
     if (!msg) return;
     sendChat(msg);
     setChatInput("");
-  };
-
-  const toggleMic = () => {
-    const newMuted = !isMicMuted;
-    localStreamRef.current?.getAudioTracks().forEach((t) => { t.enabled = !newMuted; });
-    setIsMicMuted(newMuted);
-  };
-
-  const toggleHand = () => {
-    const next = !handRaised;
-    setHandRaised(next);
-    raiseHand(next);
-  };
-
-  const handleLeave = async () => {
-    setIsLeaving(true);
-    try {
-      await fetch(`${API}/api/institutes/institutes/${instituteId}/live-classes/${sessionId}/leave`, {
-        method: "POST", headers: authHeaders(),
-      });
-    } catch { /* ignore */ }
-    localStreamRef.current?.getTracks().forEach((t) => t.stop());
-    router.push(`/${instituteId}/student/live-classes`);
-  };
-
-  const togglePanel = (panel: "chat" | "people") => {
-    if (sidePanel === panel) { setSidePanel(null); }
-    else { setSidePanel(panel); setActivePanelTab(panel); if (panel === "chat") setUnreadChat(0); }
   };
 
   const teacherStream = remoteVideos[0]?.stream ?? null;
@@ -419,8 +329,8 @@ export default function StudentClassroomPage() {
         <div>
           <h2 className="text-white text-2xl font-semibold">Class Has Ended</h2>
           <p className="text-white/50 text-sm mt-2">
-            {sessionInfo?.teacherName
-              ? `${sessionInfo.teacherName} has ended this session.`
+            {session?.teacherName
+              ? `${session.teacherName} has ended this session.`
               : "The teacher has ended this live session."}
           </p>
         </div>
@@ -434,46 +344,8 @@ export default function StudentClassroomPage() {
     );
   }
 
-  // ── Minimized PiP widget ──────────────────────────────────────────────────
-  if (isMinimized) {
-    return (
-      <div className="fixed bottom-5 right-5 z-999999 w-72 rounded-2xl overflow-hidden bg-[#202124] shadow-2xl border border-white/20">
-        {/* Preview — teacher stream or avatar */}
-        <div className="relative aspect-video bg-[#3c4043]">
-          {teacherStream ? (
-            <TeacherTile stream={teacherStream} name={sessionInfo?.teacherName} />
-          ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center gap-2">
-              <div className="w-10 h-10 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
-              <span className="text-white/40 text-xs">Waiting for teacher…</span>
-            </div>
-          )}
-          <span className="absolute top-2 left-2 text-[10px] font-bold text-white bg-red-600 px-1.5 py-0.5 rounded-full animate-pulse">● LIVE</span>
-        </div>
-        {/* Controls row */}
-        <div className="flex items-center justify-between px-3 py-2.5 bg-[#2d2f31]">
-          <div>
-            <p className="text-white text-xs font-medium truncate max-w-[130px]">{sessionInfo?.title ?? "Live Class"}</p>
-            {sessionInfo?.teacherName && <p className="text-white/40 text-[10px]">{sessionInfo.teacherName}</p>}
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => router.push(`/${instituteId}/student`)}
-              className="text-xs text-white/70 hover:text-white bg-[#3c4043] hover:bg-[#4a5157] px-2.5 py-1.5 rounded-lg transition-colors"
-            >
-              Dashboard
-            </button>
-            <button
-              onClick={() => setIsMinimized(false)}
-              className="text-xs text-white bg-[#1a73e8] hover:bg-[#1557b0] px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1"
-            >
-              <ExpandIcon /> Expand
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // When minimized the layout's LivePipWidget handles display
+  if (isMinimized) return null;
 
   return (
     <div className="fixed inset-0 z-999999 bg-[#202124] flex flex-col overflow-hidden">
@@ -485,10 +357,10 @@ export default function StudentClassroomPage() {
           </span>
           <div>
             <h1 className="text-white text-sm font-medium max-w-xs truncate">
-              {sessionInfo?.title ?? "Live Class"}
+              {session?.title ?? "Live Class"}
             </h1>
-            {sessionInfo?.teacherName && (
-              <p className="text-white/50 text-xs">{sessionInfo.teacherName}</p>
+            {session?.teacherName && (
+              <p className="text-white/50 text-xs">{session.teacherName}</p>
             )}
           </div>
         </div>
@@ -496,7 +368,7 @@ export default function StudentClassroomPage() {
           <span className="text-white/50 text-xs">{participants.length} viewer{participants.length !== 1 ? "s" : ""}</span>
           <Clock />
           <button
-            onClick={() => setIsMinimized(true)}
+            onClick={minimize}
             title="Minimise"
             className="w-7 h-7 rounded-full bg-[#3c4043] hover:bg-[#4a5157] text-white flex items-center justify-center transition-colors"
           >
@@ -509,7 +381,7 @@ export default function StudentClassroomPage() {
       <div className="flex flex-1 overflow-hidden pt-14 pb-24">
         {/* Teacher video (main) */}
         <div className="flex-1 p-2 relative">
-          <TeacherTile stream={teacherStream} name={sessionInfo?.teacherName} />
+          <TeacherTile stream={teacherStream} name={session?.teacherName} />
 
           {/* Self-view thumbnail — bottom right */}
           <div className="absolute bottom-4 right-4">
@@ -529,7 +401,7 @@ export default function StudentClassroomPage() {
           <div className="w-80 p-2 shrink-0">
             <SidePanel
               tab={activePanelTab}
-              onTabChange={(t) => { setActivePanelTab(t); if (t === "chat") setUnreadChat(0); }}
+              onTabChange={(t) => { setActivePanelTab(t); if (t === "chat") clearUnread(); }}
               participants={participants}
               raisedHands={raisedHands}
               messages={chatMessages}
@@ -549,7 +421,7 @@ export default function StudentClassroomPage() {
             {isMicMuted ? <MicOffIcon /> : <MicOnIcon />}
           </RoundBtn>
           <RoundBtn
-            onClick={toggleHand}
+            onClick={toggleHandRaised}
             label={handRaised ? "Lower hand" : "Raise hand"}
             highlight={handRaised}
           >
@@ -570,13 +442,12 @@ export default function StudentClassroomPage() {
           {/* Leave call */}
           <div className="flex flex-col items-center gap-1.5">
             <button
-              onClick={handleLeave}
-              disabled={isLeaving}
-              className="w-14 h-12 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center transition-all disabled:opacity-60 focus:outline-none"
+              onClick={leaveSession}
+              className="w-14 h-12 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center transition-all focus:outline-none"
             >
               <LeaveIcon />
             </button>
-            <span className="text-[10px] text-white/60">{isLeaving ? "Leaving…" : "Leave"}</span>
+            <span className="text-[10px] text-white/60">Leave</span>
           </div>
         </div>
       </div>
