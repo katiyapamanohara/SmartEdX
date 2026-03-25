@@ -1,21 +1,7 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useLiveSocket, ChatMessage, LiveParticipant } from "@/hooks/useLiveSocket";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5001";
-
-function getToken(): string | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(/(^| )access_token=([^;]+)/);
-  return match ? match[2] : null;
-}
-function authHeaders(): Record<string, string> {
-  const token = getToken();
-  const h: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) h["Authorization"] = `Bearer ${token}`;
-  return h;
-}
+import { useLiveSession, ChatMessage, LiveParticipant } from "@/context/LiveSessionContext";
 
 interface RemoteVideo { socketId: string; stream: MediaStream; userId: string; email?: string; }
 
@@ -81,11 +67,6 @@ const SendIcon = () => (
 const MinimizeIcon = () => (
   <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
     <path d="M19 13H5v-2h14v2z"/>
-  </svg>
-);
-const ExpandIcon = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-    <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
   </svg>
 );
 
@@ -218,15 +199,6 @@ function EndCallBtn({ onClick, loading }: { onClick: () => void; loading?: boole
   );
 }
 
-// ── PiP preview video ─────────────────────────────────────────────────────────
-function PipPreview({ streamRef }: { streamRef: React.RefObject<MediaStream | null> }) {
-  const ref = useRef<HTMLVideoElement>(null);
-  useEffect(() => {
-    if (ref.current && streamRef.current) ref.current.srcObject = streamRef.current;
-  }, [streamRef]);
-  return <video ref={ref} autoPlay muted playsInline className="w-full h-full object-cover" />;
-}
-
 // ── Grid layout helper ────────────────────────────────────────────────────────
 function gridClass(count: number) {
   if (count === 1) return "grid-cols-1 grid-rows-1";
@@ -344,83 +316,49 @@ function SidePanel({
 export default function TeacherClassroomPage() {
   const { instituteId, sessionId } = useParams<{ instituteId: string; sessionId: string }>();
   const router = useRouter();
-  const token = getToken();
-
+  const ctx = useLiveSession();
   const localVideoRef = useRef<HTMLVideoElement>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
-  const originalStreamRef = useRef<MediaStream | null>(null);
 
-  const [sessionTitle, setSessionTitle] = useState("Live Class");
-  const [selfAvatar, setSelfAvatar] = useState<string | undefined>(undefined);
-  const [selfEmail, setSelfEmail] = useState("You");
-  const [mediaReady, setMediaReady] = useState(false);
-  const [mediaError, setMediaError] = useState("");
-  const [isScreenSharing, setIsScreenSharing] = useState(false);
-  const [isMicMuted, setIsMicMuted] = useState(false);
-  const [isCamOff, setIsCamOff] = useState(false);
-  const [participants, setParticipants] = useState<LiveParticipant[]>([]);
-  const [remoteVideos, setRemoteVideos] = useState<RemoteVideo[]>([]);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [chatInput, setChatInput] = useState("");
-  const [raisedHands, setRaisedHands] = useState<Set<string>>(new Set());
-  const [sidePanel, setSidePanel] = useState<"chat" | "people" | null>(null);
-  const [activePanelTab, setActivePanelTab] = useState<"chat" | "people">("people");
-  const [isEnding, setIsEnding] = useState(false);
-  const [unreadChat, setUnreadChat] = useState(0);
-  const [isMinimized, setIsMinimized] = useState(false);
-
+  // Join (or re-attach to) the session in the persistent context
   useEffect(() => {
-    fetch(`${API}/api/institutes/institutes/${instituteId}/live-classes/${sessionId}`, { headers: authHeaders() })
-      .then((r) => r.json()).then((d) => setSessionTitle(d.title ?? "Live Class")).catch(() => {});
-    // Read profile from user cookie
-    try {
-      const userCookie = document.cookie.match(/(^| )user=([^;]+)/)?.[2];
-      if (userCookie) {
-        const u = JSON.parse(decodeURIComponent(userCookie));
-        if (u.profilePicture) setSelfAvatar(u.profilePicture);
-        if (u.email) setSelfEmail(u.email);
-      }
-    } catch { /* ignore */ }
-  }, [instituteId, sessionId]);
+    ctx.joinSession({
+      sessionId,
+      instituteId,
+      isTeacher: true,
+      title: "Live Class",
+    });
+    // Auto-minimize on unmount so PiP widget keeps session alive
+    return () => { if (ctx.session) ctx.minimize(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, instituteId]);
 
+  // Fetch session title once
   useEffect(() => {
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
-      localStreamRef.current = stream;
-      originalStreamRef.current = stream;
-      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-      setMediaReady(true);
-    }).catch((err) => setMediaError(err.message));
-    return () => { localStreamRef.current?.getTracks().forEach((t) => t.stop()); };
-  }, []);
+    const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5001";
+    const token = document.cookie.match(/(^| )access_token=([^;]+)/)?.[2];
+    fetch(`${API}/api/institutes/institutes/${instituteId}/live-classes/${sessionId}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((r) => r.json())
+      .then((d) => { if (d.title) ctx.setSessionTitle(d.title); })
+      .catch(() => {});
+  }, [instituteId, sessionId]); // eslint-disable-line
 
-  const handleParticipantJoined = useCallback((p: LiveParticipant) => {
-    setParticipants((prev) => prev.find((x) => x.socketId === p.socketId) ? prev : [...prev, p]);
-  }, []);
-  const handleParticipantLeft = useCallback((_: string, socketId: string) => {
-    setParticipants((prev) => prev.filter((p) => p.socketId !== socketId));
-    setRemoteVideos((prev) => prev.filter((v) => v.socketId !== socketId));
-  }, []);
-  const handleRemoteStream = useCallback((socketId: string, stream: MediaStream, userId: string) => {
-    setRemoteVideos((prev) => [...prev.filter((v) => v.socketId !== socketId), { socketId, stream, userId }]);
-  }, []);
-  const handleRemoteStreamRemoved = useCallback((socketId: string) => {
-    setRemoteVideos((prev) => prev.filter((v) => v.socketId !== socketId));
-  }, []);
-  const handleChatMessage = useCallback((msg: ChatMessage) => {
-    setChatMessages((prev) => [...prev, msg]);
-    setSidePanel((p) => { if (p !== "chat") setUnreadChat((n) => n + 1); return p; });
-  }, []);
-  const handleHandRaised = useCallback((userId: string, _: string, raised: boolean) => {
-    setRaisedHands((prev) => { const n = new Set(prev); raised ? n.add(userId) : n.delete(userId); return n; });
-  }, []);
-  const handleRoomState = useCallback((p: LiveParticipant[]) => setParticipants(p), []);
+  // Attach local video element to the context stream
+  useEffect(() => {
+    if (localVideoRef.current && ctx.localStream) {
+      localVideoRef.current.srcObject = ctx.localStream;
+    }
+  }, [ctx.localStream]);
 
-  const { sendChat, emitSessionEnded, peerConnections } = useLiveSocket({
-    token, sessionId, isTeacher: true, localStreamRef,
-    onParticipantJoined: handleParticipantJoined, onParticipantLeft: handleParticipantLeft,
-    onRemoteStream: handleRemoteStream, onRemoteStreamRemoved: handleRemoteStreamRemoved,
-    onChatMessage: handleChatMessage, onHandRaised: handleHandRaised, onRoomState: handleRoomState,
-  });
+  const {
+    session, isMinimized, isEnding, mediaReady, mediaError,
+    isMicMuted, isCamOff, isScreenSharing, selfEmail, selfAvatar,
+    participants, remoteVideos, raisedHands, chatMessages, chatInput,
+    sidePanel, activePanelTab, unreadChat,
+    minimize, toggleMic, toggleCam, toggleScreenShare, endSession,
+    sendChat, setChatInput, togglePanel, setActivePanelTab, clearUnread,
+  } = ctx;
 
   const handleSendChat = (e: React.FormEvent) => {
     e.preventDefault();
@@ -430,98 +368,12 @@ export default function TeacherClassroomPage() {
     setChatInput("");
   };
 
-  const toggleMic = () => {
-    localStreamRef.current?.getAudioTracks().forEach((t) => { t.enabled = isMicMuted; });
-    setIsMicMuted(!isMicMuted);
-  };
-  const toggleCam = async () => {
-    if (!isCamOff) {
-      // ── Turning OFF: stop tracks so browser releases the camera LED ──────
-      localStreamRef.current?.getVideoTracks().forEach((t) => {
-        t.stop();
-        localStreamRef.current?.removeTrack(t);
-      });
-      // Tell every peer "no video" without renegotiating
-      peerConnections.current.forEach((pc) => {
-        pc.getSenders()
-          .filter((s) => s.track?.kind === "video")
-          .forEach((s) => s.replaceTrack(null).catch(() => {}));
-      });
-      setIsCamOff(true);
-    } else {
-      // ── Turning ON: get a fresh camera stream ─────────────────────────────
-      try {
-        const newStream = await navigator.mediaDevices.getUserMedia({ video: true });
-        const newTrack = newStream.getVideoTracks()[0];
-        // Add to our local stream so future peers pick it up
-        localStreamRef.current?.addTrack(newTrack);
-        // Replace in existing peer connections
-        peerConnections.current.forEach((pc) => {
-          const sender = pc.getSenders().find((s) => s.track?.kind === "video" || s.track === null);
-          if (sender) {
-            sender.replaceTrack(newTrack).catch(() => {});
-          } else if (localStreamRef.current) {
-            pc.addTrack(newTrack, localStreamRef.current);
-          }
-        });
-        // Update the preview element
-        if (localVideoRef.current && localStreamRef.current) {
-          localVideoRef.current.srcObject = localStreamRef.current;
-        }
-        setIsCamOff(false);
-      } catch (err) {
-        console.error("[toggleCam] could not re-enable camera:", err);
-      }
-    }
-  };
-  const toggleScreenShare = async () => {
-    if (isScreenSharing) {
-      if (originalStreamRef.current && localVideoRef.current) {
-        localVideoRef.current.srcObject = originalStreamRef.current;
-        localStreamRef.current = originalStreamRef.current;
-      }
-      setIsScreenSharing(false);
-    } else {
-      try {
-        const s = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        localStreamRef.current = s;
-        if (localVideoRef.current) localVideoRef.current.srcObject = s;
-        setIsScreenSharing(true);
-        s.getVideoTracks()[0].onended = () => {
-          setIsScreenSharing(false);
-          if (originalStreamRef.current && localVideoRef.current) {
-            localVideoRef.current.srcObject = originalStreamRef.current;
-            localStreamRef.current = originalStreamRef.current;
-          }
-        };
-      } catch { /* cancelled */ }
-    }
-  };
-
-  const handleEndClass = async () => {
+  const handleEndClass = () => {
     if (!confirm("End the live class for all students?")) return;
-    setIsEnding(true);
-    emitSessionEnded();
-    try {
-      await fetch(`${API}/api/institutes/institutes/${instituteId}/live-classes/${sessionId}/end`, {
-        method: "POST", headers: authHeaders(),
-      });
-    } catch { /* ignore */ }
-    localStreamRef.current?.getTracks().forEach((t) => t.stop());
-    router.push(`/${instituteId}/teacher/live-classes`);
+    endSession();
   };
 
-  const togglePanel = (panel: "chat" | "people") => {
-    if (sidePanel === panel) { setSidePanel(null); }
-    else { setSidePanel(panel); setActivePanelTab(panel); if (panel === "chat") setUnreadChat(0); }
-  };
-
-  // Build tile list: [self] + [remote videos]
-  const allTiles = [
-    { id: "self", label: "You", stream: mediaReady ? null : null, isSelf: true },
-    ...remoteVideos.map((rv) => ({ id: rv.socketId, label: rv.email ?? rv.userId.slice(0, 8), stream: rv.stream, isSelf: false })),
-  ];
-  const tileCount = allTiles.length;
+  const tileCount = 1 + remoteVideos.length;
 
   if (mediaError) {
     return (
@@ -539,52 +391,8 @@ export default function TeacherClassroomPage() {
     );
   }
 
-  // ── Minimized PiP widget ──────────────────────────────────────────────────
-  if (isMinimized) {
-    return (
-      <div className="fixed bottom-5 right-5 z-999999 w-72 rounded-2xl overflow-hidden bg-[#202124] shadow-2xl border border-white/20">
-        {/* Hidden video keeps stream alive */}
-        <video ref={localVideoRef} autoPlay muted playsInline className="sr-only" />
-        {/* Preview */}
-        <div className="relative aspect-video bg-[#3c4043]">
-          {!isCamOff && mediaReady ? (
-            <PipPreview streamRef={localStreamRef} />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              {selfAvatar ? (
-                <img src={selfAvatar} alt={selfEmail} className="w-12 h-12 rounded-full object-cover ring-2 ring-white/20" />
-              ) : (
-                <div className="w-12 h-12 rounded-full bg-[#1a73e8] flex items-center justify-center text-white font-bold">
-                  {selfEmail[0]?.toUpperCase()}
-                </div>
-              )}
-            </div>
-          )}
-          <div className="absolute inset-x-0 bottom-0 h-10 bg-linear-to-t from-black/70 to-transparent" />
-          <span className="absolute top-2 left-2 text-[10px] font-bold text-white bg-red-600 px-1.5 py-0.5 rounded-full animate-pulse">● LIVE</span>
-          <p className="absolute bottom-1.5 left-2 text-white text-xs font-medium truncate max-w-[180px]">{sessionTitle}</p>
-        </div>
-        {/* Controls row */}
-        <div className="flex items-center justify-between px-3 py-2.5 bg-[#2d2f31]">
-          <span className="text-xs text-white/50">{participants.length} in call</span>
-          <div className="flex gap-2">
-            <button
-              onClick={() => router.push(`/${instituteId}/teacher`)}
-              className="text-xs text-white/70 hover:text-white bg-[#3c4043] hover:bg-[#4a5157] px-2.5 py-1.5 rounded-lg transition-colors"
-            >
-              Dashboard
-            </button>
-            <button
-              onClick={() => setIsMinimized(false)}
-              className="text-xs text-white bg-[#1a73e8] hover:bg-[#1557b0] px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1"
-            >
-              <ExpandIcon /> Expand
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // When minimized the layout's LivePipWidget handles display; page renders nothing
+  if (isMinimized) return null;
 
   return (
     <div className="fixed inset-0 z-999999 bg-[#202124] flex flex-col overflow-hidden">
@@ -594,12 +402,12 @@ export default function TeacherClassroomPage() {
           <span className="flex items-center gap-1.5 text-xs font-bold text-white bg-red-600 px-2.5 py-1 rounded-full animate-pulse">
             ● LIVE
           </span>
-          <h1 className="text-white text-sm font-medium max-w-xs truncate">{sessionTitle}</h1>
+          <h1 className="text-white text-sm font-medium max-w-xs truncate">{session?.title ?? "Live Class"}</h1>
         </div>
         <div className="pointer-events-auto flex items-center gap-3">
           <Clock />
           <button
-            onClick={() => setIsMinimized(true)}
+            onClick={minimize}
             title="Minimise"
             className="w-7 h-7 rounded-full bg-[#3c4043] hover:bg-[#4a5157] text-white flex items-center justify-center transition-colors"
           >
@@ -667,7 +475,7 @@ export default function TeacherClassroomPage() {
           <div className="w-80 p-2 shrink-0">
             <SidePanel
               tab={activePanelTab}
-              onTabChange={(t) => { setActivePanelTab(t); if (t === "chat") setUnreadChat(0); }}
+              onTabChange={(t) => { setActivePanelTab(t); if (t === "chat") clearUnread(); }}
               participants={participants}
               raisedHands={raisedHands}
               messages={chatMessages}
@@ -683,7 +491,7 @@ export default function TeacherClassroomPage() {
       {/* Bottom control bar */}
       <div className="absolute bottom-0 inset-x-0 flex items-center justify-center gap-3 pb-6 bg-linear-to-t from-black/50 to-transparent pointer-events-none">
         <div className="pointer-events-auto flex items-end gap-3 px-6 py-3 rounded-2xl bg-[#202124]/80 backdrop-blur-md border border-white/10 shadow-2xl">
-          <RoundBtn onClick={toggleMic} label={isMicMuted ? "Unmute" : "Mute"} active={!isMicMuted}>
+          <RoundBtn onClick={toggleMic} label={isMicMuted ? "Unmute" : "Mute"} active={!isMicMuted} >
             {isMicMuted ? <MicOffIcon /> : <MicOnIcon />}
           </RoundBtn>
           <RoundBtn onClick={toggleCam} label={isCamOff ? "Start cam" : "Stop cam"} active={!isCamOff}>
@@ -704,7 +512,7 @@ export default function TeacherClassroomPage() {
 
           <div className="w-px h-8 bg-white/10 mx-1" />
 
-          <EndCallBtn onClick={handleEndClass} loading={isEnding} />
+          <EndCallBtn onClick={handleEndClass} loading={isEnding ?? false} />
         </div>
       </div>
     </div>
