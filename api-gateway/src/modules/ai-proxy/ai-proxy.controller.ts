@@ -45,6 +45,32 @@ export class AiProxyController {
     return this.aiProxyService.forwardRequest('api/chat/message', 'POST', body, headers);
   }
 
+  // ── Multipart: student AI learning assistant (with optional file) ─
+  @Post('student-chat/message')
+  @ApiOperation({ summary: 'Chat with the student AI learning assistant (supports file upload)' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
+  async studentChat(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: any,
+    @Headers() headers: any,
+  ) {
+    return this.aiProxyService.forwardStudentChat('api/student-chat/message', file, body, headers);
+  }
+
+  // ── Multipart: teacher AI assistant chat (with optional file) ─
+  @Post('teacher-chat/message')
+  @ApiOperation({ summary: 'Chat with the teacher AI assistant (supports file upload)' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
+  async teacherChat(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: any,
+    @Headers() headers: any,
+  ) {
+    return this.aiProxyService.forwardTeacherChat('api/teacher-chat/message', file, body, headers);
+  }
+
   // ── Catch-all for everything else (health, docs, etc.) ────────
   @All('*')
   @ApiOperation({ summary: 'Proxy all other AI Core requests' })

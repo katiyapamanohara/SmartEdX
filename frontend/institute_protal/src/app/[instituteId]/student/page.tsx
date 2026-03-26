@@ -7,6 +7,7 @@ import { ApexOptions } from "apexcharts";
 import { instituteService } from "@/services/instituteService";
 import { authService } from "@/services/authService";
 import { BoxIconLine, ArrowUpIcon, TaskIcon, VideoIcon } from "@/icons";
+import StudentFloatingAiChat from "@/components/student/StudentFloatingAiChat";
 
 const ReactApexChart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
@@ -70,6 +71,7 @@ export default function StudentDashboard() {
   ];
 
   return (
+    <>
     <div className="grid grid-cols-12 gap-4 md:gap-6">
 
       {/* Welcome Banner */}
@@ -154,5 +156,7 @@ export default function StudentDashboard() {
       </div>
 
     </div>
+      <StudentFloatingAiChat instituteId={instituteId} />
+    </>
   );
 }
