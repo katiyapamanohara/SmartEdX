@@ -301,13 +301,26 @@ export class AuthService {
     if (!institute) {
       throw new NotFoundException('Institute not found');
     }
-    
+
     // Return only public information
     return {
       id: institute.id,
       name: institute.name,
       logo: institute.logo,
       phoneNumber: institute.phoneNumber,
+    };
+  }
+
+  async getInstituteVoiceConfig(id: string) {
+    const institute = await this.instituteRepository.findById(id);
+    if (!institute) {
+      throw new NotFoundException('Institute not found');
+    }
+    return {
+      id: institute.id,
+      name: institute.name,
+      voiceInstructions: institute.voiceInstructions ?? null,
+      voiceGreeting: institute.voiceGreeting ?? null,
     };
   }
 

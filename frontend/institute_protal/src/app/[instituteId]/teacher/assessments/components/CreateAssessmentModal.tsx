@@ -8,8 +8,11 @@ import {
   QuizQuestion,
   instituteService,
 } from "@/services/instituteService";
+import { authService } from "@/services/authService";
 import {
-  FiX, FiPlus, FiTrash2, FiCheckCircle, FiZap, FiChevronDown, FiChevronUp, FiLayers,
+  FiX, FiPlus, FiTrash2, FiCheckCircle, FiZap, FiChevronDown, FiChevronUp,
+  FiLayers, FiMic, FiFileText, FiUpload, FiLoader, FiAlertCircle,
+  FiChevronRight, FiAward,
 } from "react-icons/fi";
 
 const inputCls =
@@ -25,7 +28,20 @@ const newQuestion = (): QuizQuestion => ({
 
 const API_GATEWAY_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5001";
 
-// ─── AI Generate Panel ────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface VoiceQuestion {
+  id: string;
+  question: string;
+  expected_answer: string;
+  marks: number;
+  hints: string[];
+}
+
+type AssessmentType = "mcq" | "voice";
+
+// ─── MCQ AI Generate Panel ────────────────────────────────────────────────────
+
 function AIGeneratePanel({ onAddQuestions }: { onAddQuestions: (qs: QuizQuestion[]) => void }) {
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -48,20 +64,18 @@ function AIGeneratePanel({ onAddQuestions }: { onAddQuestions: (qs: QuizQuestion
       const res = await fetch(`${API_GATEWAY_URL}/api/ai/quiz/generate`, { method: "POST", body: form });
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || "Generation failed"); }
       const data = await res.json();
-      const qs: QuizQuestion[] = (data.questions as any[]).map((q) => ({
-        id: q.id ?? crypto.randomUUID(),
-        question: q.question,
+      const qs: QuizQuestion[] = (data.questions as Record<string, unknown>[]).map((q) => ({
+        id: (q.id as string) ?? crypto.randomUUID(),
+        question: q.question as string,
         options: q.options as [string, string, string, string],
-        correctAnswer: q.correctAnswer,
-        explanation: q.explanation ?? "",
+        correctAnswer: q.correctAnswer as number,
+        explanation: (q.explanation as string) ?? "",
       }));
       setGenerated(qs);
       setSelected(new Set(qs.map((q) => q.id)));
-    } catch (e: any) {
-      setAiError(e.message ?? "Something went wrong");
-    } finally {
-      setLoading(false);
-    }
+    } catch (e: unknown) {
+      setAiError(e instanceof Error ? e.message : "Something went wrong");
+    } finally { setLoading(false); }
   };
 
   const toggleSelect = (id: string) =>
@@ -76,31 +90,32 @@ function AIGeneratePanel({ onAddQuestions }: { onAddQuestions: (qs: QuizQuestion
     <div className="border border-dashed border-purple-300 dark:border-purple-700 rounded-xl overflow-hidden">
       <button type="button" onClick={() => setOpen((p) => !p)}
         className="w-full flex items-center gap-2 px-4 py-3 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 text-sm font-medium hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors">
-        <FiZap className="w-4 h-4"/>Generate with AI
-        {open ? <FiChevronUp className="w-4 h-4 ml-auto"/> : <FiChevronDown className="w-4 h-4 ml-auto"/>}
+        <FiZap className="w-4 h-4" /> Generate with AI
+        {open ? <FiChevronUp className="w-4 h-4 ml-auto" /> : <FiChevronDown className="w-4 h-4 ml-auto" />}
       </button>
       {open && (
         <div className="px-4 py-4 space-y-3 bg-white dark:bg-gray-800">
           <div>
             <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Upload PDF / Document</label>
-            <input ref={fileRef} type="file" accept=".pdf,.txt,.docx" onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 dark:file:bg-purple-900/30 dark:file:text-purple-300"/>
+            <input ref={fileRef} type="file" accept=".pdf,.txt,.docx"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              className="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 dark:file:bg-purple-900/30 dark:file:text-purple-300" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Questions</label>
-              <input type="number" min={1} max={20} value={numQuestions} onChange={(e) => setNumQuestions(Number(e.target.value))} className={inputCls}/>
+              <input type="number" min={1} max={20} value={numQuestions} onChange={(e) => setNumQuestions(Number(e.target.value))} className={inputCls} />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Difficulty</label>
-              <select value={difficulty} onChange={(e) => setDifficulty(e.target.value as any)} className={inputCls}>
+              <select value={difficulty} onChange={(e) => setDifficulty(e.target.value as "easy" | "medium" | "hard")} className={inputCls}>
                 <option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option>
               </select>
             </div>
           </div>
           <button type="button" onClick={handleGenerate} disabled={!file || loading}
             className="w-full py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-sm rounded-lg transition-colors flex items-center justify-center gap-2">
-            {loading ? <><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"/> Generating…</> : <><FiZap className="w-4 h-4"/> Generate</>}
+            {loading ? <><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> Generating…</> : <><FiZap className="w-4 h-4" /> Generate</>}
           </button>
           {aiError && <p className="text-xs text-red-500">{aiError}</p>}
           {generated.length > 0 && (
@@ -110,7 +125,7 @@ function AIGeneratePanel({ onAddQuestions }: { onAddQuestions: (qs: QuizQuestion
                 <div key={q.id} onClick={() => toggleSelect(q.id)}
                   className={`cursor-pointer rounded-lg border px-3 py-2 text-xs transition-colors ${selected.has(q.id) ? "border-purple-400 bg-purple-50 dark:bg-purple-900/20" : "border-gray-200 dark:border-gray-700"}`}>
                   <div className="flex items-start gap-2">
-                    <FiCheckCircle className={`w-4 h-4 shrink-0 mt-0.5 ${selected.has(q.id) ? "text-purple-500" : "text-gray-300"}`}/>
+                    <FiCheckCircle className={`w-4 h-4 shrink-0 mt-0.5 ${selected.has(q.id) ? "text-purple-500" : "text-gray-300"}`} />
                     <span className="text-gray-800 dark:text-gray-200">{i + 1}. {q.question}</span>
                   </div>
                 </div>
@@ -127,7 +142,8 @@ function AIGeneratePanel({ onAddQuestions }: { onAddQuestions: (qs: QuizQuestion
   );
 }
 
-// ─── Question card ────────────────────────────────────────────────
+// ─── MCQ Question card ────────────────────────────────────────────────────────
+
 function QuestionCard({ q, index, onChange, onDelete }: {
   q: QuizQuestion; index: number; onChange: (patch: Partial<QuizQuestion>) => void; onDelete: () => void;
 }) {
@@ -137,9 +153,9 @@ function QuestionCard({ q, index, onChange, onDelete }: {
       <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 dark:bg-gray-700/40">
         <span className="text-xs font-bold text-gray-500 dark:text-gray-400">Q{index + 1}</span>
         <input value={q.question} onChange={(e) => onChange({ question: e.target.value })} placeholder="Enter question…"
-          className="flex-1 bg-transparent text-sm font-medium text-gray-900 dark:text-white placeholder-gray-400 outline-none"/>
+          className="flex-1 bg-transparent text-sm font-medium text-gray-900 dark:text-white placeholder-gray-400 outline-none" />
         <button type="button" onClick={onDelete} className="p-1 text-gray-400 hover:text-red-500 transition-colors">
-          <FiTrash2 className="w-4 h-4"/>
+          <FiTrash2 className="w-4 h-4" />
         </button>
       </div>
       <div className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -151,10 +167,13 @@ function QuestionCard({ q, index, onChange, onDelete }: {
                 className={`shrink-0 w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center transition-colors ${isCorrect ? "bg-green-500 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-500 hover:bg-green-100"}`}>
                 {LETTERS[oi]}
               </button>
-              <input value={opt} onChange={(e) => { const opts = [...q.options] as [string,string,string,string]; opts[oi] = e.target.value; onChange({ options: opts }); }}
-                placeholder={`Option ${LETTERS[oi]}`}
-                className="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-200 placeholder-gray-400 outline-none"/>
-              {isCorrect && <FiCheckCircle className="w-4 h-4 text-green-500 shrink-0"/>}
+              <input value={opt} onChange={(e) => {
+                const opts = [...q.options] as [string, string, string, string];
+                opts[oi] = e.target.value;
+                onChange({ options: opts });
+              }} placeholder={`Option ${LETTERS[oi]}`}
+                className="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-200 placeholder-gray-400 outline-none" />
+              {isCorrect && <FiCheckCircle className="w-4 h-4 text-green-500 shrink-0" />}
             </div>
           );
         })}
@@ -162,13 +181,52 @@ function QuestionCard({ q, index, onChange, onDelete }: {
       <div className="px-4 py-2.5 border-t border-gray-100 dark:border-gray-700">
         <input value={q.explanation ?? ""} onChange={(e) => onChange({ explanation: e.target.value })}
           placeholder="Explanation (optional)…"
-          className="w-full bg-transparent text-xs text-gray-500 dark:text-gray-400 placeholder-gray-400 outline-none"/>
+          className="w-full bg-transparent text-xs text-gray-500 dark:text-gray-400 placeholder-gray-400 outline-none" />
       </div>
     </div>
   );
 }
 
-// ─── Modal ────────────────────────────────────────────────────────
+// ─── Voice question preview card ──────────────────────────────────────────────
+
+function VoiceQuestionCard({ q, index }: { q: VoiceQuestion; index: number }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setExpanded((p) => !p)}
+        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
+      >
+        <span className="shrink-0 w-6 h-6 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 text-xs font-bold flex items-center justify-center">{index + 1}</span>
+        <p className="flex-1 text-sm font-medium text-gray-800 dark:text-white leading-snug">{q.question}</p>
+        <span className="shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">{q.marks}m</span>
+        {expanded ? <FiChevronUp className="w-4 h-4 text-gray-400 shrink-0" /> : <FiChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
+      </button>
+      {expanded && (
+        <div className="px-4 pb-4 pt-1 space-y-2.5 border-t border-gray-100 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-800/30">
+          <div>
+            <p className="text-[10px] font-bold text-green-700 dark:text-green-400 uppercase tracking-wide mb-1">Expected Answer</p>
+            <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">{q.expected_answer}</p>
+          </div>
+          {q.hints?.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">Hints for student</p>
+              <div className="flex gap-2 flex-wrap">
+                {q.hints.map((h, i) => (
+                  <span key={i} className="px-2 py-0.5 rounded-full text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">{h}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Modal ────────────────────────────────────────────────────────────────────
+
 interface CreateAssessmentModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -177,92 +235,209 @@ interface CreateAssessmentModalProps {
   courses: Course[];
 }
 
-export default function CreateAssessmentModal({ isOpen, onClose, onCreated, instituteId, courses }: CreateAssessmentModalProps) {
-  const [courseId, setCourseId] = useState("");
-  // Content field (module) picker
-  const [moduleMode, setModuleMode] = useState<"existing" | "new">("existing");
-  const [moduleId, setModuleId] = useState("");
-  const [newModuleName, setNewModuleName] = useState("");
-  const [modules, setModules] = useState<(CourseModule & { contents: any[] })[]>([]);
-  const [modulesLoading, setModulesLoading] = useState(false);
-  // Quiz fields
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [passingScore, setPassingScore] = useState(70);
-  const [timeLimit, setTimeLimit] = useState(0);
-  const [questions, setQuestions] = useState<QuizQuestion[]>([newQuestion()]);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export default function CreateAssessmentModal({
+  isOpen, onClose, onCreated, instituteId, courses,
+}: CreateAssessmentModalProps) {
+
+  // ── Type selector ────────────────────────────────────────────────────────
+  const [assessmentType, setAssessmentType] = useState<AssessmentType>("mcq");
+
+  // ── Shared fields ────────────────────────────────────────────────────────
+  const [courseId, setCourseId]               = useState("");
+  const [moduleMode, setModuleMode]           = useState<"existing" | "new">("existing");
+  const [moduleId, setModuleId]               = useState("");
+  const [newModuleName, setNewModuleName]     = useState("");
+  const [modules, setModules]                 = useState<(CourseModule & { contents: unknown[] })[]>([]);
+  const [modulesLoading, setModulesLoading]   = useState(false);
+  const [title, setTitle]                     = useState("");
+  const [description, setDescription]         = useState("");
+  const [submitting, setSubmitting]           = useState(false);
+  const [error, setError]                     = useState<string | null>(null);
+
+  // ── MCQ-specific ─────────────────────────────────────────────────────────
+  const [passingScore, setPassingScore]       = useState(70);
+  const [timeLimit, setTimeLimit]             = useState(0);
+  const [questions, setQuestions]             = useState<QuizQuestion[]>([newQuestion()]);
+
+  // ── Voice-specific ───────────────────────────────────────────────────────
+  const [voiceInstructions, setVoiceInstructions]   = useState("");
+  const [voiceFile, setVoiceFile]                   = useState<File | null>(null);
+  const [voiceNumQ, setVoiceNumQ]                   = useState(5);
+  const [voiceMarksPerQ, setVoiceMarksPerQ]         = useState(10);
+  const [voiceGenerating, setVoiceGenerating]       = useState(false);
+  const [voiceGenError, setVoiceGenError]           = useState("");
+  const [voiceQuestions, setVoiceQuestions]         = useState<VoiceQuestion[]>([]);
+  const [voiceStep, setVoiceStep]                   = useState<"config" | "preview">("config");
+  const voiceFileRef                                = useRef<HTMLInputElement>(null);
 
   const selectedCourse = courses.find((c) => c.id === courseId) ?? null;
 
+  // ── Reset on open ────────────────────────────────────────────────────────
   useEffect(() => {
     if (isOpen) {
+      setAssessmentType("mcq");
       setCourseId(""); setModuleMode("existing"); setModuleId(""); setNewModuleName(""); setModules([]);
       setTitle(""); setDescription(""); setPassingScore(70); setTimeLimit(0);
       setQuestions([newQuestion()]); setError(null);
+      setVoiceInstructions(""); setVoiceFile(null); setVoiceNumQ(5); setVoiceMarksPerQ(10);
+      setVoiceGenerating(false); setVoiceGenError(""); setVoiceQuestions([]); setVoiceStep("config");
     }
   }, [isOpen]);
 
-  // Load modules when course changes
+  // ── Load modules when course changes ─────────────────────────────────────
   useEffect(() => {
     if (!courseId) { setModules([]); setModuleId(""); return; }
-    setModulesLoading(true);
-    setModuleId("");
+    setModulesLoading(true); setModuleId("");
     instituteService.getCourseForTeacher(instituteId, courseId)
-      .then((data) => setModules((data?.modules ?? []) as any))
+      .then((data) => setModules((data?.modules ?? []) as (CourseModule & { contents: unknown[] })[]))
       .finally(() => setModulesLoading(false));
   }, [courseId, instituteId]);
 
-  const updateQuestion = (id: string, patch: Partial<QuizQuestion>) =>
-    setQuestions((prev) => prev.map((q) => (q.id === id ? { ...q, ...patch } : q)));
+  // ── Generate voice questions ──────────────────────────────────────────────
+  async function handleVoiceGenerate() {
+    if (!voiceInstructions.trim() && !voiceFile) {
+      setVoiceGenError("Add instructions or upload a document.");
+      return;
+    }
+    setVoiceGenError(""); setVoiceGenerating(true);
+    try {
+      const token = authService.getToken();
+      const form = new FormData();
+      form.append("instructions", voiceInstructions);
+      form.append("num_questions", String(voiceNumQ));
+      form.append("marks_per_question", String(voiceMarksPerQ));
+      if (voiceFile) form.append("file", voiceFile);
 
+      const res = await fetch(`${API_GATEWAY_URL}/api/ai/voice-assessment/generate`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail ?? res.statusText); }
+      const data: { questions: VoiceQuestion[] } = await res.json();
+      setVoiceQuestions(data.questions);
+      setVoiceStep("preview");
+    } catch (e: unknown) {
+      setVoiceGenError(e instanceof Error ? e.message : "Generation failed");
+    } finally { setVoiceGenerating(false); }
+  }
+
+  // ── Submit ────────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!courseId || !title.trim()) { setError("Please select a course and provide a quiz title."); return; }
-    if (moduleMode === "existing" && !moduleId) { setError("Select an existing content field or switch to create new."); return; }
-    if (moduleMode === "new" && !newModuleName.trim()) { setError("Please enter a content field name."); return; }
-    const filled = questions.filter((q) => q.question.trim() && q.options.every((o) => o.trim()));
-    if (filled.length === 0) { setError("Add at least one complete question."); return; }
-    setError(null);
-    setSubmitting(true);
-    try {
-      const content = await instituteService.createTeacherAssessmentSmart(instituteId, courseId, {
-        ...(moduleMode === "existing" ? { moduleId } : { moduleName: newModuleName.trim() }),
-        title: title.trim(),
-        description: description.trim() || undefined,
-        quizData: { questions: filled, passingScore, timeLimit },
-      });
-      const course = selectedCourse!;
-      const modTitle = moduleMode === "existing"
-        ? (modules.find((m) => m.id === moduleId)?.title ?? "")
-        : newModuleName.trim();
-      onCreated({ course, content, moduleTitle: modTitle });
-      onClose();
-    } catch (e: any) {
-      setError(e.message ?? "Failed to create assessment");
-    } finally {
-      setSubmitting(false);
+    if (!courseId || !title.trim()) { setError("Select a course and provide a title."); return; }
+    if (moduleMode === "existing" && !moduleId) { setError("Select a content field or switch to create new."); return; }
+    if (moduleMode === "new" && !newModuleName.trim()) { setError("Enter a content field name."); return; }
+
+    if (assessmentType === "mcq") {
+      const filled = questions.filter((q) => q.question.trim() && q.options.every((o) => o.trim()));
+      if (filled.length === 0) { setError("Add at least one complete question."); return; }
+      setError(null); setSubmitting(true);
+      try {
+        const content = await instituteService.createTeacherAssessmentSmart(instituteId, courseId, {
+          ...(moduleMode === "existing" ? { moduleId } : { moduleName: newModuleName.trim() }),
+          title: title.trim(),
+          description: description.trim() || undefined,
+          quizData: { questions: filled, passingScore, timeLimit, assessmentType: "mcq" },
+        });
+        const modTitle = moduleMode === "existing"
+          ? (modules.find((m) => m.id === moduleId)?.title ?? "") : newModuleName.trim();
+        onCreated({ course: selectedCourse!, content, moduleTitle: modTitle });
+        onClose();
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Failed to create assessment");
+      } finally { setSubmitting(false); }
+    } else {
+      if (voiceQuestions.length === 0) { setError("Generate voice questions first."); return; }
+      setError(null); setSubmitting(true);
+      try {
+        const content = await instituteService.createTeacherAssessmentSmart(instituteId, courseId, {
+          ...(moduleMode === "existing" ? { moduleId } : { moduleName: newModuleName.trim() }),
+          title: title.trim(),
+          description: (voiceInstructions.trim() || description.trim()) || undefined,
+          quizData: {
+            assessmentType: "voice",
+            voiceQuestions,
+            questions: [],     // empty — not MCQ
+            passingScore: 50,
+            timeLimit: 0,
+            totalMarks: voiceQuestions.reduce((s, q) => s + q.marks, 0),
+          },
+        });
+        const modTitle = moduleMode === "existing"
+          ? (modules.find((m) => m.id === moduleId)?.title ?? "") : newModuleName.trim();
+        onCreated({ course: selectedCourse!, content, moduleTitle: modTitle });
+        onClose();
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Failed to create assessment");
+      } finally { setSubmitting(false); }
     }
   };
 
   if (!isOpen) return null;
 
+  const updateQuestion = (id: string, patch: Partial<QuizQuestion>) =>
+    setQuestions((prev) => prev.map((q) => (q.id === id ? { ...q, ...patch } : q)));
+
   const modal = (
     <div className="fixed inset-0 z-999999 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col">
-        {/* Header */}
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[94vh] flex flex-col">
+
+        {/* ── Header ── */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Create Assessment</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800">
-            <FiX className="w-5 h-5"/>
+            <FiX className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Body */}
+        {/* ── Assessment type selector ── */}
+        <div className="px-6 pt-5 pb-1 shrink-0">
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setAssessmentType("mcq")}
+              className={`flex items-center gap-3 px-4 py-3.5 rounded-xl border-2 transition-all text-left ${
+                assessmentType === "mcq"
+                  ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10"
+                  : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+              }`}
+            >
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${assessmentType === "mcq" ? "bg-blue-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-500"}`}>
+                <FiFileText className="w-4 h-4" />
+              </div>
+              <div>
+                <p className={`text-sm font-semibold ${assessmentType === "mcq" ? "text-blue-700 dark:text-blue-300" : "text-gray-700 dark:text-gray-300"}`}>MCQ Quiz</p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">Multiple choice questions</p>
+              </div>
+              {assessmentType === "mcq" && <FiCheckCircle className="w-4 h-4 text-blue-500 ml-auto shrink-0" />}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setAssessmentType("voice")}
+              className={`flex items-center gap-3 px-4 py-3.5 rounded-xl border-2 transition-all text-left ${
+                assessmentType === "voice"
+                  ? "border-purple-500 bg-purple-50 dark:bg-purple-500/10"
+                  : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+              }`}
+            >
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${assessmentType === "voice" ? "bg-gradient-to-br from-purple-500 to-indigo-600 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-500"}`}>
+                <FiMic className="w-4 h-4" />
+              </div>
+              <div>
+                <p className={`text-sm font-semibold ${assessmentType === "voice" ? "text-purple-700 dark:text-purple-300" : "text-gray-700 dark:text-gray-300"}`}>Voice Assessment</p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">AI interview — spoken answers</p>
+              </div>
+              {assessmentType === "voice" && <FiCheckCircle className="w-4 h-4 text-purple-500 ml-auto shrink-0" />}
+            </button>
+          </div>
+        </div>
+
+        {/* ── Body ── */}
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
 
-          {/* Course + Batch */}
+          {/* Course */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Course <span className="text-red-500">*</span>
@@ -270,9 +445,7 @@ export default function CreateAssessmentModal({ isOpen, onClose, onCreated, inst
             <select value={courseId} onChange={(e) => setCourseId(e.target.value)} required className={inputCls}>
               <option value="">Select course…</option>
               {courses.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}{c.batchNumber ? ` — Batch ${c.batchNumber}` : ""}
-                </option>
+                <option key={c.id} value={c.id}>{c.name}{c.batchNumber ? ` — Batch ${c.batchNumber}` : ""}</option>
               ))}
             </select>
             {selectedCourse?.batchNumber && (
@@ -285,13 +458,12 @@ export default function CreateAssessmentModal({ isOpen, onClose, onCreated, inst
             )}
           </div>
 
-          {/* Content Field (Module) */}
+          {/* Content Field */}
           <div className="space-y-3">
             <div className="flex items-center gap-2">
-              <FiLayers className="w-4 h-4 text-gray-500"/>
+              <FiLayers className="w-4 h-4 text-gray-500" />
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Content Field <span className="text-red-500">*</span></label>
             </div>
-            {/* Toggle */}
             <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden text-xs font-medium">
               <button type="button" onClick={() => setModuleMode("existing")}
                 className={`flex-1 py-2 transition-colors ${moduleMode === "existing" ? "bg-blue-600 text-white" : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"}`}>
@@ -302,80 +474,220 @@ export default function CreateAssessmentModal({ isOpen, onClose, onCreated, inst
                 Create new
               </button>
             </div>
-
             {moduleMode === "existing" ? (
-              <select
-                value={moduleId}
-                onChange={(e) => setModuleId(e.target.value)}
-                disabled={!courseId || modulesLoading}
-                className={inputCls}
-              >
+              <select value={moduleId} onChange={(e) => setModuleId(e.target.value)}
+                disabled={!courseId || modulesLoading} className={inputCls}>
                 <option value="">{modulesLoading ? "Loading…" : !courseId ? "Select a course first" : modules.length === 0 ? "No content fields — create new" : "Select content field…"}</option>
                 {modules.map((m) => <option key={m.id} value={m.id}>{m.title}</option>)}
               </select>
             ) : (
-              <input
-                value={newModuleName}
-                onChange={(e) => setNewModuleName(e.target.value)}
-                placeholder="Content field name, e.g. Chapter 1 Assessments"
-                className={inputCls}
-              />
+              <input value={newModuleName} onChange={(e) => setNewModuleName(e.target.value)}
+                placeholder="Content field name, e.g. Chapter 1 Assessments" className={inputCls} />
             )}
           </div>
 
-          {/* Quiz Title + Description */}
+          {/* Assessment Title */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quiz Title <span className="text-red-500">*</span></label>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="e.g. Chapter 1 Quiz" className={inputCls}/>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Instructions (optional)</label>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2}
-              placeholder="Any instructions for students…" className={inputCls + " resize-none"}/>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Assessment Title <span className="text-red-500">*</span>
+            </label>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} required
+              placeholder={assessmentType === "voice" ? "e.g. Python Basics Voice Interview" : "e.g. Chapter 1 Quiz"}
+              className={inputCls} />
           </div>
 
-          {/* Settings */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Passing Score (%)</label>
-              <input type="number" min={0} max={100} value={passingScore} onChange={(e) => setPassingScore(Number(e.target.value))} className={inputCls}/>
+          {/* ═══════════════════ MCQ SECTION ═══════════════════ */}
+          {assessmentType === "mcq" && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Instructions (optional)</label>
+                <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2}
+                  placeholder="Any instructions for students…" className={inputCls + " resize-none"} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Passing Score (%)</label>
+                  <input type="number" min={0} max={100} value={passingScore} onChange={(e) => setPassingScore(Number(e.target.value))} className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Time Limit (min, 0 = none)</label>
+                  <input type="number" min={0} value={timeLimit} onChange={(e) => setTimeLimit(Number(e.target.value))} className={inputCls} />
+                </div>
+              </div>
+              <AIGeneratePanel onAddQuestions={(qs) => setQuestions((prev) => [...prev, ...qs])} />
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Questions ({questions.length})</h3>
+                  <button type="button" onClick={() => setQuestions((p) => [...p, newQuestion()])}
+                    className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium">
+                    <FiPlus className="w-3.5 h-3.5" /> Add question
+                  </button>
+                </div>
+                {questions.map((q, i) => (
+                  <QuestionCard key={q.id} q={q} index={i}
+                    onChange={(patch) => updateQuestion(q.id, patch)}
+                    onDelete={() => setQuestions((prev) => prev.filter((x) => x.id !== q.id))} />
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* ═══════════════════ VOICE SECTION ═══════════════════ */}
+          {assessmentType === "voice" && (
+            <div className="space-y-4">
+
+              {voiceStep === "config" && (
+                <>
+                  {/* Voice instructions banner */}
+                  <div className="flex items-start gap-3 p-4 rounded-xl bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20">
+                    <FiMic className="w-4 h-4 text-purple-500 shrink-0 mt-0.5" />
+                    <div className="text-xs text-purple-700 dark:text-purple-300 leading-relaxed">
+                      <p className="font-semibold mb-1">How Voice Assessment works</p>
+                      <p>Describe the topic or upload a document → AI generates open-ended questions → Students answer via microphone like a real interview → AI marks each answer and records the score.</p>
+                    </div>
+                  </div>
+
+                  {/* Instructions textarea */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Topic / Instructions <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={voiceInstructions}
+                      onChange={(e) => setVoiceInstructions(e.target.value)}
+                      placeholder="Describe what to assess. E.g. 'Test students on Python functions, loops, and error handling. Intermediate difficulty. Questions should require 2–3 sentence spoken answers.'"
+                      className={inputCls + " resize-none"}
+                    />
+                  </div>
+
+                  {/* File upload */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Upload Study Material <span className="text-gray-400 font-normal">(PDF, DOCX, TXT — optional)</span>
+                    </label>
+                    <input ref={voiceFileRef} type="file" accept=".pdf,.docx,.txt" className="hidden"
+                      onChange={(e) => setVoiceFile(e.target.files?.[0] ?? null)} />
+                    <button
+                      type="button"
+                      onClick={() => voiceFileRef.current?.click()}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 hover:border-purple-400 dark:hover:border-purple-500 text-sm text-gray-500 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors group"
+                    >
+                      <FiUpload className="w-4 h-4 group-hover:scale-110 transition-transform shrink-0" />
+                      {voiceFile ? (
+                        <span className="text-purple-700 dark:text-purple-400 font-medium truncate">{voiceFile.name}</span>
+                      ) : (
+                        "Upload lecture notes, textbook excerpt, or assignment PDF"
+                      )}
+                      {voiceFile && (
+                        <button type="button" onClick={(e) => { e.stopPropagation(); setVoiceFile(null); }}
+                          className="ml-auto text-gray-400 hover:text-red-500 transition-colors">
+                          <FiX className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Config: questions + marks */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Number of Questions</label>
+                      <select value={voiceNumQ} onChange={(e) => setVoiceNumQ(Number(e.target.value))} className={inputCls}>
+                        {[3, 4, 5, 6, 7, 8, 10].map((n) => <option key={n} value={n}>{n} questions</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Marks per Question</label>
+                      <select value={voiceMarksPerQ} onChange={(e) => setVoiceMarksPerQ(Number(e.target.value))} className={inputCls}>
+                        {[5, 10, 15, 20, 25].map((n) => <option key={n} value={n}>{n} marks</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  {voiceGenError && (
+                    <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
+                      <FiAlertCircle className="w-4 h-4 shrink-0" /> {voiceGenError}
+                    </div>
+                  )}
+
+                  {/* Generate button */}
+                  <button
+                    type="button"
+                    onClick={handleVoiceGenerate}
+                    disabled={voiceGenerating || (!voiceInstructions.trim() && !voiceFile)}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 disabled:from-gray-300 disabled:to-gray-300 dark:disabled:from-gray-700 dark:disabled:to-gray-700 disabled:text-gray-400 transition-all shadow-md shadow-purple-500/20 disabled:shadow-none"
+                  >
+                    {voiceGenerating
+                      ? <><FiLoader className="w-4 h-4 animate-spin" /> Generating {voiceNumQ} questions…</>
+                      : <><FiZap className="w-4 h-4" /> Generate {voiceNumQ} Voice Questions</>
+                    }
+                  </button>
+                </>
+              )}
+
+              {voiceStep === "preview" && voiceQuestions.length > 0 && (
+                <>
+                  {/* Preview header */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <FiCheckCircle className="w-4 h-4 text-green-500" />
+                      <span className="text-sm font-semibold text-gray-800 dark:text-white">
+                        {voiceQuestions.length} questions · {voiceQuestions.reduce((s, q) => s + q.marks, 0)} total marks
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setVoiceStep("config")}
+                      className="text-xs text-purple-600 dark:text-purple-400 hover:underline font-medium flex items-center gap-1"
+                    >
+                      ← Regenerate
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {voiceQuestions.map((q, i) => <VoiceQuestionCard key={q.id} q={q} index={i} />)}
+                  </div>
+
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20 text-xs text-green-700 dark:text-green-400">
+                    <FiAward className="w-4 h-4 shrink-0" />
+                    <p>Students will answer each question via microphone. AI marks each answer and records the result with per-question feedback.</p>
+                  </div>
+                </>
+              )}
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Time Limit (min, 0 = none)</label>
-              <input type="number" min={0} value={timeLimit} onChange={(e) => setTimeLimit(Number(e.target.value))} className={inputCls}/>
+          )}
+
+          {error && (
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
+              <FiAlertCircle className="w-4 h-4 shrink-0" /> {error}
             </div>
-          </div>
-
-          {/* AI Generate */}
-          <AIGeneratePanel onAddQuestions={(qs) => setQuestions((prev) => [...prev, ...qs])}/>
-
-          {/* Questions */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Questions ({questions.length})</h3>
-              <button type="button" onClick={() => setQuestions((p) => [...p, newQuestion()])}
-                className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium">
-                <FiPlus className="w-3.5 h-3.5"/> Add question
-              </button>
-            </div>
-            {questions.map((q, i) => (
-              <QuestionCard key={q.id} q={q} index={i}
-                onChange={(patch) => updateQuestion(q.id, patch)}
-                onDelete={() => setQuestions((prev) => prev.filter((x) => x.id !== q.id))}/>
-            ))}
-          </div>
-
-          {error && <p className="text-sm text-red-500">{error}</p>}
+          )}
         </form>
 
-        {/* Footer */}
+        {/* ── Footer ── */}
         <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 shrink-0">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+          <button type="button" onClick={onClose}
+            className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
             Cancel
           </button>
-          <button onClick={handleSubmit as any} disabled={submitting || !courseId || !title.trim()}
-            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
-            {submitting ? <><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"/> Saving…</> : "Create Assessment"}
+          <button
+            onClick={handleSubmit as unknown as React.MouseEventHandler<HTMLButtonElement>}
+            disabled={
+              submitting || !courseId || !title.trim() ||
+              (assessmentType === "voice" && (voiceQuestions.length === 0 || voiceStep === "config"))
+            }
+            className={`px-5 py-2 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-all flex items-center gap-2 shadow-sm ${
+              assessmentType === "voice"
+                ? "bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 shadow-purple-500/25"
+                : "bg-blue-600 hover:bg-blue-700"
+            }`}
+          >
+            {submitting
+              ? <><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> Saving…</>
+              : assessmentType === "voice"
+                ? <><FiMic className="w-4 h-4" /> Save Voice Assessment</>
+                : <><FiChevronRight className="w-4 h-4" /> Create Assessment</>
+            }
           </button>
         </div>
       </div>

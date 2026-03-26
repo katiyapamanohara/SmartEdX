@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Articom Voice Agent — Dashboard</title>
+    <style>
+        :root {
+            --bg: #0f1117;
+            --surface: #1a1d27;
+            --border: #2a2d3a;
+            --text: #e4e4e7;
+            --text-muted: #8b8d98;
+            --accent: #6366f1;
+            --accent-light: #818cf8;
+            --green: #22c55e;
+            --red: #ef4444;
+            --yellow: #eab308;
+            --blue: #3b82f6;
+            --radius: 12px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        header {
+            border-bottom: 1px solid var(--border);
+            padding: 16px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        header h1 .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--green);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .header-meta {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .uptime { font-variant-numeric: tabular-nums; }
+
+        main { padding: 24px 32px; max-width: 1400px; margin: 0 auto; }
+
+        /* ── Metric cards ─────────────────────────────────────── */
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+        }
+
+        .card-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .card-value {
+            font-size: 28px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .card-sub {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* ── Config & Transport grid ──────────────────────────── */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        @media (max-width: 768px) {
+            .grid-2 { grid-template-columns: 1fr; }
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text);
+        }
+
+        .kv-list { list-style: none; }
+
+        .kv-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 13px;
+        }
+
+        .kv-list li:last-child { border-bottom: none; }
+
+        .kv-key { color: var(--text-muted); }
+        .kv-val { font-weight: 500; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 10px;
+            border-radius: 100px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge-on  { background: rgba(34, 197, 94, 0.15); color: var(--green); }
+        .badge-off { background: rgba(239, 68, 68, 0.12); color: var(--red); }
+
+        .badge::before {
+            content: '';
+            width: 6px; height: 6px;
+            border-radius: 50%;
+        }
+
+        .badge-on::before  { background: var(--green); }
+        .badge-off::before { background: var(--red); }
+
+        /* ── Tables ───────────────────────────────────────────── */
+        .table-wrap {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            margin-bottom: 28px;
+        }
+
+        .table-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        thead th {
+            text-align: left;
+            padding: 10px 20px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+            background: rgba(255,255,255,0.02);
+        }
+
+        tbody td {
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border);
+            font-variant-numeric: tabular-nums;
+        }
+
+        tbody tr:last-child td { border-bottom: none; }
+
+        tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+        .empty-state {
+            padding: 40px 20px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+
+        .status-active  { background: var(--green); }
+        .status-idle     { background: var(--yellow); }
+        .status-ended    { background: var(--red); }
+
+        .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+
+        .refresh-btn {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 6px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.15s;
+        }
+
+        .refresh-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent-light);
+        }
+
+        .auto-label {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* ── Latency section ─────────────────────────────────── */
+        .latency-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        .latency-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+        }
+
+        .latency-title {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .latency-title .last-val {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--accent-light);
+        }
+
+        .latency-title .last-unit {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .latency-stats {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 14px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .latency-stats span {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .latency-stats .stat-val {
+            color: var(--text);
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .latency-bar-wrap {
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            height: 40px;
+        }
+
+        .latency-bar {
+            flex: 1;
+            min-width: 3px;
+            background: var(--accent);
+            border-radius: 2px 2px 0 0;
+            transition: height 0.2s;
+            position: relative;
+        }
+
+        .latency-bar:hover {
+            background: var(--accent-light);
+        }
+
+        .latency-empty {
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1><span class="dot"></span> Articom Voice Agent</h1>
+    <div class="header-meta">
+        <span class="uptime" id="uptime">—</span>
+        <span class="auto-label">auto-refresh 5s</span>
+        <button class="refresh-btn" onclick="fetchStats()">Refresh</button>
+    </div>
+</header>
+
+<main>
+    <!-- Top metric cards -->
+    <div class="metrics">
+        <div class="card">
+            <div class="card-label">Active SIP Calls</div>
+            <div class="card-value" id="m-sip-calls">—</div>
+            <div class="card-sub" id="m-sip-sub"></div>
+        </div>
+        <div class="card">
+            <div class="card-label">Total Sessions</div>
+            <div class="card-value" id="m-sessions">—</div>
+            <div class="card-sub">across all transports</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Model</div>
+            <div class="card-value" id="m-model" style="font-size:16px;word-break:break-all;">—</div>
+            <div class="card-sub" id="m-model-sub"></div>
+        </div>
+        <div class="card">
+            <div class="card-label">Uptime</div>
+            <div class="card-value" id="m-uptime">—</div>
+            <div class="card-sub" id="m-uptime-sub"></div>
+        </div>
+    </div>
+
+    <!-- Config + Transports -->
+    <div class="grid-2">
+        <div class="card">
+            <div class="section-title">Configuration</div>
+            <ul class="kv-list" id="config-list"></ul>
+        </div>
+        <div class="card">
+            <div class="section-title">Transports</div>
+            <ul class="kv-list" id="transport-list"></ul>
+        </div>
+    </div>
+
+    <!-- Active SIP calls table -->
+    <div class="table-wrap">
+        <div class="table-header">
+            <span class="section-title" style="margin:0">Active Calls</span>
+            <span class="card-sub" id="calls-count"></span>
+        </div>
+        <div id="calls-table-body">
+            <div class="empty-state">No active calls</div>
+        </div>
+    </div>
+
+    <!-- Latency metrics -->
+    <div class="table-wrap">
+        <div class="table-header">
+            <span class="section-title" style="margin:0">Latencies</span>
+            <span class="card-sub">last / avg / min / max — in milliseconds</span>
+        </div>
+        <div style="padding: 16px 20px;">
+            <div class="latency-grid" id="latency-grid">
+                <div class="empty-state">No latency data yet</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sessions table -->
+    <div class="table-wrap">
+        <div class="table-header">
+            <span class="section-title" style="margin:0">Sessions</span>
+            <span class="card-sub" id="sessions-count"></span>
+        </div>
+        <div id="sessions-table-body">
+            <div class="empty-state">No sessions recorded</div>
+        </div>
+    </div>
+</main>
+
+<script>
+    function fmtUptime(s) {
+        const d = Math.floor(s / 86400);
+        const h = Math.floor((s % 86400) / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = Math.floor(s % 60);
+        if (d > 0) return `${d}d ${h}h ${m}m`;
+        if (h > 0) return `${h}h ${m}m ${sec}s`;
+        return `${m}m ${sec}s`;
+    }
+
+    function badge(on, labelOn = 'Enabled', labelOff = 'Disabled') {
+        const cls = on ? 'badge-on' : 'badge-off';
+        return `<span class="badge ${cls}">${on ? labelOn : labelOff}</span>`;
+    }
+
+    function statusDot(call) {
+        if (call.bye_sent) return '<span class="status-dot status-ended"></span>Ended';
+        if (call.is_active) return '<span class="status-dot status-active"></span>Active';
+        return '<span class="status-dot status-idle"></span>Idle';
+    }
+
+    function truncate(s, len = 20) {
+        if (!s) return '—';
+        return s.length > len ? s.slice(0, len) + '…' : s;
+    }
+
+    function render(data) {
+        // Top cards
+        document.getElementById('m-sip-calls').textContent = data.sip.active_calls;
+        document.getElementById('m-sip-sub').textContent = data.sip.enabled ? 'SIP server running' : 'SIP server disabled';
+        document.getElementById('m-sessions').textContent = data.sessions.total;
+        document.getElementById('m-model').textContent = data.config.model;
+        document.getElementById('m-model-sub').textContent = data.config.vertex_ai ? 'Vertex AI' : 'Gemini API';
+
+        const up = data.uptime_seconds;
+        document.getElementById('m-uptime').textContent = fmtUptime(up);
+        document.getElementById('m-uptime-sub').textContent = `${Math.round(up)}s total`;
+        document.getElementById('uptime').textContent = 'Up ' + fmtUptime(up);
+
+        // Config list
+        const cfgEl = document.getElementById('config-list');
+        cfgEl.innerHTML = [
+            kv('Assistant ID', `<span class="mono">${truncate(data.config.assistant_id, 28)}</span>`),
+            kv('Model', `<span class="mono">${data.config.model}</span>`),
+            kv('Vertex AI', badge(data.config.vertex_ai)),
+            kv('Langfuse', badge(data.config.langfuse)),
+            kv('Custom Tools', badge(data.config.custom_tools)),
+            kv('Knowledge Base', badge(data.config.knowledge_base)),
+        ].join('');
+
+        // Transport list
+        const trEl = document.getElementById('transport-list');
+        trEl.innerHTML = [
+            kv('Browser WebSocket', badge(data.transports.websocket, 'Active', 'Inactive')),
+            kv('SIP-over-WebSocket', badge(data.transports.sip_ws, 'Active', 'Inactive')),
+            kv('Native SIP/UDP', badge(data.transports.sip_udp, 'Active', 'Inactive')),
+            data.transports.sip_port ? kv('SIP Port', `<span class="mono">${data.transports.sip_port}</span>`) : '',
+        ].join('');
+
+        // Calls table
+        const callsWrap = document.getElementById('calls-table-body');
+        document.getElementById('calls-count').textContent = `${data.sip.calls.length} call(s)`;
+        if (data.sip.calls.length === 0) {
+            callsWrap.innerHTML = '<div class="empty-state">No active calls</div>';
+        } else {
+            callsWrap.innerHTML = `<table>
+                <thead><tr>
+                    <th>Status</th><th>Call ID</th><th>Session</th>
+                    <th>RTP Frames</th><th>User Turns</th><th>Playback</th><th>Interrupt</th>
+                </tr></thead>
+                <tbody>${data.sip.calls.map(c => `<tr>
+                    <td>${statusDot(c)}</td>
+                    <td class="mono">${truncate(c.call_id, 16)}</td>
+                    <td class="mono">${truncate(c.session_id, 16)}</td>
+                    <td>${c.rtp_frames.toLocaleString()}</td>
+                    <td>${c.user_turns}</td>
+                    <td>${c.playback_active ? '🔊' : '—'}</td>
+                    <td>${c.interrupt_active ? '⚡' : '—'}</td>
+                </tr>`).join('')}</tbody>
+            </table>`;
+        }
+
+        // Sessions table
+        const sessWrap = document.getElementById('sessions-table-body');
+        document.getElementById('sessions-count').textContent = `${data.sessions.details.length} session(s)`;
+        if (data.sessions.details.length === 0) {
+            sessWrap.innerHTML = '<div class="empty-state">No sessions recorded</div>';
+        } else {
+            sessWrap.innerHTML = `<table>
+                <thead><tr>
+                    <th>Session ID</th><th>Total Messages</th><th>User</th><th>Agent</th>
+                </tr></thead>
+                <tbody>${data.sessions.details.map(s => `<tr>
+                    <td class="mono">${truncate(s.session_id, 24)}</td>
+                    <td>${s.total_messages}</td>
+                    <td>${s.user_messages}</td>
+                    <td>${s.agent_messages}</td>
+                </tr>`).join('')}</tbody>
+            </table>`;
+        }
+
+        // Latencies
+        renderLatencies(data.latencies || {});
+    }
+
+    const METRIC_LABELS = {
+        session_init: 'Session Init',
+        session_finalize: 'Session Finalize',
+        first_response: 'First Response',
+        api_fetch_config: 'API: Fetch Config',
+        api_start_session: 'API: Start Session',
+        api_end_session: 'API: End Session',
+    };
+
+    // Keep a rolling history for the mini bar charts
+    const latencyHistory = {};
+    const MAX_BARS = 30;
+
+    function renderLatencies(latencies) {
+        const grid = document.getElementById('latency-grid');
+        const metrics = Object.keys(latencies);
+
+        if (metrics.length === 0) {
+            grid.innerHTML = '<div class="empty-state">No latency data yet — make a call or connect via WebSocket</div>';
+            return;
+        }
+
+        // Update rolling history
+        for (const name of metrics) {
+            if (!latencyHistory[name]) latencyHistory[name] = [];
+            const lastVal = latencies[name].last;
+            const hist = latencyHistory[name];
+            if (hist.length === 0 || hist[hist.length - 1] !== lastVal) {
+                hist.push(lastVal);
+                if (hist.length > MAX_BARS) hist.shift();
+            }
+        }
+
+        grid.innerHTML = metrics.map(name => {
+            const m = latencies[name];
+            const label = METRIC_LABELS[name] || name;
+            const hist = latencyHistory[name] || [];
+            const maxVal = Math.max(...hist, 1);
+
+            const barsHtml = hist.map(v => {
+                const h = Math.max(4, (v / maxVal) * 36);
+                return `<div class="latency-bar" style="height:${h}px" title="${v}ms"></div>`;
+            }).join('');
+
+            return `<div class="latency-card">
+                <div class="latency-title">
+                    <span>${label}</span>
+                    <span><span class="last-val">${m.last}</span> <span class="last-unit">ms</span></span>
+                </div>
+                <div class="latency-stats">
+                    <span>avg <span class="stat-val">${m.avg}ms</span></span>
+                    <span>min <span class="stat-val">${m.min}ms</span></span>
+                    <span>max <span class="stat-val">${m.max}ms</span></span>
+                    <span>n <span class="stat-val">${m.count}</span></span>
+                </div>
+                <div class="latency-bar-wrap">${barsHtml || '<span class="latency-empty">—</span>'}</div>
+            </div>`;
+        }).join('');
+    }
+
+    function kv(key, val) {
+        return `<li><span class="kv-key">${key}</span><span class="kv-val">${val}</span></li>`;
+    }
+
+    async function fetchStats() {
+        try {
+            const res = await fetch('/api/stats');
+            if (!res.ok) throw new Error(res.statusText);
+            const data = await res.json();
+            render(data);
+        } catch (e) {
+            console.error('Dashboard fetch error:', e);
+        }
+    }
+
+    // Initial + auto refresh
+    fetchStats();
+    setInterval(fetchStats, 5000);
+</script>
+
+</body>
+</html>

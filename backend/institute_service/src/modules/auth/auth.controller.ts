@@ -136,6 +136,27 @@ export class AuthController {
     return this.authService.getInstituteInfo(id);
   }
 
+  @Public()
+  @Get('institutes/:id/voice-config')
+  @ApiOperation({ summary: 'Get institute voice agent configuration' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns institute voice instructions and greeting for the voice agent',
+    schema: {
+      example: {
+        id: '123e4567-e89b-12d3-a456-426614174000',
+        name: 'Example Institute',
+        voiceInstructions: 'You are a helpful AI assistant for Example Institute...',
+        voiceGreeting: 'Hello! Welcome to Example Institute. How can I help you?',
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Institute not found' })
+  async getInstituteVoiceConfig(@Param('id') id: string) {
+    return this.authService.getInstituteVoiceConfig(id);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('institutes/:id')
   @ApiBearerAuth('JWT-auth')

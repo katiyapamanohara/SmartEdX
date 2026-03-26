@@ -4,10 +4,39 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { LoggingInterceptor } from './core/interceptors/logging.interceptor';
 import { AllExceptionsFilter } from './core/filters/http-exception.filter';
+import { createProxyMiddleware } from 'http-proxy-middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     bodyParser: true,
+  });
+
+  // ── Voice Agent proxy (HTTP + WebSocket) ──────────────────────────────────
+  const voiceAgentTarget = process.env.VOICE_AGENT_URL || 'http://localhost:8002';
+
+  // HTTP proxy: /api/voice-agent/* → http://localhost:8002/*
+  const voiceAgentHttpProxy = createProxyMiddleware({
+    target: voiceAgentTarget,
+    changeOrigin: true,
+    pathRewrite: { '^/api/voice-agent': '' },
+  });
+
+  // WebSocket proxy: /voice-agent/ws/* → ws://localhost:8002/ws/*
+  const voiceAgentWsProxy = createProxyMiddleware({
+    target: voiceAgentTarget,
+    changeOrigin: true,
+    ws: true,
+    pathRewrite: { '^/voice-agent': '' },
+  });
+
+  app.use('/api/voice-agent', voiceAgentHttpProxy);
+  app.use('/voice-agent', voiceAgentWsProxy);
+
+  // Attach WebSocket upgrade handler so WS connections are proxied
+  app.getHttpServer().on('upgrade', (req: any, socket: any, head: any) => {
+    if (req.url?.startsWith('/voice-agent')) {
+      (voiceAgentWsProxy as any).upgrade(req, socket, head);
+    }
   });
 
   // Increase JSON / URL-encoded body size limit (for base64 cover images etc.)
