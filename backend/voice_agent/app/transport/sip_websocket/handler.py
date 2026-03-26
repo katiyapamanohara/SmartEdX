@@ -24,7 +24,7 @@ from app.adk.session_manager import ADKSessionManager
 from app.agent import register_call_guard, unregister_call_guard, update_call_guard
 from app.audio import AudioCodec, CodecType
 from app.config import (
-    ARTICOM_ASSISTANT_ID,
+    INSTITUTE_ID,
     END_CALL_INTERRUPT_COOLDOWN,
     HARD_MUTE_SECONDS,
     INTERRUPT_SILENCE_MS,
@@ -484,13 +484,14 @@ a=sendrecv
     return sdp
 
 
-@observe_decorator(name=f"SIP Call - {ARTICOM_ASSISTANT_ID}", as_type="generation")
+@observe_decorator(name=f"SIP Call - {INSTITUTE_ID}", as_type="generation")
 async def sip_websocket_endpoint(
     websocket: WebSocket,
     runner: Runner,
     session_service: InMemorySessionService,
     app_name: str,
     transcript_store: dict,
+    greeting_message: str = "Hello! How can I help you today?",
 ) -> None:
     """WebSocket endpoint for SIP-over-WebSocket connections."""
     await websocket.accept()
@@ -514,7 +515,7 @@ async def sip_websocket_endpoint(
 
         # Langfuse trace
         update_trace(
-            tags=["voice-agent", "sip-websocket", model_name, f"agent:{ARTICOM_ASSISTANT_ID}"],
+            tags=["voice-agent", "sip-websocket", model_name, f"agent:{INSTITUTE_ID}"],
             metadata={
                 "model": model_name,
                 "call_id": call_id,
@@ -554,6 +555,8 @@ async def sip_websocket_endpoint(
             transcript_store=transcript_store,
             user_id=f"sip-{from_tag}",
             session_id=call_id,
+            institute_id=INSTITUTE_ID,
+            greeting_message=greeting_message,
             is_sip=True,
             call_id=call_id,
         )

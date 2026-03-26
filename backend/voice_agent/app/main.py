@@ -12,20 +12,19 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 
 # Load environment variables BEFORE importing agent (needs config at import time)
-load_dotenv(Path(__file__).parent / ".env")
+load_dotenv(Path(__file__).parent.parent / ".env")
 
-from app.agent import agent, search_knowledgebase  # noqa: E402
+from app.agent import get_runner_for_institute, search_knowledgebase  # noqa: E402
 from app.config import (  # noqa: E402
     APP_NAME,
-    ARTICOM_ASSISTANT_ID,
     CUSTOM_TOOLS_ENABLED,
     DASHBOARD_ENABLED,
     DEMO_AGENT_MODEL,
     GOOGLE_GENAI_USE_VERTEXAI,
+    INSTITUTE_ID,
     LANGFUSE_ENABLED,
     LOG_FORMAT,
     LOG_LEVEL,
@@ -36,7 +35,7 @@ from app.config import (  # noqa: E402
     TRANSPORT_WEBSOCKET,
 )
 from app.latency import latency as latency_tracker  # noqa: E402
-from app.observability.langfuse_client import init_instrumentor, observe_decorator  # noqa: E402
+from app.observability.langfuse_client import init_instrumentor  # noqa: E402
 from app.transport.sip_udp.server import get_sip_server, start_native_sip_server, stop_native_sip_server  # noqa: E402
 from app.transport.sip_websocket.handler import sip_websocket_endpoint  # noqa: E402
 from app.transport.websocket.handler import websocket_endpoint  # noqa: E402
@@ -70,7 +69,6 @@ init_instrumentor()
 # ── Core services ────────────────────────────────────────────────────
 
 session_service = InMemorySessionService()
-runner = Runner(app_name=APP_NAME, agent=agent, session_service=session_service)
 transcript_store: dict = {}
 _transcript_lock = asyncio.Lock()
 _start_time = time.time()
@@ -94,7 +92,6 @@ def _print_banner() -> None:
 \033[0m\033[1m         Voice Agent Service v0.1.0\033[0m
 
   Model       : {DEMO_AGENT_MODEL}
-  Assistant   : {ARTICOM_ASSISTANT_ID or "(not set)"}
   Platform    : {"Vertex AI" if GOOGLE_GENAI_USE_VERTEXAI else "Gemini API"}
 
   Transports
@@ -122,7 +119,14 @@ async def lifespan(app: FastAPI):
     if sip_enabled:
         logger.info("Starting native SIP/UDP server...")
         try:
-            await start_native_sip_server(runner=runner, session_service=session_service, app_name=APP_NAME)
+            sip_runner, sip_greeting = get_runner_for_institute(INSTITUTE_ID, session_service)
+            await start_native_sip_server(
+                runner=sip_runner,
+                session_service=session_service,
+                app_name=APP_NAME,
+                institute_id=INSTITUTE_ID,
+                greeting_message=sip_greeting,
+            )
             logger.info("Native SIP server started successfully")
         except Exception as e:
             logger.error(f"Failed to start native SIP server: {e}", exc_info=True)
@@ -232,7 +236,6 @@ async def api_stats():
         "uptime_seconds": round(uptime, 1),
         "config": {
             "model": DEMO_AGENT_MODEL,
-            "assistant_id": ARTICOM_ASSISTANT_ID,
             "vertex_ai": GOOGLE_GENAI_USE_VERTEXAI,
             "langfuse": LANGFUSE_ENABLED,
             "custom_tools": CUSTOM_TOOLS_ENABLED,
@@ -264,12 +267,14 @@ if TRANSPORT_SIP_WS:
     @app.websocket("/sip")
     async def sip_endpoint(websocket: WebSocket) -> None:
         """SIP-over-WebSocket telephony endpoint (Kamailio proxy)."""
+        sip_runner, sip_greeting = get_runner_for_institute(INSTITUTE_ID, session_service)
         await sip_websocket_endpoint(
             websocket=websocket,
-            runner=runner,
+            runner=sip_runner,
             session_service=session_service,
             app_name=APP_NAME,
             transcript_store=transcript_store,
+            greeting_message=sip_greeting,
         )
 else:
     logger.info("SIP-over-WebSocket transport disabled")
@@ -277,20 +282,20 @@ else:
 
 if TRANSPORT_WEBSOCKET:
 
-    @app.websocket("/ws/{user_id}/{session_id}")
-    @observe_decorator(name=f"Voice Agent Execution - {ARTICOM_ASSISTANT_ID}", as_type="generation")
+    @app.websocket("/ws/{institute_id}/{user_id}/{session_id}")
     async def ws_endpoint(
         websocket: WebSocket,
+        institute_id: str,
         user_id: str,
         session_id: str,
         proactivity: bool = False,
         affective_dialog: bool = False,
         language: Optional[str] = None,
     ) -> None:
-        """WebSocket endpoint for bidirectional streaming with ADK."""
+        """WebSocket endpoint — institute_id selects the per-institute agent."""
         await websocket_endpoint(
             websocket=websocket,
-            runner=runner,
+            institute_id=institute_id,
             session_service=session_service,
             transcript_store=transcript_store,
             user_id=user_id,

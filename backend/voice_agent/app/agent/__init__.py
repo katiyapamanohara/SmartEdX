@@ -1,8 +1,7 @@
-"""Articom Voice Agent package (Google ADK)."""
+"""SmartEdX Voice Agent package (Google ADK)."""
 
 from .agent import (
-    agent,
-    greeting_message,
+    get_runner_for_institute,
     register_call_guard,
     search_knowledgebase,
     unregister_call_guard,
@@ -10,8 +9,7 @@ from .agent import (
 )
 
 __all__ = [
-    "agent",
-    "greeting_message",
+    "get_runner_for_institute",
     "register_call_guard",
     "search_knowledgebase",
     "unregister_call_guard",

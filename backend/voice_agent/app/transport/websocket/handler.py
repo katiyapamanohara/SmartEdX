@@ -7,7 +7,6 @@ import logging
 from typing import Optional
 
 from fastapi import WebSocket, WebSocketDisconnect
-from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
@@ -18,19 +17,20 @@ from app.agent.audio_clips import (
     register_session_audio_queue,
     unregister_session_audio_queue,
 )
-from app.config import ARTICOM_ASSISTANT_ID, AUDIO_CLIP_TOOL_MAP
+from app.agent import get_runner_for_institute
+from app.config import APP_NAME, AUDIO_CLIP_TOOL_MAP
 from app.latency import latency
 from app.observability.langfuse_client import observe_decorator, update_trace
 
 logger = logging.getLogger(__name__)
 
 
-@observe_decorator(name=f"Voice Agent Execution - {ARTICOM_ASSISTANT_ID}", as_type="generation")
+@observe_decorator(name="Voice Agent Execution", as_type="generation")
 async def websocket_endpoint(
     websocket: WebSocket,
+    institute_id: str,
     user_id: str,
     session_id: str,
-    runner: Runner,
     session_service: InMemorySessionService,
     transcript_store: dict,
     *,
@@ -41,17 +41,21 @@ async def websocket_endpoint(
     """WebSocket endpoint for bidirectional streaming with ADK."""
     await websocket.accept()
 
+    # Resolve runner and greeting for this institute (cached after first call)
+    runner, greeting_message = get_runner_for_institute(institute_id, session_service)
+
     model_name = runner.agent.model
     run_config = build_run_config(model_name, proactivity=proactivity, affective_dialog=affective_dialog)
 
     # Langfuse trace
     update_trace(
-        tags=["voice-agent", "websocket", model_name, f"agent:{ARTICOM_ASSISTANT_ID}"],
+        tags=["voice-agent", "websocket", model_name, f"institute:{institute_id}"],
         metadata={
             "proactivity": proactivity,
             "affective_dialog": affective_dialog,
             "response_modalities": run_config.response_modalities,
             "model": model_name,
+            "institute_id": institute_id,
             "user_id": user_id,
             "session_id": session_id,
         },
@@ -64,6 +68,8 @@ async def websocket_endpoint(
         transcript_store=transcript_store,
         user_id=user_id,
         session_id=session_id,
+        institute_id=institute_id,
+        greeting_message=greeting_message,
         is_sip=False,
         language=language,
     )
@@ -97,6 +103,52 @@ async def websocket_endpoint(
                     live_request_queue.send_content(content)
                     mgr.transcript_handler.record_message("user", user_text)
                     mgr.transcript_handler.resume_agent_output()
+
+                elif json_message.get("type") == "assessment_init":
+                    # Student is starting a voice assessment — inject questions into session
+                    data = json_message.get("data", {})
+                    questions = data.get("questions", [])
+                    title = data.get("title", "Voice Assessment")
+                    instructions = data.get("instructions", "")
+
+                    # Store questions in ADK session state for the evaluation tool
+                    session = await session_service.get_session(
+                        app_name=APP_NAME, user_id=user_id, session_id=session_id
+                    )
+                    if session:
+                        import google.adk.events as adk_events
+                        state_event = adk_events.Event(
+                            author=user_id,
+                            actions=adk_events.EventActions(state_delta={"assessment_questions": questions}),
+                        )
+                        await session_service.append_event(session, state_event)
+
+                    # Build numbered question list for the agent
+                    q_lines = "\n".join(
+                        f"{i+1}. [{q['id']}] {q['question']} (max {q.get('marks', 10)} marks)"
+                        for i, q in enumerate(questions)
+                    )
+                    init_prompt = (
+                        f"VOICE ASSESSMENT SESSION\n"
+                        f"Title: {title}\n"
+                        f"{('Instructions: ' + instructions + chr(10)) if instructions else ''}"
+                        f"\nYou must ask the student these {len(questions)} questions ONE BY ONE:\n{q_lines}\n\n"
+                        f"Rules:\n"
+                        f"1. Welcome the student and briefly explain the assessment.\n"
+                        f"2. Ask Question 1, then wait for the student to answer.\n"
+                        f"3. Acknowledge the answer briefly (e.g. 'Thank you') then ask the next question.\n"
+                        f"4. Do NOT give hints, corrections, or reveal the expected answers during the interview.\n"
+                        f"5. After collecting ALL {len(questions)} answers, call evaluate_voice_assessment with:\n"
+                        f'   {{"questions": [{{the full question objects as listed above, including expected_answer and marks}}], '
+                        f'"student_answers": [{{"question_id": "q1", "answer": "their answer"}}, ...]}}\n'
+                        f"6. Once evaluate_voice_assessment returns, announce the student's total score, grade, and overall feedback.\n\n"
+                        f"The full question data (including expected_answer and marks) for the evaluation tool:\n"
+                        f"{json.dumps(questions)}\n\n"
+                        f"Begin now by welcoming the student."
+                    )
+                    init_content = types.Content(parts=[types.Part(text=init_prompt)], role="user")
+                    live_request_queue.send_content(init_content)
+                    logger.info(f"WS {session_id}: assessment_init sent ({len(questions)} questions, title='{title}')")
 
                 elif json_message.get("type") == "image":
                     image_data = base64.b64decode(json_message["data"])
@@ -145,9 +197,21 @@ async def websocket_endpoint(
                     except Exception:
                         pass
 
+                has_audio = '"inlineData"' in event_json
+                has_text = '"text"' in event_json
+                has_usage = '"usageMetadata"' in event_json
+                if has_audio:
+                    logger.info(f"WS {session_id}: sending audio event ({len(event_json)} bytes)")
+                elif has_text:
+                    logger.info(f"WS {session_id}: sending text event")
+                elif has_usage:
+                    logger.info(f"WS {session_id}: sending usageMetadata event")
+                else:
+                    logger.debug(f"WS {session_id}: sending other event keys={list(json.loads(event_json).keys())}")
+
                 await websocket.send_text(event_json)
 
-                if '"inlineData"' not in event_json or '"text"' in event_json:
+                if not has_audio or has_text:
                     mgr.transcript_handler.process_event(event_json)
         except Exception as e:
             logger.warning(f"WS {session_id}: Gemini live connection ended: {e}")

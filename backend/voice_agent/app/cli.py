@@ -46,7 +46,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     # ── Model / Agent ────────────────────────────────────────────────
     agent = parser.add_argument_group("model / agent")
     agent.add_argument("-m", "--model", default=None, help="Gemini model name (overrides DEMO_AGENT_MODEL)")
-    agent.add_argument("--assistant-id", default=None, help="Articom assistant ID (overrides ARTICOM_ASSISTANT_ID)")
+    agent.add_argument("--assistant-id", default=None, help="Institute ID (overrides INSTITUTE_ID)")
     agent.add_argument("--vertex", action="store_true", default=None, help="Use Vertex AI instead of Gemini API")
     agent.add_argument("--no-vertex", action="store_true", default=None, help="Use Gemini API (disable Vertex AI)")
 
@@ -103,7 +103,7 @@ def apply_overrides(args: argparse.Namespace) -> None:
     if args.model:
         os.environ["DEMO_AGENT_MODEL"] = args.model
     if args.assistant_id:
-        os.environ["ARTICOM_ASSISTANT_ID"] = args.assistant_id
+        os.environ["INSTITUTE_ID"] = args.assistant_id
     if args.vertex:
         os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "TRUE"
     elif args.no_vertex:

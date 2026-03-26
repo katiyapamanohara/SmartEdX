@@ -1,22 +1,24 @@
-"""Articom Core API client for session management."""
+"""SmartEdX API client — fetches institute config and manages sessions."""
 
 import logging
 from typing import Any, Dict, List, Optional
 
 import requests
 
-from app.config import ARTICOM_API_KEY, ARTICOM_ASSISTANT_ID, SERVER_API, SERVER_CORE
+from app.config import ARTICOM_API_KEY, INSTITUTE_SERVICE_URL, SERVER_CORE
 from app.latency import latency
 
 logger = logging.getLogger(__name__)
 
 
-def fetch_assistant_config(assistant_id: str, token: str) -> Dict[str, Any]:
-    """Fetch the comprehensive configuration for an assistant from Articom API."""
-    url = f"{SERVER_API}/api/v1/assistants/{assistant_id}/comprehensive/voice"
-    headers = {"Authorization": f"Bearer {token}"}
+def fetch_institute_config(institute_id: str) -> Dict[str, Any]:
+    """Fetch voice agent configuration for an institute from the SmartEdX institute service.
+
+    Returns a dict with keys: id, name, voiceInstructions, voiceGreeting.
+    """
+    url = f"{INSTITUTE_SERVICE_URL}/auth/institutes/{institute_id}/voice-config"
     with latency.measure("api_fetch_config"):
-        response = requests.get(url, headers=headers, timeout=30)
+        response = requests.get(url, timeout=15)
     response.raise_for_status()
     return response.json()
 
@@ -24,10 +26,11 @@ def fetch_assistant_config(assistant_id: str, token: str) -> Dict[str, Any]:
 def start_assistant_session(
     session_id: str,
     user_id: str,
+    institute_id: str,
     is_sip: Optional[bool] = True,
     call_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Start a voice session with Articom Core."""
+    """Start a voice session with SmartEdX Core."""
     url = f"{SERVER_CORE}/api/session/voice/start"
     headers = {"Authorization": f"Bearer {ARTICOM_API_KEY}"}
     meta_data = {
@@ -36,7 +39,7 @@ def start_assistant_session(
     }
     body = {
         "sip_session_id": session_id,
-        "assistant_id": ARTICOM_ASSISTANT_ID,
+        "institute_id": institute_id,
         "sip_caller_id": call_id,
         "meta_data": meta_data,
     }

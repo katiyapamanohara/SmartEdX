@@ -11,7 +11,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
-load_dotenv(Path(__file__).parent / ".env", override=True)
+load_dotenv(Path(__file__).parent.parent / ".env", override=True)
 
 # ── Google / Auth ────────────────────────────────────────────────────
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
@@ -25,10 +25,12 @@ APP_NAME = "articom-voice-agent"
 LOG_FORMAT = os.getenv("LOG_FORMAT", "text")  # "json" for structured, "text" for human-readable
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
-# ── Articom API ──────────────────────────────────────────────────────
+# ── SmartEdX API ─────────────────────────────────────────────────────
 SERVER_API = os.getenv("SERVER_API", "")
 SERVER_CORE = os.getenv("SERVER_CORE", "")
-ARTICOM_ASSISTANT_ID = os.getenv("ARTICOM_ASSISTANT_ID", "")
+AI_CORE_URL = os.getenv("AI_CORE_URL", "http://localhost:8001")
+INSTITUTE_SERVICE_URL = os.getenv("INSTITUTE_SERVICE_URL", "http://localhost:5003")
+INSTITUTE_ID = os.getenv("INSTITUTE_ID", "")
 ARTICOM_API_KEY = os.getenv("ARTICOM_API_KEY", "")
 
 # ── Agent / Model ────────────────────────────────────────────────────

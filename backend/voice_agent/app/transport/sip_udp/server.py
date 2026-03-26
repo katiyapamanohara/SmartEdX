@@ -22,7 +22,6 @@ from google.genai.errors import APIError as GenaiAPIError
 
 from app.adk.run_config_factory import build_sip_run_config
 from app.agent import register_call_guard, unregister_call_guard, update_call_guard
-from app.agent.agent import greeting_message
 from app.agent.api import end_assistant_session, start_assistant_session
 from app.agent.audio_clips import (
     register_session_audio_queue,
@@ -110,6 +109,8 @@ class NativeSIPServer:
         runner: Runner,
         session_service: InMemorySessionService,
         app_name: str,
+        institute_id: str = "",
+        greeting_message: str = "Hello! How can I help you today?",
         sip_port: int = 5060,
         rtp_port: int = 20000,
         bind_address: str = "0.0.0.0",
@@ -117,6 +118,8 @@ class NativeSIPServer:
         self.runner = runner
         self.session_service = session_service
         self.app_name = app_name
+        self.institute_id = institute_id
+        self.greeting_message = greeting_message
         self.sip_port = sip_port
         self.rtp_port = rtp_port
         self.bind_address = bind_address
@@ -482,19 +485,20 @@ class NativeSIPServer:
                 core_resp = start_assistant_session(
                     session_id=call_info.session_id,
                     user_id=call_info.user_id,
+                    institute_id=self.institute_id,
                     is_sip=True,
                     call_id=call_info.call_id,
                 )
                 call_info.core_session_id = core_resp.get("session_id") or core_resp.get("id")
-                logger.info(f"Started Articom Core session for call {call_info.call_id}: {call_info.core_session_id}")
+                logger.info(f"Started SmartEdX Core session for call {call_info.call_id}: {call_info.core_session_id}")
             except Exception as e:
-                logger.warning(f"Failed to start Articom Core session for call {call_info.call_id}: {e}")
+                logger.warning(f"Failed to start SmartEdX Core session for call {call_info.call_id}: {e}")
 
-            logger.info(f"Sending greeting for call {call_info.call_id}: {greeting_message}")
-            greeting_prompt = f"Say exactly this greeting to the user (do not add anything else): {greeting_message}"
+            logger.info(f"Sending greeting for call {call_info.call_id}: {self.greeting_message}")
+            greeting_prompt = f"Say exactly this greeting to the user (do not add anything else): {self.greeting_message}"
             greeting_content = types.Content(parts=[types.Part(text=greeting_prompt)], role="user")
             call_info.live_request_queue.send_content(greeting_content)
-            call_info.transcript_handler.record_greeting(greeting_message)
+            call_info.transcript_handler.record_greeting(self.greeting_message)
 
             call_info.adk_task = asyncio.create_task(self._run_adk_session(call_info))
             call_info.rtp_pacing_task = asyncio.create_task(self._rtp_pacing_worker(call_info))
@@ -1001,7 +1005,11 @@ def get_sip_server() -> Optional[NativeSIPServer]:
 
 
 async def start_native_sip_server(
-    runner: Runner, session_service: InMemorySessionService, app_name: str
+    runner: Runner,
+    session_service: InMemorySessionService,
+    app_name: str,
+    institute_id: str = "",
+    greeting_message: str = "Hello! How can I help you today?",
 ) -> NativeSIPServer:
     global _sip_server
 
@@ -1009,6 +1017,8 @@ async def start_native_sip_server(
         runner=runner,
         session_service=session_service,
         app_name=app_name,
+        institute_id=institute_id,
+        greeting_message=greeting_message,
         sip_port=SIP_PORT,
         rtp_port=SIP_SDP_PORT,
         bind_address=SIP_BIND_ADDRESS,
