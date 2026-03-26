@@ -8,6 +8,7 @@ from routers.quiz import router as quiz_router
 from routers.description import router as description_router
 from routers.chat import router as chat_router
 from routers.teacher_chat import router as teacher_chat_router
+from routers.student_chat import router as student_chat_router
 
 app = FastAPI(
     title="SmartEdX AI Core",
@@ -27,6 +28,7 @@ app.include_router(quiz_router)
 app.include_router(description_router)
 app.include_router(chat_router)
 app.include_router(teacher_chat_router)
+app.include_router(student_chat_router)
 
 
 @app.get("/health")
