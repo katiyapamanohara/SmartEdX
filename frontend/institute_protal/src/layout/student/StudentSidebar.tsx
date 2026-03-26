@@ -59,17 +59,18 @@ const navItems: NavItem[] = [
     name: "Exams",
     path: "/student/exams",
   },
+  {
+    icon: <VideoIcon />,
+    name: "Live Classes",
+    path: "/student/live-classes",
+  },
   
   {
     icon: <PieChartIcon />,
     name: "Performance",
     path: "/student/performance",
   },
-  {
-    icon: <VideoIcon />,
-    name: "Live Classes",
-    path: "/student/live-classes",
-  },
+  
 
  
   {
