@@ -19,6 +19,9 @@ def fetch_institute_config(institute_id: str) -> Dict[str, Any]:
     url = f"{INSTITUTE_SERVICE_URL}/auth/institutes/{institute_id}/voice-config"
     with latency.measure("api_fetch_config"):
         response = requests.get(url, timeout=15)
+    if response.status_code == 404:
+        logger.warning(f"Institute {institute_id} voice-config not found (404), using defaults")
+        return {}
     response.raise_for_status()
     return response.json()
 

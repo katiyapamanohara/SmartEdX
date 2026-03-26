@@ -154,7 +154,14 @@ async def websocket_endpoint(
                         f"   evaluate_voice_assessment with the exact JSON below — no extra commentary before the tool call:\n"
                         f'   {{"questions": <full question objects>, "student_answers": [{{"question_id": "...", "answer": "..."}}]}}\n'
                         f"4. After evaluate_voice_assessment returns, announce the score and grade conversationally\n"
-                        f"   (e.g. 'Great effort! You scored X out of Y — that's a [grade].'), then read the overall feedback.\n\n"
+                        f"   (e.g. 'Great effort! You scored X out of Y — that's a [grade].'), then read the overall feedback.\n"
+                        f"5. After announcing the result, say a brief goodbye and call end_call.\n\n"
+                        f"=== EARLY EXIT ===\n"
+                        f"If the student says they want to leave, stop, end early, or skip the rest:\n"
+                        f"- Do NOT argue or try to continue.\n"
+                        f"- Immediately call evaluate_voice_assessment with ALL questions and whatever answers were collected.\n"
+                        f"  For any question the student did not answer, use an empty string as the answer.\n"
+                        f"- After the result, say a brief goodbye and call end_call.\n\n"
                         f"Full question data for the evaluation tool:\n"
                         f"{json.dumps(questions)}\n\n"
                         f"Begin now — welcome the student."
@@ -162,6 +169,22 @@ async def websocket_endpoint(
                     init_content = types.Content(parts=[types.Part(text=init_prompt)], role="user")
                     live_request_queue.send_content(init_content)
                     logger.info(f"WS {session_id}: assessment_init sent ({len(questions)} questions, title='{title}')")
+
+                elif json_message.get("type") == "end_assessment":
+                    # Student chose to end the assessment early from the UI —
+                    # prompt the agent to evaluate whatever partial answers it has.
+                    end_prompt = (
+                        "EARLY SESSION END: The student has chosen to stop the assessment now.\n"
+                        "Do NOT speak before acting. IMMEDIATELY call evaluate_voice_assessment with:\n"
+                        "  - questions: the full question objects from this session\n"
+                        "  - student_answers: every answer collected so far. "
+                        "For any question the student did not answer, include it with an empty string answer.\n"
+                        "After the tool returns, announce the score and grade in one sentence, "
+                        "say a brief goodbye, then call end_call."
+                    )
+                    end_content = types.Content(parts=[types.Part(text=end_prompt)], role="user")
+                    live_request_queue.send_content(end_content)
+                    logger.info(f"WS {session_id}: end_assessment early-exit signal sent")
 
                 elif json_message.get("type") == "image":
                     image_data = base64.b64decode(json_message["data"])

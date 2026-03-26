@@ -189,6 +189,9 @@ export default function VoiceAssessmentPlayer({
   const playVersionRef    = useRef(0);
   // Stable ref so onaudioprocess closure can call stopAllAudio without stale capture
   const stopAllAudioRef   = useRef<() => void>(() => {});
+  // True once an evaluation result has been received — prevents ws.onclose from
+  // showing an error when the session ends normally after evaluation.
+  const hasResultRef      = useRef(false);
 
   // ── Stop all queued/playing AI audio (barge-in or interruption) ─────────────
   const stopAllAudio = useCallback(() => {
@@ -207,6 +210,17 @@ export default function VoiceAssessmentPlayer({
   // capturing a stale reference (onaudioprocess is created once in ws.onopen).
   stopAllAudioRef.current = stopAllAudio;
 
+  // ── Stop mic only (keep WS open) ─────────────────────────────────────────────
+  const stopMic = useCallback(() => {
+    processorRef.current?.disconnect();
+    processorRef.current = null;
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    micCtxRef.current?.close().catch(() => {});
+    micCtxRef.current = null;
+    setMicActive(false);
+  }, []);
+
   // ── Reset on open/close ──────────────────────────────────────────────────────
   useEffect(() => {
     if (isOpen && assessmentData) {
@@ -216,6 +230,7 @@ export default function VoiceAssessmentPlayer({
       setEvalResult(null);
       setErrorMsg("");
       setStatusText("");
+      hasResultRef.current = false;
     }
     if (!isOpen) {
       disconnect();
@@ -321,6 +336,7 @@ export default function VoiceAssessmentPlayer({
         const response = fnResp.response as EvalResult | { error: string } | undefined;
         if (response && !("error" in response)) {
           const result = response as EvalResult;
+          hasResultRef.current = true;
           setEvalResult(result);
           setStep("results");
           setAvatarState("idle");
@@ -496,7 +512,7 @@ export default function VoiceAssessmentPlayer({
 
     ws.onclose = (e) => {
       setMicActive(false);
-      if (step !== "results" && e.code !== 1000) {
+      if (!hasResultRef.current && e.code !== 1000) {
         setErrorMsg(`Connection closed (${e.code}). The session may have ended.`);
         setStep("error");
       }
@@ -619,7 +635,19 @@ export default function VoiceAssessmentPlayer({
             </div>
 
             <button
-              onClick={() => { disconnect(); setStep("intro"); }}
+              onClick={() => {
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                  stopMic();
+                  stopAllAudio();
+                  wsRef.current.send(JSON.stringify({ type: "end_assessment" }));
+                  setStep("evaluating");
+                  setAvatarState("idle");
+                  setStatusText("Evaluating your answers…");
+                } else {
+                  disconnect();
+                  setStep("intro");
+                }
+              }}
               className="text-xs text-gray-400 hover:text-red-500 underline transition-colors"
             >
               End session
