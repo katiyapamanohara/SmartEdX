@@ -49,6 +49,11 @@ const navItems: NavItem[] = [
     name: "Recordings",
     path: "/teacher/recordings",
   },
+    {
+    icon: <ChatIcon />,
+    name: "Messages",
+    path: "/teacher/messages",
+  },
   {
     icon: <GroupIcon />,
     name: "Students",
@@ -65,11 +70,7 @@ const navItems: NavItem[] = [
     name: "Integrity Monitor",
     path: "/teacher/integrity-monitor",
   },
-  {
-    icon: <ChatIcon />,
-    name: "Messages",
-    path: "/teacher/messages",
-  },
+
   {
     icon: <DocsIcon />,
     name: "Reports",

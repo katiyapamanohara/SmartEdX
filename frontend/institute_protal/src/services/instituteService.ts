@@ -440,6 +440,48 @@ class InstituteService {
     }
   }
 
+  async submitVoiceAssessmentResult(
+    instituteId: string,
+    contentId: string,
+    result: {
+      score: number;
+      voiceResult: {
+        totalScore: number;
+        totalMarks: number;
+        grade: string;
+        passed: boolean;
+        overallFeedback: string;
+        questionResults: Array<{
+          questionId: string;
+          question: string;
+          studentAnswer: string;
+          expectedAnswer: string;
+          score: number;
+          marksAvailable: number;
+          percentage: number;
+          feedback: string;
+        }>;
+      };
+    },
+  ): Promise<{ success: boolean; message: string; score: number }> {
+    const token = authService.getToken();
+    if (!token) throw new Error('Not authenticated');
+
+    const response = await fetch(
+      `${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/student-assessments/${contentId}/submit`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(result),
+      },
+    );
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error((err as any).message || response.statusText);
+    }
+    return response.json();
+  }
+
   async getMyEnrolledCourses(instituteId: string): Promise<Course[]> {
     const token = authService.getToken();
     if (!token) return [];

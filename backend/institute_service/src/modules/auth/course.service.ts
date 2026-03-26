@@ -322,6 +322,23 @@ export class CourseService {
     userId: string,
     score: number,
     answers?: Record<string, number>,
+    voiceResult?: {
+      totalScore: number;
+      totalMarks: number;
+      grade: string;
+      passed: boolean;
+      overallFeedback: string;
+      questionResults: Array<{
+        questionId: string;
+        question: string;
+        studentAnswer: string;
+        expectedAnswer: string;
+        score: number;
+        marksAvailable: number;
+        percentage: number;
+        feedback: string;
+      }>;
+    },
   ) {
     // Find the content (quiz)
     const content = await this.moduleContentRepository.findOne({ where: { id: contentId } } as any);
@@ -336,14 +353,23 @@ export class CourseService {
     }
 
     // Build a new object so TypeORM detects the JSONB change
-    const updatedAttempts = {
-      ...existing,
-      [userId]: {
-        score,
-        answers: answers ?? {},
-        attemptedAt: new Date().toISOString(),
-      },
+    const attemptEntry: Record<string, any> = {
+      score,
+      answers: answers ?? {},
+      attemptedAt: new Date().toISOString(),
     };
+
+    if (voiceResult) {
+      attemptEntry.type = 'voice';
+      attemptEntry.totalScore = voiceResult.totalScore;
+      attemptEntry.totalMarks = voiceResult.totalMarks;
+      attemptEntry.grade = voiceResult.grade;
+      attemptEntry.passed = voiceResult.passed;
+      attemptEntry.overallFeedback = voiceResult.overallFeedback;
+      attemptEntry.questionResults = voiceResult.questionResults;
+    }
+
+    const updatedAttempts = { ...existing, [userId]: attemptEntry };
 
     // Use update() with the new object to force a direct SQL UPDATE
     await this.moduleContentRepository.update(contentId, { studentAttempts: updatedAttempts } as any);

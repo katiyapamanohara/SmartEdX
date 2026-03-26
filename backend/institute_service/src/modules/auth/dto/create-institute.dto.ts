@@ -57,4 +57,22 @@ export class CreateInstituteDto {
   @IsString()
   @IsOptional()
   primaryUseCases?: string;
+
+  @ApiProperty({
+    example: 'You are a helpful AI voice assistant for Example Institute. Help students with their assessments.',
+    description: 'Custom system instructions for the voice agent',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  voiceInstructions?: string;
+
+  @ApiProperty({
+    example: 'Hello! Welcome to Example Institute. How can I help you today?',
+    description: 'Greeting message spoken by the voice agent at session start',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  voiceGreeting?: string;
 }

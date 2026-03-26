@@ -70,9 +70,29 @@ export class CourseController {
     @Param('id') instituteId: string,
     @Param('contentId') contentId: string,
     @CurrentUser('userId') userId: string,
-    @Body() body: { score: number; answers?: Record<string, number> },
+    @Body() body: {
+    score: number;
+    answers?: Record<string, number>;
+    voiceResult?: {
+      totalScore: number;
+      totalMarks: number;
+      grade: string;
+      passed: boolean;
+      overallFeedback: string;
+      questionResults: Array<{
+        questionId: string;
+        question: string;
+        studentAnswer: string;
+        expectedAnswer: string;
+        score: number;
+        marksAvailable: number;
+        percentage: number;
+        feedback: string;
+      }>;
+    };
+  },
   ) {
-    return this.courseService.recordStudentQuizAttempt(instituteId, contentId, userId, body.score, body.answers);
+    return this.courseService.recordStudentQuizAttempt(instituteId, contentId, userId, body.score, body.answers, body.voiceResult);
   }
 
   @Get('my-enrolled-courses')

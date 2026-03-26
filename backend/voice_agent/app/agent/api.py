@@ -1,0 +1,66 @@
+"""SmartEdX API client — fetches institute config and manages sessions."""
+
+import logging
+from typing import Any, Dict, List, Optional
+
+import requests
+
+from app.config import ARTICOM_API_KEY, INSTITUTE_SERVICE_URL, SERVER_CORE
+from app.latency import latency
+
+logger = logging.getLogger(__name__)
+
+
+def fetch_institute_config(institute_id: str) -> Dict[str, Any]:
+    """Fetch voice agent configuration for an institute from the SmartEdX institute service.
+
+    Returns a dict with keys: id, name, voiceInstructions, voiceGreeting.
+    """
+    url = f"{INSTITUTE_SERVICE_URL}/auth/institutes/{institute_id}/voice-config"
+    with latency.measure("api_fetch_config"):
+        response = requests.get(url, timeout=15)
+    if response.status_code == 404:
+        logger.warning(f"Institute {institute_id} voice-config not found (404), using defaults")
+        return {}
+    response.raise_for_status()
+    return response.json()
+
+
+def start_assistant_session(
+    session_id: str,
+    user_id: str,
+    institute_id: str,
+    is_sip: Optional[bool] = True,
+    call_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Start a voice session with SmartEdX Core."""
+    url = f"{SERVER_CORE}/api/session/voice/start"
+    headers = {"Authorization": f"Bearer {ARTICOM_API_KEY}"}
+    meta_data = {
+        "type": "sip" if is_sip else "web",
+        "user_id": user_id,
+    }
+    body = {
+        "sip_session_id": session_id,
+        "institute_id": institute_id,
+        "sip_caller_id": call_id,
+        "meta_data": meta_data,
+    }
+    with latency.measure("api_start_session"):
+        response = requests.post(url, headers=headers, json=body, timeout=30)
+    response.raise_for_status()
+    return response.json()
+
+
+def end_assistant_session(session_id: str, history: List[dict]) -> Dict[str, Any]:
+    """End a voice session with Articom Core, sending final transcript."""
+    url = f"{SERVER_CORE}/api/session/voice/end"
+    headers = {"Authorization": f"Bearer {ARTICOM_API_KEY}"}
+    body = {
+        "session_id": session_id,
+        "chat_history": history,
+    }
+    with latency.measure("api_end_session"):
+        response = requests.post(url, headers=headers, json=body, timeout=30)
+    response.raise_for_status()
+    return response.json()

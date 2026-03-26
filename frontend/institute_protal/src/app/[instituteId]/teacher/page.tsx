@@ -7,6 +7,7 @@ import { ApexOptions } from "apexcharts";
 import { instituteService } from "@/services/instituteService";
 import { authService } from "@/services/authService";
 import { GroupIcon, BoxIconLine, ArrowUpIcon } from "@/icons";
+import TeacherFloatingAiChat from "@/components/teacher/TeacherFloatingAiChat";
 
 const ReactApexChart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
@@ -99,6 +100,7 @@ export default function TeacherDashboard() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
+    <>
     <div className="grid grid-cols-12 gap-4 md:gap-6">
 
       {/* ── Metric Cards ── */}
@@ -169,5 +171,8 @@ export default function TeacherDashboard() {
       </div>
 
     </div>
+      <TeacherFloatingAiChat instituteId={instituteId} />
+    </>
   );
 }
+

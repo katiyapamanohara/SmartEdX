@@ -18,6 +18,7 @@ import {
   InfoIcon,
   UserCircleIcon,
 } from "../../icons/index";
+import { MdVideoLibrary } from "react-icons/md";
 
 type NavItem = {
   name: string;
@@ -37,36 +38,41 @@ const navItems: NavItem[] = [
     name: "My Courses",
     path: "/student/my-courses",
   },
+   {
+    icon: <MdVideoLibrary className="w-6 h-6" />,
+    name: "Recordings",
+    path: "/student/recordings",
+  },
+   {
+    icon: <ChatIcon />,
+    name: "Messages",
+    path: "/student/messages",
+  },
   {
     icon: <TaskIcon />,
     name: "Assignments",
     path: "/student/assignments",
   },
+  
   {
     icon: <DocsIcon />,
     name: "Exams",
     path: "/student/exams",
   },
   {
-    icon: <PieChartIcon />,
-    name: "Performance",
-    path: "/student/performance",
-  },
-  {
     icon: <VideoIcon />,
     name: "Live Classes",
     path: "/student/live-classes",
   },
+  
   {
-    icon: <VideoIcon />,
-    name: "Recordings",
-    path: "/student/recordings",
+    icon: <PieChartIcon />,
+    name: "Performance",
+    path: "/student/performance",
   },
-  {
-    icon: <ChatIcon />,
-    name: "Messages",
-    path: "/student/messages",
-  },
+  
+
+ 
   {
     icon: <InfoIcon />,
     name: "Support",
