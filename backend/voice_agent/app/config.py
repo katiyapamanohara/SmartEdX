@@ -35,7 +35,7 @@ ARTICOM_API_KEY = os.getenv("ARTICOM_API_KEY", "")
 
 # ── Agent / Model ────────────────────────────────────────────────────
 DEMO_AGENT_MODEL = os.getenv("DEMO_AGENT_MODEL", "gemini-2.5-flash-native-audio-preview-12-2025")
-AGENT_VOICE = os.getenv("AGENT_VOICE", "Zephyr")
+AGENT_VOICE = os.getenv("AGENT_VOICE", "Aoede")
 SYSTEM_INSTRUCTION_OVERRIDE = os.getenv("SYSTEM_INSTRUCTION_OVERRIDE", "")
 GREETING_MESSAGE_OVERRIDE = os.getenv("GREETING_MESSAGE_OVERRIDE", "")
 
