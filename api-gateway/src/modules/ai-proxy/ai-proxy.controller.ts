@@ -45,6 +45,36 @@ export class AiProxyController {
     return this.aiProxyService.forwardRequest('api/chat/message', 'POST', body, headers);
   }
 
+  // ── Multipart: voice assessment question generation ───────────
+  @Post('voice-assessment/generate')
+  @ApiOperation({ summary: 'Generate voice assessment questions from instructions and/or file' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
+  async voiceAssessmentGenerate(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: any,
+    @Headers() headers: any,
+  ) {
+    return this.aiProxyService.forwardVoiceAssessmentGenerate(
+      'api/voice-assessment/generate',
+      file,
+      body,
+      headers,
+    );
+  }
+
+  // ── JSON: voice assessment answer evaluation ───────────────────
+  @Post('voice-assessment/evaluate')
+  @ApiOperation({ summary: 'Evaluate student voice/text answers and return scores' })
+  async voiceAssessmentEvaluate(@Body() body: any, @Headers() headers: any) {
+    return this.aiProxyService.forwardRequest(
+      'api/voice-assessment/evaluate',
+      'POST',
+      body,
+      headers,
+    );
+  }
+
   // ── Multipart: student AI learning assistant (with optional file) ─
   @Post('student-chat/message')
   @ApiOperation({ summary: 'Chat with the student AI learning assistant (supports file upload)' })

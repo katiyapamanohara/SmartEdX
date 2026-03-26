@@ -8,6 +8,7 @@ import { instituteService } from "@/services/instituteService";
 import { authService } from "@/services/authService";
 import { BoxIconLine, ArrowUpIcon, TaskIcon, VideoIcon } from "@/icons";
 import StudentFloatingAiChat from "@/components/student/StudentFloatingAiChat";
+import VoiceAssessmentPlayer from "@/components/student/VoiceAssessmentPlayer";
 
 const ReactApexChart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
@@ -25,6 +26,7 @@ export default function StudentDashboard() {
     assignmentCount: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [voicePlayerOpen, setVoicePlayerOpen] = useState(false);
 
   useEffect(() => {
     if (!instituteId) return;
@@ -75,9 +77,20 @@ export default function StudentDashboard() {
     <div className="grid grid-cols-12 gap-4 md:gap-6">
 
       {/* Welcome Banner */}
-      <div className="col-span-12 rounded-2xl bg-gradient-to-r from-brand-500 to-indigo-600 p-6 text-white">
-        <h2 className="text-xl font-bold">Welcome back! 👋</h2>
-        <p className="text-sm text-white/80 mt-1">Here&apos;s an overview of your learning progress.</p>
+      <div className="col-span-12 rounded-2xl bg-gradient-to-r from-brand-500 to-indigo-600 p-6 text-white flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold">Welcome back! 👋</h2>
+          <p className="text-sm text-white/80 mt-1">Here&apos;s an overview of your learning progress.</p>
+        </div>
+        <button
+          onClick={() => setVoicePlayerOpen(true)}
+          className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-sm font-semibold transition-colors backdrop-blur-sm border border-white/25"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+          </svg>
+          Take Voice Assessment
+        </button>
       </div>
 
       {/* Metric Cards */}
@@ -157,6 +170,10 @@ export default function StudentDashboard() {
 
     </div>
       <StudentFloatingAiChat instituteId={instituteId} />
+      <VoiceAssessmentPlayer
+        isOpen={voicePlayerOpen}
+        onClose={() => setVoicePlayerOpen(false)}
+      />
     </>
   );
 }

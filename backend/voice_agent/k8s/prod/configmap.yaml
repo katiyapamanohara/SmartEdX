@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: voice-service-config
+  namespace: prod
+  labels:
+    app: voice-service
+data:
+  # Google Gemini Live API Configuration
+  GOOGLE_GENAI_USE_VERTEXAI: "true"
+  GOOGLE_CLOUD_LOCATION: "us-central1"
+  GOOGLE_CLOUD_PROJECT: "articom-integration"
+  DEMO_AGENT_MODEL: "gemini-live-2.5-flash-native-audio"
+  AUDIO_CLIP_TOOL_MAP: |
+    {"get_sales_hotline_number_english": "assets/voice_en.pcm", "get_sales_hotline_number_sinhala": "assets/voice_si.pcm", "get_sales_hotline_number_tamil": "assets/voice_ta.pcm", "get_technical_hotline_number_english": "assets/tech_voice_en.pcm", "get_technical_hotline_number_sinhala": "assets/tech_voice_si.pcm", "get_technical_hotline_number_tamil": "assets/tech_voice_ta.pcm"}
+  # Articom API Endpoints
+  SERVER_API: "https://api.dpaiops.com"
+  SERVER_CORE: "https://aicore.dpaiops.com"
+  ARTICOM_MANIFEST_URL: "http://dpreskill-prod.prod.svc.cluster.local:8001"
+  ARTICOM_TOOLS_SECRET: "test123456TTE"
+  ARTICOM_TOOL_ENABLED: "false"
+  AGENT_VOICE: "Puck"
+  # Native SIP/UDP Configuration (iPhonik)
+  SIP_ENABLED: "false"
+  SIP_PORT: "5060"
+  SIP_BIND_ADDRESS: "0.0.0.0"
+  SIP_SERVER_HOST: "voice-service-sip.prod.svc.cluster.local"
+  # SDP host must be the Load Balancer IP for external SIP clients (iPhonic)
+  SIP_SDP_HOST: "10.1.0.62"
+  SIP_SDP_PORT: "20000"
+  SIP_USE_RTP: "true"
+
+  QDRANT_URL: "http://dpg-qdrant.prod.svc.cluster.local:6333"
+  QDRANT_COLLECTION_NAME: "dp_instructions_kb"
+  QDRANT_API_KEY: ""
+  QDRANT_KB_ENABLED: "true"
+  CUSTOM_TOOLS_ENABLED: "true"
+
+  LANGFUSE_ENABLED: "true"
+  DASHBOARD_ENABLED: "true"

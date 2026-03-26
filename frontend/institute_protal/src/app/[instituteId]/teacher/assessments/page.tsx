@@ -11,6 +11,7 @@ import {
 } from "@/services/instituteService";
 // CourseModule used only for Pick type — no runtime usage needed
 import CreateAssessmentModal from "./components/CreateAssessmentModal";
+import VoiceAssessmentModal from "@/components/teacher/VoiceAssessmentModal";
 import {
   FiHelpCircle,
   FiClock,
@@ -23,6 +24,7 @@ import {
   FiChevronRight,
   FiUsers,
   FiChevronUp,
+  FiMic,
 } from "react-icons/fi";
 
 // ─── Types ────────────────────────────────────────────────────────
@@ -534,6 +536,7 @@ export default function TeacherAssessmentsPage() {
   const [viewingQuiz, setViewingQuiz] = useState<QuizEntry | null>(null);
   const [viewingAttempts, setViewingAttempts] = useState<QuizEntry | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [voiceOpen, setVoiceOpen]   = useState(false);
 
   useEffect(() => {
     if (!instituteId) return;
@@ -585,12 +588,20 @@ export default function TeacherAssessmentsPage() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Assessments</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Quizzes across your assigned courses</p>
         </div>
-        <button
-          onClick={() => setCreateOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
-        >
-          <FiPlus className="w-4 h-4" /> Create Assessment
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setVoiceOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white text-sm font-medium rounded-lg transition-all shadow-sm shadow-purple-500/25"
+          >
+            <FiMic className="w-4 h-4" /> Voice Assessment
+          </button>
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+          >
+            <FiPlus className="w-4 h-4" /> Create Assessment
+          </button>
+        </div>
       </div>
 
       {/* Stat bar */}
@@ -663,6 +674,12 @@ export default function TeacherAssessmentsPage() {
         onCreated={handleCreated}
         instituteId={instituteId}
         courses={allCourses}
+      />
+
+      <VoiceAssessmentModal
+        isOpen={voiceOpen}
+        onClose={() => setVoiceOpen(false)}
+        instituteId={instituteId}
       />
     </div>
   );

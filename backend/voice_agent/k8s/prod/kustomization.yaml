@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: prod
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+
+# commonLabels:
+#   app.kubernetes.io/name: voice-service
+#   app.kubernetes.io/component: sip-trunk
+#   app.kubernetes.io/part-of: articom-voice
+#   app.kubernetes.io/managed-by: kustomize
+
+images:
+  - name: articom-voice-dp
+    newTag: latest
