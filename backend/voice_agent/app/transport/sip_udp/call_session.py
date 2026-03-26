@@ -49,5 +49,5 @@ class SIPCallInfo:
     user_turn_count: int = 0
     transcript_handler: Optional[TranscriptHandler] = None
     core_session_id: Optional[str] = None
-    greeting_done: bool = False
-    greeting_audio_queued: bool = False
+    greeting_done: bool = True
+    greeting_audio_queued: bool = True

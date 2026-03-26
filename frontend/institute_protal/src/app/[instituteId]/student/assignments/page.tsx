@@ -209,6 +209,15 @@ export default function StudentAssignmentsPage() {
                 </span>
 
                 {item.type === "voice" ? (
+                  attemptedIds.has(item.id) ? (
+                    <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                      (attemptScores[item.id] ?? 0) >= (item.passingScore || 50)
+                        ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400"
+                        : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
+                    }`}>
+                      {(attemptScores[item.id] ?? 0) >= (item.passingScore || 50) ? "Passed" : "Failed"} · {attemptScores[item.id] ?? 0}%
+                    </span>
+                  ) : (
                   <button
                     onClick={() => {
                       setActiveVoiceItem(item);
@@ -218,6 +227,7 @@ export default function StudentAssignmentsPage() {
                   >
                     <FiMic className="w-3 h-3" /> Start Interview
                   </button>
+                  )
                 ) : attemptedIds.has(item.id) ? (
                   <div className="flex items-center gap-2">
                     <span className={`rounded-full px-2 py-1 text-xs font-medium ${
@@ -257,6 +267,12 @@ export default function StudentAssignmentsPage() {
           instructions: activeVoiceItem.description,
           questions: activeVoiceItem.voiceQuestions ?? [],
         } : undefined}
+        onCompleted={(result) => {
+          if (!activeVoiceItem) return;
+          // Mark as attempted and record score locally so the badge shows immediately
+          setAttemptedIds((prev) => new Set([...prev, activeVoiceItem.id]));
+          setAttemptScores((prev) => ({ ...prev, [activeVoiceItem.id]: result.percentage }));
+        }}
       />
     </div>
   );

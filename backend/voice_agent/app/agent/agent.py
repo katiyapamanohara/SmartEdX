@@ -24,7 +24,6 @@ from app.config import (
     CUSTOM_TOOLS_ENABLED,
     DEMO_AGENT_MODEL,
     END_CALL_INTERRUPT_COOLDOWN,
-    GREETING_MESSAGE_OVERRIDE,
     MIN_USER_TURNS_BEFORE_END_CALL,
     QDRANT_API_KEY,
     QDRANT_COLLECTION_NAME,
@@ -316,12 +315,10 @@ def get_runner_for_institute(institute_id: str, session_service: InMemorySession
     logger.info(f"Building agent for institute: {institute_id}")
 
     # Fetch institute-specific config from the SmartEdX institute service
-    greeting = "Hello! How can I help you today?"
     institute_name = "SmartEdX"
     base_instructions = (
         "You are the SmartEdX voice assistant.\n"
         "Follow the user's instructions carefully and provide accurate information.\n"
-        "- Greet the user with a friendly message.\n"
         "- Provide helpful and concise responses.\n"
         "- If you don't know the answer, politely say so.\n"
     )
@@ -329,12 +326,9 @@ def get_runner_for_institute(institute_id: str, session_service: InMemorySession
     try:
         config = fetch_institute_config(institute_id)
         institute_name = config.get("name") or institute_name
-        if config.get("voiceGreeting"):
-            greeting = config["voiceGreeting"]
         if config.get("voiceInstructions"):
             base_instructions = config["voiceInstructions"]
         else:
-            # Build default instructions from institute name
             base_instructions = (
                 f"You are the AI voice assistant for {institute_name}.\n"
                 "Help students with their voice assessments and learning needs.\n"
@@ -346,13 +340,9 @@ def get_runner_for_institute(institute_id: str, session_service: InMemorySession
     except Exception as e:
         logger.error(f"Failed to fetch institute config for {institute_id}: {e}", exc_info=True)
 
-    # Allow env-var overrides
     if SYSTEM_INSTRUCTION_OVERRIDE:
         logger.info(f"Using SYSTEM_INSTRUCTION_OVERRIDE for institute {institute_id}")
         base_instructions = SYSTEM_INSTRUCTION_OVERRIDE
-    if GREETING_MESSAGE_OVERRIDE:
-        logger.info(f"Using GREETING_MESSAGE_OVERRIDE for institute {institute_id}")
-        greeting = GREETING_MESSAGE_OVERRIDE
 
     system_instructions = _build_system_instructions(base_instructions, CUSTOM_TOOLS_ENABLED)
 
@@ -373,7 +363,7 @@ def get_runner_for_institute(institute_id: str, session_service: InMemorySession
     with _cache_lock:
         # Double-checked locking: another thread may have populated during fetch
         if institute_id not in _institute_cache:
-            _institute_cache[institute_id] = (institute_runner, greeting)
+            _institute_cache[institute_id] = (institute_runner, "")
         return _institute_cache[institute_id]
 
 

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { createPortal } from "react-dom";
+import { instituteService } from "@/services/instituteService";
 import {
   FiMic, FiMicOff, FiX, FiAward, FiAlertCircle,
   FiVolume2, FiLoader, FiWifi, FiWifiOff,
@@ -44,11 +45,12 @@ export interface VoiceAssessmentPlayerProps {
   isOpen: boolean;
   onClose: () => void;
   assessmentData?: {
-    id: string;
+    id: string;       // contentId — used to submit results
     title: string;
     instructions?: string;
     questions: VoiceQuestion[];
   };
+  onCompleted?: (result: EvalResult) => void;
 }
 
 // ─── PCM audio helpers ────────────────────────────────────────────────────────
@@ -155,7 +157,7 @@ function Avatar({ state }: { state: AvatarState }) {
 type Step = "intro" | "connecting" | "session" | "evaluating" | "results" | "error";
 
 export default function VoiceAssessmentPlayer({
-  isOpen, onClose, assessmentData,
+  isOpen, onClose, assessmentData, onCompleted,
 }: VoiceAssessmentPlayerProps) {
   const params = useParams();
   const instituteId = (params?.instituteId as string) ?? "";
@@ -167,17 +169,43 @@ export default function VoiceAssessmentPlayer({
   const [errorMsg, setErrorMsg] = useState("");
   const [statusText, setStatusText] = useState("");
   const [audioChunks, setAudioChunks] = useState(0);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   // WebSocket + WebAudio refs
-  // playCtxRef: dedicated playback context (created on button click, always running)
-  // micCtxRef:  mic capture context (16 kHz, created after getUserMedia)
-  const wsRef          = useRef<WebSocket | null>(null);
-  const playCtxRef     = useRef<AudioContext | null>(null);
-  const micCtxRef      = useRef<AudioContext | null>(null);
-  const processorRef   = useRef<ScriptProcessorNode | null>(null);
-  const streamRef      = useRef<MediaStream | null>(null);
-  const nextPlayTimeRef = useRef(0);
-  const sessionIdRef   = useRef<string>("");
+  // playCtxRef:       dedicated playback context (created on button click, always running)
+  // micCtxRef:        mic capture context (16 kHz, created after getUserMedia)
+  // activeSourcesRef: all scheduled AudioBufferSourceNodes — stopped on barge-in
+  // isAISpeakingRef:  true while AI audio is queued/playing — gates local VAD barge-in
+  // playVersionRef:   incremented on interruption to discard in-flight decodeAudioData
+  const wsRef             = useRef<WebSocket | null>(null);
+  const playCtxRef        = useRef<AudioContext | null>(null);
+  const micCtxRef         = useRef<AudioContext | null>(null);
+  const processorRef      = useRef<ScriptProcessorNode | null>(null);
+  const streamRef         = useRef<MediaStream | null>(null);
+  const nextPlayTimeRef   = useRef(0);
+  const sessionIdRef      = useRef<string>("");
+  const activeSourcesRef  = useRef<AudioBufferSourceNode[]>([]);
+  const isAISpeakingRef   = useRef(false);
+  const playVersionRef    = useRef(0);
+  // Stable ref so onaudioprocess closure can call stopAllAudio without stale capture
+  const stopAllAudioRef   = useRef<() => void>(() => {});
+
+  // ── Stop all queued/playing AI audio (barge-in or interruption) ─────────────
+  const stopAllAudio = useCallback(() => {
+    playVersionRef.current += 1;                       // invalidate in-flight decodes
+    for (const src of activeSourcesRef.current) {
+      try { src.stop(0); } catch (_) {}                // safe even if already ended
+    }
+    activeSourcesRef.current = [];
+    const ctx = playCtxRef.current;
+    nextPlayTimeRef.current = ctx ? ctx.currentTime : 0;
+    isAISpeakingRef.current = false;
+    setAvatarState((prev) => (prev === "speaking" ? "listening" : prev));
+  }, []);
+
+  // Keep stopAllAudioRef current so onaudioprocess closure can call it without
+  // capturing a stale reference (onaudioprocess is created once in ws.onopen).
+  stopAllAudioRef.current = stopAllAudio;
 
   // ── Reset on open/close ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -199,6 +227,12 @@ export default function VoiceAssessmentPlayer({
 
   // ── Disconnect helper ────────────────────────────────────────────────────────
   const disconnect = useCallback(() => {
+    // Stop any buffered AI audio first
+    playVersionRef.current += 1;
+    for (const src of activeSourcesRef.current) { try { src.stop(0); } catch (_) {} }
+    activeSourcesRef.current = [];
+    isAISpeakingRef.current = false;
+
     processorRef.current?.disconnect();
     processorRef.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -219,24 +253,23 @@ export default function VoiceAssessmentPlayer({
   // ── Playback PCM audio from model ────────────────────────────────────────────
   const enqueueAudio = useCallback((base64Pcm: string) => {
     const ctx = playCtxRef.current;
-    console.log("[VAP] enqueueAudio called, ctx state:", ctx?.state, "data length:", base64Pcm?.length);
-    if (!ctx) { console.warn("[VAP] No playback AudioContext"); return; }
+    if (!ctx) return;
+    if (ctx.state === "suspended") ctx.resume();
 
-    if (ctx.state === "suspended") {
-      console.warn("[VAP] AudioContext suspended, resuming");
-      ctx.resume();
-    }
-
+    isAISpeakingRef.current = true;
     setAvatarState("speaking");
-    setAudioChunks((n) => n + 1);
 
-    // Decode base64 (handles both standard and URL-safe) → raw PCM bytes
+    // Snapshot the current play-version so we can discard this chunk if a
+    // barge-in/interruption happens before decodeAudioData finishes.
+    const version = playVersionRef.current;
+
     const pcmBuf = base64ToArrayBuffer(base64Pcm);
-
-    // Wrap in WAV container so decodeAudioData handles it robustly
     const wavBuf = pcmToWav(pcmBuf, 24000);
 
     ctx.decodeAudioData(wavBuf, (audioBuffer) => {
+      // Stale — an interruption occurred while we were decoding; discard.
+      if (playVersionRef.current !== version) return;
+
       const now = ctx.currentTime;
       const startAt = Math.max(nextPlayTimeRef.current, now + 0.05);
       nextPlayTimeRef.current = startAt + audioBuffer.duration;
@@ -244,13 +277,17 @@ export default function VoiceAssessmentPlayer({
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
       source.connect(ctx.destination);
+      activeSourcesRef.current.push(source);
       source.start(startAt);
+
       source.onended = () => {
-        if (nextPlayTimeRef.current <= ctx.currentTime + 0.1) {
-          setAvatarState("listening");
+        activeSourcesRef.current = activeSourcesRef.current.filter((s) => s !== source);
+        // Only switch to listening once all buffered audio has drained
+        if (activeSourcesRef.current.length === 0 && playVersionRef.current === version) {
+          isAISpeakingRef.current = false;
+          setAvatarState((prev) => (prev === "speaking" ? "listening" : prev));
         }
       };
-      console.log(`[VAP] Scheduled audio: ${audioBuffer.duration.toFixed(3)}s at t=${startAt.toFixed(3)}`);
     }, (err) => {
       console.error("[VAP] decodeAudioData failed:", err);
     });
@@ -258,10 +295,15 @@ export default function VoiceAssessmentPlayer({
 
   // ── Parse incoming events from voice agent ───────────────────────────────────
   const handleEvent = useCallback((event: Record<string, unknown>) => {
-    console.log("[VAP] handleEvent keys:", Object.keys(event));
+    // Server-side interruption: Gemini detected the student speaking and cut the
+    // model output — stop any locally-buffered AI audio immediately.
+    if (event.interrupted === true) {
+      stopAllAudio();
+      return;
+    }
+
     const content = event?.content as Record<string, unknown> | undefined;
     const parts = (content?.parts as unknown[]) ?? [];
-    if (parts.length > 0) console.log("[VAP] parts[0] keys:", Object.keys(parts[0] as object));
 
     for (const part of parts) {
       const p = part as Record<string, unknown>;
@@ -278,10 +320,40 @@ export default function VoiceAssessmentPlayer({
       if (fnResp?.name === "evaluate_voice_assessment") {
         const response = fnResp.response as EvalResult | { error: string } | undefined;
         if (response && !("error" in response)) {
-          setEvalResult(response as EvalResult);
+          const result = response as EvalResult;
+          setEvalResult(result);
           setStep("results");
           setAvatarState("idle");
           setMicActive(false);
+
+          // Persist result to backend
+          if (assessmentData?.id && instituteId) {
+            setSaveStatus("saving");
+            instituteService.submitVoiceAssessmentResult(instituteId, assessmentData.id, {
+              score: result.percentage,
+              voiceResult: {
+                totalScore: result.total_score,
+                totalMarks: result.total_marks,
+                grade: result.grade,
+                passed: result.passed,
+                overallFeedback: result.overall_feedback,
+                questionResults: result.results.map((r) => ({
+                  questionId: r.question_id,
+                  question: r.question,
+                  studentAnswer: r.student_answer,
+                  expectedAnswer: r.expected_answer,
+                  score: r.score,
+                  marksAvailable: r.marks_available,
+                  percentage: r.percentage,
+                  feedback: r.feedback,
+                })),
+              },
+            })
+              .then(() => { setSaveStatus("saved"); onCompleted?.(result); })
+              .catch(() => setSaveStatus("error"));
+          } else {
+            onCompleted?.(result);
+          }
         } else if (response && "error" in response) {
           setErrorMsg((response as { error: string }).error);
           setStep("error");
@@ -289,12 +361,7 @@ export default function VoiceAssessmentPlayer({
       }
     }
 
-    // Turn end — model finished speaking
-    if (event?.usageMetadata) {
-      // Only switch to listening if still in session and not evaluating
-      setAvatarState((prev) => (prev === "speaking" ? "listening" : prev));
-    }
-  }, [enqueueAudio]);
+  }, [enqueueAudio, stopAllAudio]);
 
   // ── Connect to voice agent ───────────────────────────────────────────────────
   const connect = useCallback(async () => {
@@ -350,10 +417,39 @@ export default function VoiceAssessmentPlayer({
       const processor = micCtx.createScriptProcessor(2048, 1, 1);
       processorRef.current = processor;
 
+      // Frames of consecutive speech above threshold required to trigger barge-in.
+      // At 2048 samples / 16kHz = 128 ms per frame; 2 frames ≈ 256 ms.
+      const BARGE_IN_THRESHOLD = 0.022;
+      const BARGE_IN_FRAMES    = 2;
+      let bargeInCount = 0;
+
       processor.onaudioprocess = (e: AudioProcessingEvent) => {
+        const samples = e.inputBuffer.getChannelData(0);
+
+        // Stream PCM to the voice agent
         if (ws.readyState === WebSocket.OPEN) {
-          const pcm = float32ToInt16(e.inputBuffer.getChannelData(0));
-          ws.send(pcm);
+          ws.send(float32ToInt16(samples));
+        }
+
+        // ── Local barge-in VAD ─────────────────────────────────────────────
+        // When the AI is playing audio and the student starts speaking loudly
+        // enough, immediately stop all queued AI audio without waiting for the
+        // server round-trip. The server's own VAD will also interrupt the model
+        // and send an `interrupted` event to clean up any remaining buffers.
+        if (isAISpeakingRef.current) {
+          let sum = 0;
+          for (let k = 0; k < samples.length; k++) sum += samples[k] * samples[k];
+          if (Math.sqrt(sum / samples.length) > BARGE_IN_THRESHOLD) {
+            bargeInCount++;
+            if (bargeInCount >= BARGE_IN_FRAMES) {
+              bargeInCount = 0;
+              stopAllAudioRef.current();   // stop via stable ref — closure-safe
+            }
+          } else {
+            bargeInCount = 0;
+          }
+        } else {
+          bargeInCount = 0;
         }
       };
 
@@ -547,6 +643,17 @@ export default function VoiceAssessmentPlayer({
         {/* ── Results ── */}
         {step === "results" && evalResult && (
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {/* Save status */}
+            {saveStatus === "saving" && (
+              <p className="text-xs text-center text-gray-400 animate-pulse">Saving results…</p>
+            )}
+            {saveStatus === "saved" && (
+              <p className="text-xs text-center text-green-600 dark:text-green-400">✓ Results saved</p>
+            )}
+            {saveStatus === "error" && (
+              <p className="text-xs text-center text-amber-600 dark:text-amber-400">Results could not be saved (already attempted or network error)</p>
+            )}
+
             {/* Score banner */}
             <div className={`rounded-2xl border p-5 ${
               evalResult.passed

@@ -110,7 +110,6 @@ class NativeSIPServer:
         session_service: InMemorySessionService,
         app_name: str,
         institute_id: str = "",
-        greeting_message: str = "Hello! How can I help you today?",
         sip_port: int = 5060,
         rtp_port: int = 20000,
         bind_address: str = "0.0.0.0",
@@ -119,7 +118,6 @@ class NativeSIPServer:
         self.session_service = session_service
         self.app_name = app_name
         self.institute_id = institute_id
-        self.greeting_message = greeting_message
         self.sip_port = sip_port
         self.rtp_port = rtp_port
         self.bind_address = bind_address
@@ -493,12 +491,6 @@ class NativeSIPServer:
                 logger.info(f"Started SmartEdX Core session for call {call_info.call_id}: {call_info.core_session_id}")
             except Exception as e:
                 logger.warning(f"Failed to start SmartEdX Core session for call {call_info.call_id}: {e}")
-
-            logger.info(f"Sending greeting for call {call_info.call_id}: {self.greeting_message}")
-            greeting_prompt = f"Say exactly this greeting to the user (do not add anything else): {self.greeting_message}"
-            greeting_content = types.Content(parts=[types.Part(text=greeting_prompt)], role="user")
-            call_info.live_request_queue.send_content(greeting_content)
-            call_info.transcript_handler.record_greeting(self.greeting_message)
 
             call_info.adk_task = asyncio.create_task(self._run_adk_session(call_info))
             call_info.rtp_pacing_task = asyncio.create_task(self._rtp_pacing_worker(call_info))
@@ -1009,7 +1001,6 @@ async def start_native_sip_server(
     session_service: InMemorySessionService,
     app_name: str,
     institute_id: str = "",
-    greeting_message: str = "Hello! How can I help you today?",
 ) -> NativeSIPServer:
     global _sip_server
 
@@ -1018,7 +1009,6 @@ async def start_native_sip_server(
         session_service=session_service,
         app_name=app_name,
         institute_id=institute_id,
-        greeting_message=greeting_message,
         sip_port=SIP_PORT,
         rtp_port=SIP_SDP_PORT,
         bind_address=SIP_BIND_ADDRESS,

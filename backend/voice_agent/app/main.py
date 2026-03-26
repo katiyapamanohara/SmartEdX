@@ -119,13 +119,12 @@ async def lifespan(app: FastAPI):
     if sip_enabled:
         logger.info("Starting native SIP/UDP server...")
         try:
-            sip_runner, sip_greeting = get_runner_for_institute(INSTITUTE_ID, session_service)
+            sip_runner, _ = get_runner_for_institute(INSTITUTE_ID, session_service)
             await start_native_sip_server(
                 runner=sip_runner,
                 session_service=session_service,
                 app_name=APP_NAME,
                 institute_id=INSTITUTE_ID,
-                greeting_message=sip_greeting,
             )
             logger.info("Native SIP server started successfully")
         except Exception as e:
@@ -267,14 +266,13 @@ if TRANSPORT_SIP_WS:
     @app.websocket("/sip")
     async def sip_endpoint(websocket: WebSocket) -> None:
         """SIP-over-WebSocket telephony endpoint (Kamailio proxy)."""
-        sip_runner, sip_greeting = get_runner_for_institute(INSTITUTE_ID, session_service)
+        sip_runner, _ = get_runner_for_institute(INSTITUTE_ID, session_service)
         await sip_websocket_endpoint(
             websocket=websocket,
             runner=sip_runner,
             session_service=session_service,
             app_name=APP_NAME,
             transcript_store=transcript_store,
-            greeting_message=sip_greeting,
         )
 else:
     logger.info("SIP-over-WebSocket transport disabled")

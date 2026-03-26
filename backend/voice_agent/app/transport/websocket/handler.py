@@ -42,7 +42,7 @@ async def websocket_endpoint(
     await websocket.accept()
 
     # Resolve runner and greeting for this institute (cached after first call)
-    runner, greeting_message = get_runner_for_institute(institute_id, session_service)
+    runner, _ = get_runner_for_institute(institute_id, session_service)
 
     model_name = runner.agent.model
     run_config = build_run_config(model_name, proactivity=proactivity, affective_dialog=affective_dialog)
@@ -69,7 +69,6 @@ async def websocket_endpoint(
         user_id=user_id,
         session_id=session_id,
         institute_id=institute_id,
-        greeting_message=greeting_message,
         is_sip=False,
         language=language,
     )
@@ -132,19 +131,33 @@ async def websocket_endpoint(
                         f"VOICE ASSESSMENT SESSION\n"
                         f"Title: {title}\n"
                         f"{('Instructions: ' + instructions + chr(10)) if instructions else ''}"
-                        f"\nYou must ask the student these {len(questions)} questions ONE BY ONE:\n{q_lines}\n\n"
-                        f"Rules:\n"
-                        f"1. Welcome the student and briefly explain the assessment.\n"
-                        f"2. Ask Question 1, then wait for the student to answer.\n"
-                        f"3. Acknowledge the answer briefly (e.g. 'Thank you') then ask the next question.\n"
-                        f"4. Do NOT give hints, corrections, or reveal the expected answers during the interview.\n"
-                        f"5. After collecting ALL {len(questions)} answers, call evaluate_voice_assessment with:\n"
-                        f'   {{"questions": [{{the full question objects as listed above, including expected_answer and marks}}], '
-                        f'"student_answers": [{{"question_id": "q1", "answer": "their answer"}}, ...]}}\n'
-                        f"6. Once evaluate_voice_assessment returns, announce the student's total score, grade, and overall feedback.\n\n"
-                        f"The full question data (including expected_answer and marks) for the evaluation tool:\n"
+                        f"\nYou must cover these {len(questions)} questions in order:\n{q_lines}\n\n"
+                        f"=== CONVERSATION STYLE (follow strictly) ===\n"
+                        f"- Be warm, natural, and encouraging — like a supportive teacher, not a robot reading a script.\n"
+                        f"- Keep YOUR speaking turns SHORT: 1-2 sentences when asking questions or acknowledging answers.\n"
+                        f"- After asking a question, STOP SPEAKING and wait silently for the student's answer.\n"
+                        f"  Do NOT repeat or rephrase the question unless the student explicitly asks.\n"
+                        f"- If the student INTERRUPTS you while you are speaking, stop immediately and listen.\n"
+                        f"  Acknowledge what they said naturally, then continue toward the next unanswered question.\n"
+                        f"- If the student goes OFF-TOPIC or asks something unrelated, reply briefly (1 sentence) and\n"
+                        f"  redirect: 'Good question! Let's keep going — [rephrase the current question concisely].'\n"
+                        f"- If the student says they don't know or is clearly stuck, give ONE gentle hint\n"
+                        f"  (e.g. 'Think about how X relates to Y…') WITHOUT revealing the expected answer.\n"
+                        f"- If the student gives a partial answer, accept it and move on — do NOT coach them to expand.\n"
+                        f"- Never reveal expected answers or scores during the interview.\n"
+                        f"- Track which questions have been answered (even briefly) and always progress forward.\n"
+                        f"  If a student already answered Q2 while answering Q1, skip Q2 and go straight to Q3.\n\n"
+                        f"=== FLOW ===\n"
+                        f"1. Welcome the student warmly in 1-2 sentences and tell them how many questions there are.\n"
+                        f"2. Ask Question 1. Wait. Acknowledge briefly. Ask Question 2. Continue until all {len(questions)} are done.\n"
+                        f"3. Once ALL {len(questions)} questions have been answered (however briefly), IMMEDIATELY call\n"
+                        f"   evaluate_voice_assessment with the exact JSON below — no extra commentary before the tool call:\n"
+                        f'   {{"questions": <full question objects>, "student_answers": [{{"question_id": "...", "answer": "..."}}]}}\n'
+                        f"4. After evaluate_voice_assessment returns, announce the score and grade conversationally\n"
+                        f"   (e.g. 'Great effort! You scored X out of Y — that's a [grade].'), then read the overall feedback.\n\n"
+                        f"Full question data for the evaluation tool:\n"
                         f"{json.dumps(questions)}\n\n"
-                        f"Begin now by welcoming the student."
+                        f"Begin now — welcome the student."
                     )
                     init_content = types.Content(parts=[types.Part(text=init_prompt)], role="user")
                     live_request_queue.send_content(init_content)

@@ -42,7 +42,6 @@ class ADKSessionManager:
         user_id: str,
         session_id: str,
         institute_id: str,
-        greeting_message: str,
         is_sip: bool = False,
         call_id: Optional[str] = None,
         language: Optional[str] = None,
@@ -53,7 +52,6 @@ class ADKSessionManager:
         self.user_id = user_id
         self.session_id = session_id
         self.institute_id = institute_id
-        self.greeting_message = greeting_message
         self.is_sip = is_sip
         self.call_id = call_id
         self.language = language
@@ -119,21 +117,6 @@ class ADKSessionManager:
             logger.warning(f"Articom Core session start failed (HTTP {e.response.status_code}): {e}")
         except requests.exceptions.RequestException as e:
             logger.warning(f"Articom Core unreachable: {e}")
-
-        # Send greeting — instruct the model to speak the greeting message
-        logger.info(f"Sending greeting: {self.greeting_message}")
-        if self.language:
-            language_lock_prompt = self._build_language_lock_prompt()
-            greeting_prompt = (
-                f"{language_lock_prompt}\n"
-                f"Now translate the following greeting into {self.language} and say it to the user "
-                f"(do not add anything else): {self.greeting_message}"
-            )
-        else:
-            greeting_prompt = f"Say exactly this greeting to the user (do not add anything else): {self.greeting_message}"
-        greeting_content = types.Content(parts=[types.Part(text=greeting_prompt)], role="user")
-        self.live_request_queue.send_content(greeting_content)
-        self.transcript_handler.record_greeting(self.greeting_message)
 
         latency.stop_timer("session_init", t_init, self.session_id)
         return self.live_request_queue

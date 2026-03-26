@@ -84,7 +84,7 @@ class SIPCallSession:
         self.audio_buffer: list[bytes] = []
         self.playback_task: Optional[asyncio.Task] = None
         self.playback_active = False
-        self.greeting_done = False
+        self.greeting_done = True
 
     # ── Helpers ──────────────────────────────────────────────────────
 
@@ -491,7 +491,6 @@ async def sip_websocket_endpoint(
     session_service: InMemorySessionService,
     app_name: str,
     transcript_store: dict,
-    greeting_message: str = "Hello! How can I help you today?",
 ) -> None:
     """WebSocket endpoint for SIP-over-WebSocket connections."""
     await websocket.accept()
@@ -556,7 +555,6 @@ async def sip_websocket_endpoint(
             user_id=f"sip-{from_tag}",
             session_id=call_id,
             institute_id=INSTITUTE_ID,
-            greeting_message=greeting_message,
             is_sip=True,
             call_id=call_id,
         )

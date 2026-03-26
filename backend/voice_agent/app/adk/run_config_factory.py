@@ -18,10 +18,14 @@ def _make_speech_config(voice_name: str) -> types.SpeechConfig:
 
 _VAD_CONFIG = types.RealtimeInputConfig(
     automatic_activity_detection=types.AutomaticActivityDetection(
-        start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_LOW,
+        # HIGH start sensitivity = model detects student speaking quickly →
+        # faster barge-in so the student can interrupt the AI mid-sentence.
+        start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_HIGH,
+        # LOW end sensitivity = wait longer before deciding the student has
+        # finished speaking, giving them time to think between sentences.
         end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_LOW,
-        prefix_padding_ms=300,
-        silence_duration_ms=800,
+        prefix_padding_ms=200,
+        silence_duration_ms=1200,
     )
 )
 

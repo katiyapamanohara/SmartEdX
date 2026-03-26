@@ -164,9 +164,16 @@ function StudentAttemptsModal({
   if (!isOpen || !content) return null;
 
   const attempts = content.studentAttempts || {};
-  const attemptEntries = Object.entries(attempts) as [string, { score: number; answers: Record<string, number>; attemptedAt: string }][];
+  type QuizAttempt = { score: number; answers: Record<string, number>; attemptedAt: string; type?: never };
+  type VoiceAttempt = {
+    score: number; type: "voice"; totalScore: number; totalMarks: number; grade: string;
+    passed: boolean; overallFeedback: string; attemptedAt: string;
+    questionResults: Array<{ questionId: string; question: string; studentAnswer: string; expectedAnswer: string; score: number; marksAvailable: number; percentage: number; feedback: string }>;
+  };
+  const attemptEntries = Object.entries(attempts) as [string, QuizAttempt | VoiceAttempt][];
   const questions: QuizQuestion[] = content.quizData?.questions ?? [];
   const passingScore = content.quizData?.passingScore ?? 70;
+  const isVoice = (content.quizData as any)?.assessmentType === "voice";
 
   const modal = (
     <div className="fixed inset-0 z-999999 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -209,7 +216,10 @@ function StudentAttemptsModal({
               const name = students[userId] || userId;
               const passed = attempt.score >= passingScore;
               const isOpen = expanded === userId;
-              const correctCount = questions.filter((q) => attempt.answers?.[q.id] === q.correctAnswer).length;
+              const isVoiceAttempt = attempt.type === "voice";
+              const correctCount = isVoiceAttempt
+                ? null
+                : questions.filter((q) => (attempt as QuizAttempt).answers?.[q.id] === q.correctAnswer).length;
 
               return (
                 <div key={userId} className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -224,7 +234,9 @@ function StudentAttemptsModal({
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{name}</p>
                       <p className="text-xs text-gray-400 dark:text-gray-500">
-                        {correctCount}/{questions.length} correct
+                        {isVoiceAttempt
+                          ? `${(attempt as VoiceAttempt).totalScore}/${(attempt as VoiceAttempt).totalMarks} marks · Grade: ${(attempt as VoiceAttempt).grade}`
+                          : `${correctCount}/${questions.length} correct`}
                         {attempt.attemptedAt ? ` · ${new Date(attempt.attemptedAt).toLocaleDateString()}` : ""}
                       </p>
                     </div>
@@ -241,10 +253,54 @@ function StudentAttemptsModal({
                   {/* Per-question breakdown */}
                   {isOpen && (
                     <div className="border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 px-4 py-4 space-y-3">
-                      {questions.length === 0 ? (
+                      {isVoiceAttempt ? (
+                        // ── Voice assessment breakdown ──
+                        <>
+                          {(attempt as VoiceAttempt).overallFeedback && (
+                            <div className="rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20 px-3 py-2 text-xs text-purple-800 dark:text-purple-300">
+                              <span className="font-semibold">Overall Feedback: </span>
+                              {(attempt as VoiceAttempt).overallFeedback}
+                            </div>
+                          )}
+                          {((attempt as VoiceAttempt).questionResults ?? []).map((qr, qi) => (
+                            <div key={qr.questionId} className={`rounded-lg border overflow-hidden ${
+                              qr.percentage >= 50 ? "border-green-300 dark:border-green-700" : "border-red-300 dark:border-red-700"
+                            }`}>
+                              <div className="flex items-start gap-2 px-3 py-2 bg-white dark:bg-gray-900">
+                                <span className="shrink-0 w-5 h-5 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 text-xs font-bold flex items-center justify-center mt-0.5">
+                                  {qi + 1}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium text-gray-900 dark:text-white leading-snug">{qr.question}</p>
+                                </div>
+                                <span className={`shrink-0 text-xs px-1.5 py-0.5 rounded font-medium ${
+                                  qr.percentage >= 50
+                                    ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                                    : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                                }`}>
+                                  {qr.score}/{qr.marksAvailable} marks
+                                </span>
+                              </div>
+                              <div className="px-3 py-2 space-y-1.5 bg-gray-50 dark:bg-gray-800/60">
+                                <div className="text-xs">
+                                  <span className="text-gray-500 dark:text-gray-400">Student said: </span>
+                                  <span className="text-gray-800 dark:text-gray-200 italic">&ldquo;{qr.studentAnswer || "—"}&rdquo;</span>
+                                </div>
+                                <div className="text-xs">
+                                  <span className="text-gray-500 dark:text-gray-400">Expected: </span>
+                                  <span className="text-gray-700 dark:text-gray-300">{qr.expectedAnswer}</span>
+                                </div>
+                                {qr.feedback && (
+                                  <div className="text-xs text-gray-500 dark:text-gray-400 italic">{qr.feedback}</div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </>
+                      ) : questions.length === 0 ? (
                         <p className="text-xs text-gray-400">No questions.</p>
                       ) : questions.map((q, qi) => {
-                        const studentPick = attempt.answers?.[q.id];
+                        const studentPick = (attempt as QuizAttempt).answers?.[q.id];
                         const isCorrect = studentPick === q.correctAnswer;
                         const unanswered = studentPick === undefined;
 
