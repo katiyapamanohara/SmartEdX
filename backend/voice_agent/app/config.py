@@ -1,4 +1,4 @@
-"""Centralized configuration for the Articom Voice Agent Service.
+"""Centralized configuration for the Voice Agent Service.
 
 All environment variables and constants are defined here to avoid
 scattered os.getenv() calls across modules.
@@ -21,7 +21,7 @@ GOOGLE_CLOUD_PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT", "")
 GOOGLE_CLOUD_LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
 
 # ── Application ──────────────────────────────────────────────────────
-APP_NAME = "articom-voice-agent"
+APP_NAME = "voice-agent"
 LOG_FORMAT = os.getenv("LOG_FORMAT", "text")  # "json" for structured, "text" for human-readable
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
@@ -31,7 +31,7 @@ SERVER_CORE = os.getenv("SERVER_CORE", "")
 AI_CORE_URL = os.getenv("AI_CORE_URL", "http://localhost:8001")
 INSTITUTE_SERVICE_URL = os.getenv("INSTITUTE_SERVICE_URL", "http://localhost:5003")
 INSTITUTE_ID = os.getenv("INSTITUTE_ID", "")
-ARTICOM_API_KEY = os.getenv("ARTICOM_API_KEY", "")
+API_KEY = os.getenv("API_KEY", "")
 
 # ── Agent / Model ────────────────────────────────────────────────────
 DEMO_AGENT_MODEL = os.getenv("DEMO_AGENT_MODEL", "gemini-2.5-flash-native-audio-preview-12-2025")
@@ -41,14 +41,26 @@ GREETING_MESSAGE_OVERRIDE = os.getenv("GREETING_MESSAGE_OVERRIDE", "")
 
 # ── Custom Tools ─────────────────────────────────────────────────────
 CUSTOM_TOOLS_ENABLED = os.getenv("CUSTOM_TOOLS_ENABLED", "false").lower() == "true"
-ARTICOM_MANIFEST_URL = os.getenv("ARTICOM_MANIFEST_URL")
-ARTICOM_TOOLS_SECRET = os.getenv("ARTICOM_TOOLS_SECRET")
+MANIFEST_URL = os.getenv("MANIFEST_URL")
+TOOLS_SECRET = os.getenv("TOOLS_SECRET")
 
 # ── Knowledge Base (Qdrant) ──────────────────────────────────────────
 QDRANT_KB_ENABLED = os.getenv("QDRANT_KB_ENABLED", "false").lower() == "true"
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 QDRANT_COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME", "dp_instructions_kb")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
+
+# ── MinIO ────────────────────────────────────────────────────────────
+MINIO_URL = os.getenv("MINIO_URL", "http://localhost:9000")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "")
+
+# ── Course Knowledge Base (Qdrant) ───────────────────────────────────
+# Separate collection that stores course-specific content (PDFs, Word docs).
+# Enabled independently of the general KB so course Q&A works even when
+# the institute-level knowledge base is turned off.
+COURSE_KB_ENABLED = os.getenv("COURSE_KB_ENABLED", "true").lower() == "true"
+COURSE_KB_COLLECTION_NAME = os.getenv("COURSE_KB_COLLECTION_NAME", "course_kb")
 
 # ── Langfuse / Observability ────────────────────────────────────────
 LANGFUSE_ENABLED = os.getenv("LANGFUSE_ENABLED", "false").lower() == "true"

@@ -1,4 +1,4 @@
-"""Articom Voice Agent Service - Real-time voice interaction platform."""
+"""Voice Agent Service - Real-time voice interaction platform."""
 
 import asyncio
 import logging
@@ -17,9 +17,10 @@ from google.adk.sessions import InMemorySessionService
 # Load environment variables BEFORE importing agent (needs config at import time)
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-from app.agent import get_runner_for_institute, search_knowledgebase  # noqa: E402
+from app.agent import get_runner_for_course, get_runner_for_institute, search_knowledgebase  # noqa: E402
 from app.config import (  # noqa: E402
     APP_NAME,
+    COURSE_KB_ENABLED,
     CUSTOM_TOOLS_ENABLED,
     DASHBOARD_ENABLED,
     DEMO_AGENT_MODEL,
@@ -34,6 +35,7 @@ from app.config import (  # noqa: E402
     TRANSPORT_SIP_WS,
     TRANSPORT_WEBSOCKET,
 )
+from app.routers.course_kb import router as course_kb_router  # noqa: E402
 from app.latency import latency as latency_tracker  # noqa: E402
 from app.observability.langfuse_client import init_instrumentor  # noqa: E402
 from app.transport.sip_udp.server import get_sip_server, start_native_sip_server, stop_native_sip_server  # noqa: E402
@@ -84,26 +86,27 @@ def _print_banner() -> None:
     flag = lambda v: on if v else off  # noqa: E731
 
     banner = f"""\033[36m
-     _    ____ _____ ___ ____ ___  __  __
-    / \\  |  _ \\_   _|_ _/ ___/ _ \\|  \\/  |
-   / _ \\ | |_) || |  | | |  | | | | |\\/| |
-  / ___ \\|  _ < | |  | | |__| |_| | |  | |
- /_/   \\_\\_| \\_\\|_| |___\\____\\___/|_|  |_|
-\033[0m\033[1m         Voice Agent Service v0.1.0\033[0m
+         _____                 _    ______    _    _           _           _   
+        / ___/___  ____  _____| |  / /  _/   / \  |  _ \_   _|_ _| ___  __| |  
+        \__ \/ _ \/ __ \/ ___/ | / // /    / _ \ | |_) || |  | | / _ \/ _` |  
+     ___/ /  __/ /_/ / /   | |/ // /_   / ___ \|  _ < | |  | |  __/ (_| |  
+    /____/\___/\____/_/    |___/___/  /_/   \_\_| \_\|_| |___\___|\__,_|  
+\033[0m\033[1m         SmartEdX Voice Agent v0.1.0\033[0m
 
-  Model       : {DEMO_AGENT_MODEL}
-  Platform    : {"Vertex AI" if GOOGLE_GENAI_USE_VERTEXAI else "Gemini API"}
+    Model       : {DEMO_AGENT_MODEL}
+    Platform    : {"Vertex AI" if GOOGLE_GENAI_USE_VERTEXAI else "Gemini API"}
 
-  Transports
-    WebSocket : {flag(TRANSPORT_WEBSOCKET)}
-    SIP-WS    : {flag(TRANSPORT_SIP_WS)}
-    SIP/UDP   : {flag(SIP_ENABLED)}{f"  (port {SIP_PORT})" if SIP_ENABLED else ""}
+    Transports
+        WebSocket : {flag(TRANSPORT_WEBSOCKET)}
+        SIP-WS    : {flag(TRANSPORT_SIP_WS)}
+        SIP/UDP   : {flag(SIP_ENABLED)}{f"  (port {SIP_PORT})" if SIP_ENABLED else ""}
 
-  Features
-    Dashboard : {flag(DASHBOARD_ENABLED)}
-    Langfuse  : {flag(LANGFUSE_ENABLED)}
-    Custom Tools : {flag(CUSTOM_TOOLS_ENABLED)}
-    Knowledge Base : {flag(QDRANT_KB_ENABLED)}
+    Features
+        Dashboard : {flag(DASHBOARD_ENABLED)}
+        Langfuse  : {flag(LANGFUSE_ENABLED)}
+        Custom Tools : {flag(CUSTOM_TOOLS_ENABLED)}
+        Knowledge Base : {flag(QDRANT_KB_ENABLED)}
+        Course Q&A KB  : {flag(COURSE_KB_ENABLED)}
 """
     print(banner)
 
@@ -140,6 +143,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+# ── Course KB router (document indexing / deletion) ──────────────────
+app.include_router(course_kb_router)
 
 # Mount static files and dashboard routes only when enabled
 if DASHBOARD_ENABLED:
@@ -304,3 +310,41 @@ if TRANSPORT_WEBSOCKET:
         )
 else:
     logger.info("Browser WebSocket transport disabled")
+
+
+# ── Course Q&A WebSocket endpoint ──────────────────────────────────────
+# Students connect here after selecting a course.  The agent is scoped to
+# that course's indexed content in Qdrant.
+#
+# URL: /ws/course-qa/{institute_id}/{course_id}/{user_id}/{session_id}
+# Query params:
+#   course_name (str) – human-readable course name for the system prompt
+#   language    (str, optional) – language hint passed to the session
+
+@app.websocket("/ws/course-qa/{institute_id}/{course_id}/{user_id}/{session_id}")
+async def course_qa_ws_endpoint(
+    websocket: WebSocket,
+    institute_id: str,
+    course_id: str,
+    user_id: str,
+    session_id: str,
+    course_name: str = "",
+    language: Optional[str] = None,
+) -> None:
+    """Course Q&A voice assistant — answers student questions from course content."""
+    course_runner, _ = get_runner_for_course(
+        institute_id=institute_id,
+        course_id=course_id,
+        course_name=course_name or course_id,
+        session_service=session_service,
+    )
+    await websocket_endpoint(
+        websocket=websocket,
+        institute_id=institute_id,
+        user_id=user_id,
+        session_id=session_id,
+        session_service=session_service,
+        transcript_store=transcript_store,
+        runner=course_runner,
+        language=language,
+    )

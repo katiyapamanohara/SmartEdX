@@ -35,6 +35,18 @@ services:
     mem_limit: 128m
     cpus: 0.25  
 
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+    environment:
+      QDRANT__STORAGE__PERSISTENCE: "true"
+
 volumes:
   minio_data:
   redis_data:
+  qdrant_data:

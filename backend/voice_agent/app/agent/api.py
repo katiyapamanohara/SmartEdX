@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
-from app.config import ARTICOM_API_KEY, INSTITUTE_SERVICE_URL, SERVER_CORE
+from app.config import API_KEY, INSTITUTE_SERVICE_URL, SERVER_CORE
 from app.latency import latency
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ def start_assistant_session(
 ) -> Dict[str, Any]:
     """Start a voice session with SmartEdX Core."""
     url = f"{SERVER_CORE}/api/session/voice/start"
-    headers = {"Authorization": f"Bearer {ARTICOM_API_KEY}"}
+    headers = {"Authorization": f"Bearer {API_KEY}"}
     meta_data = {
         "type": "sip" if is_sip else "web",
         "user_id": user_id,
@@ -53,9 +53,9 @@ def start_assistant_session(
 
 
 def end_assistant_session(session_id: str, history: List[dict]) -> Dict[str, Any]:
-    """End a voice session with Articom Core, sending final transcript."""
+    """End a voice session with Core, sending final transcript."""
     url = f"{SERVER_CORE}/api/session/voice/end"
-    headers = {"Authorization": f"Bearer {ARTICOM_API_KEY}"}
+    headers = {"Authorization": f"Bearer {API_KEY}"}
     body = {
         "session_id": session_id,
         "chat_history": history,

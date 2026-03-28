@@ -17,10 +17,11 @@ from app.agent.audio_clips import create_audio_clip_tool
 from app.agent.custom_tools import CustomToolHelper
 from app.agent.instructions import all_instructions
 from app.config import (
-    ARTICOM_MANIFEST_URL,
-    ARTICOM_TOOLS_SECRET,
+    MANIFEST_URL,
+    TOOLS_SECRET,
     AUDIO_CLIP_TOOL_MAP,
     APP_NAME,
+    COURSE_KB_ENABLED,
     CUSTOM_TOOLS_ENABLED,
     DEMO_AGENT_MODEL,
     END_CALL_INTERRUPT_COOLDOWN,
@@ -180,14 +181,14 @@ def _build_shared_tools() -> list:
     # Custom tools from manifest
     try:
         if CUSTOM_TOOLS_ENABLED:
-            if not ARTICOM_MANIFEST_URL:
-                raise ValueError("ARTICOM_MANIFEST_URL is not set")
-            if ARTICOM_TOOLS_SECRET is None:
-                raise ValueError("ARTICOM_TOOLS_SECRET is not set")
+            if not MANIFEST_URL:
+                raise ValueError("MANIFEST_URL is not set")
+            if TOOLS_SECRET is None:
+                raise ValueError("TOOLS_SECRET is not set")
             tool_helper = CustomToolHelper()
-            manifest = tool_helper.fetch_manifest(url=ARTICOM_MANIFEST_URL, secret=ARTICOM_TOOLS_SECRET)
+            manifest = tool_helper.fetch_manifest(url=MANIFEST_URL, secret=TOOLS_SECRET)
             all_custom_tools = tool_helper.create_custom_tools(
-                url=ARTICOM_MANIFEST_URL, manifest=manifest, secret=ARTICOM_TOOLS_SECRET
+                url=MANIFEST_URL, manifest=manifest, secret=TOOLS_SECRET
             )
             tools = [t for t in all_custom_tools if t.name not in AUDIO_CLIP_TOOL_MAP]
             skipped = [t.name for t in all_custom_tools if t.name in AUDIO_CLIP_TOOL_MAP]
@@ -367,7 +368,113 @@ def get_runner_for_institute(institute_id: str, session_service: InMemorySession
         return _institute_cache[institute_id]
 
 
+# ── Per-course Q&A agent cache ────────────────────────────────────────
+# Students select a course and ask questions; the agent searches only that
+# course's indexed content via the course_kb Qdrant collection.
+
+_course_qa_cache: dict[str, tuple[Runner, str]] = {}  # "{institute_id}:{course_id}" -> (runner, greeting)
+_course_qa_lock = threading.Lock()
+
+
+def get_runner_for_course(
+    institute_id: str,
+    course_id: str,
+    course_name: str,
+    session_service: InMemorySessionService,
+) -> tuple[Runner, str]:
+    """Return a cached (Runner, greeting) for a course Q&A voice assistant.
+
+    The agent is scoped to a single course — its ``search_course_material``
+    tool automatically filters Qdrant results to the given ``course_id``.
+
+    Args:
+        institute_id: Institute UUID (namespaces the cache key).
+        course_id:    Course UUID (Qdrant filter + cache key).
+        course_name:  Human-readable course name used in the system prompt.
+        session_service: Shared ADK session service instance.
+
+    Returns:
+        (runner, greeting_message) — greeting is sent to the student on connect.
+    """
+    cache_key = f"{institute_id}:{course_id}"
+
+    with _course_qa_lock:
+        if cache_key in _course_qa_cache:
+            return _course_qa_cache[cache_key]
+
+    if not COURSE_KB_ENABLED:
+        logger.warning("Course KB is disabled (COURSE_KB_ENABLED=false) — course Q&A agent will have no search tool")
+
+    logger.info(f"Building course Q&A agent for course: {course_name!r} ({course_id})")
+
+    # Build a course-specific search tool via closure so course_id is baked in.
+    def search_course_material(query: str, limit: int = 5) -> dict:
+        """Search the course material for information relevant to the student's question.
+
+        Use this tool whenever the student asks about any topic, concept, or
+        content covered in this course.  Always search before answering to
+        ensure accuracy.
+
+        Args:
+            query: Natural-language description of the information to find.
+            limit: Maximum number of results to return (default 5).
+
+        Returns:
+            Matching excerpts from the course material with page references.
+        """
+        if not COURSE_KB_ENABLED:
+            return {"status": "error", "message": "Course knowledge base is not enabled."}
+        try:
+            from app.qdrant.course_kb import search_course
+
+            results = search_course(institute_id=institute_id, course_id=course_id, query=query, limit=limit)
+            if not results:
+                return {"status": "no_results", "message": "No relevant information found in the course material."}
+            return {"status": "ok", "results": results}
+        except Exception as e:
+            logger.error(f"Course KB search failed for course {course_id}: {e}", exc_info=True)
+            return {"status": "error", "message": "Failed to search course material."}
+
+    system_instructions = all_instructions + (
+        f"You are an AI tutor for the course '{course_name}'.\n"
+        f"Your role is to help students understand the course material and answer their questions.\n"
+        f"- Use the search_course_material tool to look up relevant information before answering.\n"
+        f"- Give clear, concise, and helpful explanations based on the retrieved content.\n"
+        f"- Cite the page number when referencing specific material (e.g. 'According to page 3...').\n"
+        f"- If the answer is not in the course material, say so honestly and suggest the student\n"
+        f"  consult their teacher or course notes.\n"
+        f"- Be encouraging and supportive — you are a tutor, not just a search engine.\n"
+        f"\nCOURSE MATERIAL SEARCH: ALWAYS call search_course_material before answering any question\n"
+        f"about the course content. Do not answer from memory alone."
+    )
+
+    safe_id = course_id.replace("-", "_")
+    course_agent = Agent(
+        name=f"smartedx_course_qa_{safe_id}",
+        model=DEMO_AGENT_MODEL,
+        tools=[
+            FunctionTool(func=search_course_material),
+            FunctionTool(func=end_call),
+        ],
+        instruction=system_instructions,
+    )
+
+    course_runner = Runner(
+        app_name=APP_NAME,
+        agent=course_agent,
+        session_service=session_service,
+    )
+
+    greeting = f"Hello! I'm your AI tutor for {course_name}. What would you like to learn about today?"
+
+    with _course_qa_lock:
+        if cache_key not in _course_qa_cache:
+            _course_qa_cache[cache_key] = (course_runner, greeting)
+    return _course_qa_cache[cache_key]
+
+
 __all__ = [
+    "get_runner_for_course",
     "get_runner_for_institute",
     "register_call_guard",
     "search_knowledgebase",

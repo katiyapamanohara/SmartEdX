@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, HttpCode, HttpStatus, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiBody } from '@nestjs/swagger';
 import { CourseService } from './course.service';
 import { CreateCourseDto } from './dto/create-course.dto';
@@ -143,6 +144,21 @@ export class CourseController {
   }
 
   // ─── Teacher content CRUD ─────────────────────────────────────────
+  @Post(':courseId/teacher-modules/:moduleId/contents/upload-file')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Teacher uploads a file (PDF/DOCX/video) as content — auto-indexes into Qdrant KB' })
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadTeacherContentFile(
+    @Param('id') instituteId: string,
+    @Param('courseId') courseId: string,
+    @Param('moduleId') moduleId: string,
+    @CurrentUser('userId') userId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: any,
+  ) {
+    return this.courseService.createContentWithFileUploadForTeacher(instituteId, courseId, moduleId, userId, file, body);
+  }
+
   @Post(':courseId/teacher-modules/:moduleId/contents')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Teacher creates content in their assigned course module' })

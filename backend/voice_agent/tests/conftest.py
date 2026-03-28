@@ -1,10 +1,10 @@
-"""Shared test fixtures for the Articom Voice Agent Service."""
+"""Shared test fixtures for the Voice Agent Service."""
 
 import os
 
 # Set test environment variables before any app imports
 os.environ.setdefault("INSTITUTE_ID", "test-institute-id")
-os.environ.setdefault("ARTICOM_API_KEY", "test-api-key")
+os.environ.setdefault("API_KEY", "test-api-key")
 os.environ.setdefault("SERVER_API", "http://localhost:8080")
 os.environ.setdefault("SERVER_CORE", "http://localhost:8081")
 os.environ.setdefault("LANGFUSE_ENABLED", "false")

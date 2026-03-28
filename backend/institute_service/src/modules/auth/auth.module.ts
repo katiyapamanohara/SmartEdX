@@ -13,6 +13,7 @@ import { SeedService } from './services/seed.service';
 import { RepositoriesModule } from '../../infra/database/repositories';
 import { FirebaseModule } from '../../infra/firebase/firebase.module';
 import { MinioModule } from '../../infra/storage/minio.module';
+import { VoiceAgentClient } from '../../infra/http/voice-agent.client';
 
 import { InstituteUserController } from './institute-user.controller';
 import { CourseController } from './course.controller';
@@ -64,6 +65,7 @@ import { LiveGateway } from './live.gateway';
     FirebaseAuthGuard,
     RolesGuard,
     SeedService,
+    VoiceAgentClient,
   ],
   exports: [
     AuthService,

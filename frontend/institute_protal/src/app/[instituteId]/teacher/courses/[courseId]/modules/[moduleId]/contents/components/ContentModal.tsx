@@ -817,9 +817,15 @@ const ContentModal: React.FC<ContentModalProps> = ({
 
     // Validate file upload types
     const isFileUploadType = formData.type === "pdf" || formData.type === "document" || formData.type === "video";
-    if (isFileUploadType && pdfMode === "file" && !pdfFile && !formData.url) {
-      setError(`Please upload a file or enter a URL.`);
-      return;
+    if (isFileUploadType) {
+      if (pdfMode === "file" && !pdfFile) {
+        setError("Please select a file to upload.");
+        return;
+      }
+      if (pdfMode === "url" && !formData.url.trim()) {
+        setError("Please enter a URL.");
+        return;
+      }
     }
 
     setSubmitting(true);

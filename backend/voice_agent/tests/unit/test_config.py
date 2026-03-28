@@ -7,7 +7,7 @@ class TestConfig:
     def test_app_name_default(self):
         from app.config import APP_NAME
 
-        assert APP_NAME == "articom-voice-agent"
+        assert APP_NAME == "voice-agent"
 
     def test_sip_port_default(self):
         from app.config import SIP_PORT

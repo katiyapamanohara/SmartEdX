@@ -361,7 +361,7 @@ class NativeSIPServer:
                 "Accept": "application/sdp",
                 "Allow": "INVITE, ACK, BYE, CANCEL, OPTIONS, REGISTER",
                 "Supported": "replaces, timer",
-                "Server": "Articom-Voice-Agent/1.0",
+                "Server": "Voice-Agent/1.0",
             },
             remote_addr=addr,
         )
@@ -379,7 +379,7 @@ class NativeSIPServer:
             extra_headers={
                 "Contact": contact,
                 "Expires": expires,
-                "Server": "Articom-Voice-Agent/1.0",
+                "Server": "Voice-Agent/1.0",
             },
             remote_addr=addr,
         )
@@ -897,9 +897,9 @@ class NativeSIPServer:
                         session_id=call_info.core_session_id,
                         history=final_transcript,
                     )
-                    logger.info(f"Ended Articom Core session for call {call_id}")
+                    logger.info(f"Ended Core session for call {call_id}")
                 except Exception as e:
-                    logger.warning(f"Failed to end Articom Core session for call {call_id}: {e}")
+                    logger.warning(f"Failed to end Core session for call {call_id}: {e}")
 
             self.transcript_store.pop(call_info.session_id, None)
 

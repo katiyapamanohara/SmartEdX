@@ -1,14 +1,16 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { instituteService, Course } from "@/services/instituteService";
 import { BoxIconLine } from "@/icons";
+import CourseVoiceAssistant from "@/components/student/CourseVoiceAssistant";
 
 export default function StudentMyCoursesPage() {
   const params = useParams();
   const instituteId = params?.instituteId as string;
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tutorCourse, setTutorCourse] = useState<Course | null>(null);
 
   useEffect(() => {
     if (!instituteId) return;
@@ -98,22 +100,39 @@ export default function StudentMyCoursesPage() {
                 {course.description && (
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 line-clamp-2">{course.description}</p>
                 )}
-                <div className="mt-3 flex items-center justify-between">
-                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
                     {course.moduleCount ?? 0} module{(course.moduleCount ?? 0) !== 1 ? "s" : ""}
                   </span>
-                  <a
-                    href={`/${instituteId}/student/my-courses/${course.id}/modules`}
-                    className="inline-flex items-center gap-1 text-sm font-medium text-brand-500 hover:underline"
-                  >
-                    View →
-                  </a>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setTutorCourse(course)}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-white bg-brand-500 hover:bg-brand-600 px-2.5 py-1 rounded-lg transition-colors"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+                      </svg>
+                      AI Tutor
+                    </button>
+                    <a
+                      href={`/${instituteId}/student/my-courses/${course.id}/modules`}
+                      className="inline-flex items-center gap-1 text-sm font-medium text-brand-500 hover:underline"
+                    >
+                      View →
+                    </a>
+                  </div>
                 </div>
               </div>
             </div>
           ))}
         </div>
       )}
+
+      <CourseVoiceAssistant
+        isOpen={tutorCourse !== null}
+        onClose={() => setTutorCourse(null)}
+        initialCourse={tutorCourse ?? undefined}
+      />
     </div>
   );
 }

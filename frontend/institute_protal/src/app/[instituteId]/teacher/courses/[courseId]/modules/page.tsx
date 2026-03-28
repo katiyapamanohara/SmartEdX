@@ -117,11 +117,25 @@ function ModuleAccordion({
   useEffect(() => { setContents(module.contents ?? []); }, [module.contents]);
 
   const handleContentSubmit = async (data: any) => {
+    const { pdfFile, ...rest } = data;
     if (contentModal.editing) {
-      const updated = await instituteService.updateTeacherContent(instituteId, courseId, module.id, contentModal.editing.id, data);
+      const updated = await instituteService.updateTeacherContent(instituteId, courseId, module.id, contentModal.editing.id, rest);
       setContents((p) => p.map((c) => (c.id === contentModal.editing!.id ? updated : c)));
     } else {
-      const created = await instituteService.createTeacherContent(instituteId, courseId, module.id, data);
+      const isFileType = rest.type === "pdf" || rest.type === "document" || rest.type === "video";
+      let created;
+      if (isFileType && pdfFile) {
+        created = await instituteService.uploadTeacherFileContent(
+          instituteId, courseId, module.id, pdfFile,
+          { title: rest.title, type: rest.type, description: rest.description, order: rest.order }
+        );
+      } else if (isFileType && rest.url?.trim()) {
+        created = await instituteService.createTeacherContent(instituteId, courseId, module.id, rest);
+      } else if (isFileType) {
+        throw new Error("Please select a file to upload or enter a URL.");
+      } else {
+        created = await instituteService.createTeacherContent(instituteId, courseId, module.id, rest);
+      }
       setContents((p) => [...p, created]);
     }
     setContentModal({ open: false, editing: null });
