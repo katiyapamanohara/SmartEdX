@@ -1,14 +1,14 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ApexOptions } from "apexcharts";
 import { instituteService } from "@/services/instituteService";
-import { authService } from "@/services/authService";
 import { BoxIconLine, ArrowUpIcon, TaskIcon, VideoIcon } from "@/icons";
 import StudentFloatingAiChat from "@/components/student/StudentFloatingAiChat";
 import VoiceAssessmentPlayer from "@/components/student/VoiceAssessmentPlayer";
+import CourseVoiceAssistant from "@/components/student/CourseVoiceAssistant";
 
 const ReactApexChart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
@@ -27,6 +27,7 @@ export default function StudentDashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [voicePlayerOpen, setVoicePlayerOpen] = useState(false);
+  const [courseAssistantOpen, setCourseAssistantOpen] = useState(false);
 
   useEffect(() => {
     if (!instituteId) return;
@@ -77,20 +78,31 @@ export default function StudentDashboard() {
     <div className="grid grid-cols-12 gap-4 md:gap-6">
 
       {/* Welcome Banner */}
-      <div className="col-span-12 rounded-2xl bg-gradient-to-r from-brand-500 to-indigo-600 p-6 text-white flex items-center justify-between gap-4">
+      <div className="col-span-12 rounded-2xl bg-linear-to-r from-brand-500 to-indigo-600 p-6 text-white flex items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold">Welcome back! 👋</h2>
           <p className="text-sm text-white/80 mt-1">Here&apos;s an overview of your learning progress.</p>
         </div>
-        <button
-          onClick={() => setVoicePlayerOpen(true)}
-          className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-sm font-semibold transition-colors backdrop-blur-sm border border-white/25"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
-          </svg>
-          Take Voice Assessment
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setCourseAssistantOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-sm font-semibold transition-colors backdrop-blur-sm border border-white/25"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 9.75a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375m-13.5 3.01c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.184-4.183a1.14 1.14 0 0 1 .778-.332 48.294 48.294 0 0 0 5.83-.498c1.585-.233 2.708-1.626 2.708-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
+            </svg>
+            Ask AI Tutor
+          </button>
+          <button
+            onClick={() => setVoicePlayerOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-sm font-semibold transition-colors backdrop-blur-sm border border-white/25"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+            </svg>
+            Voice Assessment
+          </button>
+        </div>
       </div>
 
       {/* Metric Cards */}
@@ -173,6 +185,10 @@ export default function StudentDashboard() {
       <VoiceAssessmentPlayer
         isOpen={voicePlayerOpen}
         onClose={() => setVoicePlayerOpen(false)}
+      />
+      <CourseVoiceAssistant
+        isOpen={courseAssistantOpen}
+        onClose={() => setCourseAssistantOpen(false)}
       />
     </>
   );

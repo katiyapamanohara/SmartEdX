@@ -4,7 +4,7 @@ import asyncio
 import base64
 import json
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import WebSocket, WebSocketDisconnect
 from google.adk.sessions import InMemorySessionService
@@ -34,15 +34,23 @@ async def websocket_endpoint(
     session_service: InMemorySessionService,
     transcript_store: dict,
     *,
+    runner: Optional[Any] = None,
     proactivity: bool = False,
     affective_dialog: bool = False,
     language: Optional[str] = None,
 ) -> None:
-    """WebSocket endpoint for bidirectional streaming with ADK."""
+    """WebSocket endpoint for bidirectional streaming with ADK.
+
+    Args:
+        runner: Pre-built ADK Runner.  When ``None`` (default) the institute
+                runner is resolved via ``get_runner_for_institute``.  Pass an
+                explicit runner to use a course-scoped or custom agent.
+    """
     await websocket.accept()
 
-    # Resolve runner and greeting for this institute (cached after first call)
-    runner, _ = get_runner_for_institute(institute_id, session_service)
+    # Resolve runner — callers may inject a course-specific runner
+    if runner is None:
+        runner, _ = get_runner_for_institute(institute_id, session_service)
 
     model_name = runner.agent.model
     run_config = build_run_config(model_name, proactivity=proactivity, affective_dialog=affective_dialog)

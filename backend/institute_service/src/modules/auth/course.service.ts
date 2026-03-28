@@ -1,7 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { CourseRepository, TeacherRepository } from '../../infra/database/repositories';
 import { ModuleContentRepository } from '../../infra/database/repositories/module-content.repository';
 import { CourseModuleRepository } from '../../infra/database/repositories/course-module.repository';
+import { VoiceAgentClient } from '../../infra/http/voice-agent.client';
+import { MinioService } from '../../infra/storage/minio.service';
 
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
@@ -9,13 +11,24 @@ import { Teacher } from './entities/teacher.entity';
 import { Course } from './entities/course.entity';
 import { ContentType } from './entities/module-content.entity';
 
+/** Content types that hold indexable text for the course knowledge base. */
+const INDEXABLE_TYPES: ContentType[] = [ContentType.PDF, ContentType.DOCUMENT];
+
+function isIndexable(type: ContentType, url: string | undefined | null): boolean {
+  return INDEXABLE_TYPES.includes(type) && !!url;
+}
+
 @Injectable()
 export class CourseService {
+  private readonly logger = new Logger(CourseService.name);
+
   constructor(
     private readonly courseRepository: CourseRepository,
     private readonly teacherRepository: TeacherRepository,
     private readonly moduleContentRepository: ModuleContentRepository,
     private readonly courseModuleRepository: CourseModuleRepository,
+    private readonly voiceAgentClient: VoiceAgentClient,
+    private readonly minioService: MinioService,
   ) {}
 
   private mapCourseToResponse(course: Course) {
@@ -103,26 +116,117 @@ export class CourseService {
   }
 
   // ─── Teacher content CRUD ───────────────────────────────────────
-  async createContentForTeacher(instituteId: string, courseId: string, moduleId: string, userId: string, dto: { title: string; description?: string; type: ContentType; url?: string; quizData?: any; order?: number }) {
-    await this._assertTeacherOwns(courseId, instituteId, userId);
+  async createContentForTeacher(
+    instituteId: string,
+    courseId: string,
+    moduleId: string,
+    userId: string,
+    dto: { title: string; description?: string; type: ContentType; url?: string; quizData?: any; order?: number },
+  ) {
+    const course = await this._assertTeacherOwns(courseId, instituteId, userId);
     const module = await this.courseModuleRepository.findOne({ where: { id: moduleId, courseId } as any });
     if (!module) throw new NotFoundException('Module not found');
     const existing = await this.moduleContentRepository.findByModuleId(moduleId);
-    return this.moduleContentRepository.create({ ...dto, moduleId, order: dto.order ?? existing.length });
+    const content = await this.moduleContentRepository.create({ ...dto, moduleId, order: dto.order ?? existing.length });
+
+    // Index PDF / Word documents into the course's dedicated Qdrant collection
+    if (isIndexable(content.type, content.url)) {
+      this.voiceAgentClient.indexContent({
+        institute_id: instituteId,
+        course_id:    courseId,
+        course_name:  course.name,
+        content_id:   content.id,
+        file_url:     content.url!,
+        file_type:    content.type,
+        title:        content.title,
+      }).catch((err) => this.logger.error(`KB index failed for content ${content.id}: ${err}`));
+    }
+
+    return content;
   }
 
-  async updateContentForTeacher(instituteId: string, courseId: string, moduleId: string, contentId: string, userId: string, dto: Partial<{ title: string; description: string; url: string; quizData: any; order: number }>) {
-    await this._assertTeacherOwns(courseId, instituteId, userId);
+  async createContentWithFileUploadForTeacher(
+    instituteId: string,
+    courseId: string,
+    moduleId: string,
+    userId: string,
+    file: Express.Multer.File,
+    body: any,
+  ) {
+    const type = body.type as ContentType;
+    const bucket =
+      type === ContentType.PDF   ? 'pdfs'   :
+      type === ContentType.VIDEO ? 'videos' :
+      'documents';
+
+    const url = await this.minioService.uploadFile(file, bucket);
+    return this.createContentForTeacher(instituteId, courseId, moduleId, userId, {
+      ...body,
+      url,
+      order: body.order !== undefined ? parseInt(body.order) : undefined,
+    });
+  }
+
+  async updateContentForTeacher(
+    instituteId: string,
+    courseId: string,
+    moduleId: string,
+    contentId: string,
+    userId: string,
+    dto: Partial<{ title: string; description: string; type: ContentType; url: string; quizData: any; order: number }>,
+  ) {
+    const course = await this._assertTeacherOwns(courseId, instituteId, userId);
     const content = await this.moduleContentRepository.findById(contentId);
     if (!content || content.moduleId !== moduleId) throw new NotFoundException('Content not found');
-    return this.moduleContentRepository.update(contentId, dto as any);
+
+    const updated = await this.moduleContentRepository.update(contentId, dto as any);
+
+    const wasIndexable = isIndexable(content.type, content.url);
+    const newType      = (dto.type  ?? content.type) as ContentType;
+    const newUrl       = dto.url    ?? content.url;
+    const nowIndexable = isIndexable(newType, newUrl);
+
+    const urlChanged  = dto.url  !== undefined && dto.url  !== content.url;
+    const typeChanged = dto.type !== undefined && dto.type !== content.type;
+
+    if (nowIndexable && (urlChanged || typeChanged)) {
+      // Re-index with the latest URL/type
+      this.voiceAgentClient.indexContent({
+        institute_id: instituteId,
+        course_id:    courseId,
+        course_name:  course.name,
+        content_id:   contentId,
+        file_url:     newUrl!,
+        file_type:    newType,
+        title:        dto.title ?? content.title,
+      }).catch((err) => this.logger.error(`KB re-index failed for content ${contentId}: ${err}`));
+    } else if (wasIndexable && !nowIndexable) {
+      // No longer a PDF/DOCUMENT — remove from index
+      this.voiceAgentClient.deleteContent(instituteId, courseId, contentId)
+        .catch((err) => this.logger.error(`KB delete failed for content ${contentId}: ${err}`));
+    }
+
+    return updated;
   }
 
-  async deleteContentForTeacher(instituteId: string, courseId: string, moduleId: string, contentId: string, userId: string) {
+  async deleteContentForTeacher(
+    instituteId: string,
+    courseId: string,
+    moduleId: string,
+    contentId: string,
+    userId: string,
+  ) {
     await this._assertTeacherOwns(courseId, instituteId, userId);
     const content = await this.moduleContentRepository.findById(contentId);
     if (!content || content.moduleId !== moduleId) throw new NotFoundException('Content not found');
     await this.moduleContentRepository.delete(contentId);
+
+    // Remove from Qdrant if it was an indexed document
+    if (isIndexable(content.type, content.url)) {
+      this.voiceAgentClient.deleteContent(instituteId, courseId, contentId)
+        .catch((err) => this.logger.error(`KB delete failed for content ${contentId}: ${err}`));
+    }
+
     return { message: 'Content deleted successfully' };
   }
 

@@ -50,6 +50,18 @@ QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 QDRANT_COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME", "dp_instructions_kb")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
 
+# ── MinIO ────────────────────────────────────────────────────────────
+MINIO_URL = os.getenv("MINIO_URL", "http://localhost:9000")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "")
+
+# ── Course Knowledge Base (Qdrant) ───────────────────────────────────
+# Separate collection that stores course-specific content (PDFs, Word docs).
+# Enabled independently of the general KB so course Q&A works even when
+# the institute-level knowledge base is turned off.
+COURSE_KB_ENABLED = os.getenv("COURSE_KB_ENABLED", "true").lower() == "true"
+COURSE_KB_COLLECTION_NAME = os.getenv("COURSE_KB_COLLECTION_NAME", "course_kb")
+
 # ── Langfuse / Observability ────────────────────────────────────────
 LANGFUSE_ENABLED = os.getenv("LANGFUSE_ENABLED", "false").lower() == "true"
 LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY", "")
