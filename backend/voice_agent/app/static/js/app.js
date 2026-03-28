@@ -834,7 +834,11 @@ function connectWebsocket() {
           const data = part.inlineData.data;
 
           if (mimeType && mimeType.startsWith("audio/pcm") && audioPlayerNode) {
-            audioPlayerNode.port.postMessage(base64ToArray(data));
+            // Clear buffer before playing new audio to prevent 'tik tik tik' sound
+            audioPlayerNode.port.postMessage({ command: "endOfAudio" });
+            setTimeout(() => {
+              audioPlayerNode.port.postMessage(base64ToArray(data));
+            }, 10);
           }
         }
 

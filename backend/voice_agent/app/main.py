@@ -83,27 +83,27 @@ def _print_banner() -> None:
     off = "\033[90moff\033[0m"
     flag = lambda v: on if v else off  # noqa: E731
 
-    banner = f"""\033[36m
-     _    ____ _____ ___ ____ ___  __  __
-    / \\  |  _ \\_   _|_ _/ ___/ _ \\|  \\/  |
-   / _ \\ | |_) || |  | | |  | | | | |\\/| |
-  / ___ \\|  _ < | |  | | |__| |_| | |  | |
- /_/   \\_\\_| \\_\\|_| |___\\____\\___/|_|  |_|
-\033[0m\033[1m         Voice Agent Service v0.1.0\033[0m
+        banner = f"""\033[36m
+         _____                 _    ______    _    _           _           _   
+        / ___/___  ____  _____| |  / /  _/   / \  |  _ \_   _|_ _| ___  __| |  
+        \__ \/ _ \/ __ \/ ___/ | / // /    / _ \ | |_) || |  | | / _ \/ _` |  
+     ___/ /  __/ /_/ / /   | |/ // /_   / ___ \|  _ < | |  | |  __/ (_| |  
+    /____/\___/\____/_/    |___/___/  /_/   \_\_| \_\|_| |___\___|\__,_|  
+\033[0m\033[1m         SmartEdX Voice Agent v0.1.0\033[0m
 
-  Model       : {DEMO_AGENT_MODEL}
-  Platform    : {"Vertex AI" if GOOGLE_GENAI_USE_VERTEXAI else "Gemini API"}
+    Model       : {DEMO_AGENT_MODEL}
+    Platform    : {"Vertex AI" if GOOGLE_GENAI_USE_VERTEXAI else "Gemini API"}
 
-  Transports
-    WebSocket : {flag(TRANSPORT_WEBSOCKET)}
-    SIP-WS    : {flag(TRANSPORT_SIP_WS)}
-    SIP/UDP   : {flag(SIP_ENABLED)}{f"  (port {SIP_PORT})" if SIP_ENABLED else ""}
+    Transports
+        WebSocket : {flag(TRANSPORT_WEBSOCKET)}
+        SIP-WS    : {flag(TRANSPORT_SIP_WS)}
+        SIP/UDP   : {flag(SIP_ENABLED)}{f"  (port {SIP_PORT})" if SIP_ENABLED else ""}
 
-  Features
-    Dashboard : {flag(DASHBOARD_ENABLED)}
-    Langfuse  : {flag(LANGFUSE_ENABLED)}
-    Custom Tools : {flag(CUSTOM_TOOLS_ENABLED)}
-    Knowledge Base : {flag(QDRANT_KB_ENABLED)}
+    Features
+        Dashboard : {flag(DASHBOARD_ENABLED)}
+        Langfuse  : {flag(LANGFUSE_ENABLED)}
+        Custom Tools : {flag(CUSTOM_TOOLS_ENABLED)}
+        Knowledge Base : {flag(QDRANT_KB_ENABLED)}
 """
     print(banner)
 
