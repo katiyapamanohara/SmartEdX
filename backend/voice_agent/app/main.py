@@ -1,4 +1,4 @@
-"""Articom Voice Agent Service - Real-time voice interaction platform."""
+"""Voice Agent Service - Real-time voice interaction platform."""
 
 import asyncio
 import logging

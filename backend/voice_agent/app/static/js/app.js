@@ -1,5 +1,5 @@
 /**
- * app.js: Articom Voice Agent client application.
+ * app.js: Voice Agent client application.
  */
 
 /**
@@ -7,8 +7,8 @@
  */
 
 // Connect the server with a WebSocket connection
-const userId = "articom-user";
-let sessionId = "articom-session-" + Math.random().toString(36).substring(7);
+const userId = "voice-user";
+let sessionId = "voice-session-" + Math.random().toString(36).substring(7);
 let websocket = null;
 let is_audio = false;
 let reconnectTimeoutId = null;
@@ -25,7 +25,7 @@ function hasSelectedLanguage() {
 }
 
 function resetSessionId() {
-  sessionId = "articom-session-" + Math.random().toString(36).substring(7);
+  sessionId = "voice-session-" + Math.random().toString(36).substring(7);
 }
 
 function clearPendingReconnect() {

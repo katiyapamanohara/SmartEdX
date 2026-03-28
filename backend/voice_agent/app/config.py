@@ -1,4 +1,4 @@
-"""Centralized configuration for the Articom Voice Agent Service.
+"""Centralized configuration for the Voice Agent Service.
 
 All environment variables and constants are defined here to avoid
 scattered os.getenv() calls across modules.
@@ -21,7 +21,7 @@ GOOGLE_CLOUD_PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT", "")
 GOOGLE_CLOUD_LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
 
 # ── Application ──────────────────────────────────────────────────────
-APP_NAME = "articom-voice-agent"
+APP_NAME = "voice-agent"
 LOG_FORMAT = os.getenv("LOG_FORMAT", "text")  # "json" for structured, "text" for human-readable
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
@@ -31,7 +31,7 @@ SERVER_CORE = os.getenv("SERVER_CORE", "")
 AI_CORE_URL = os.getenv("AI_CORE_URL", "http://localhost:8001")
 INSTITUTE_SERVICE_URL = os.getenv("INSTITUTE_SERVICE_URL", "http://localhost:5003")
 INSTITUTE_ID = os.getenv("INSTITUTE_ID", "")
-ARTICOM_API_KEY = os.getenv("ARTICOM_API_KEY", "")
+API_KEY = os.getenv("API_KEY", "")
 
 # ── Agent / Model ────────────────────────────────────────────────────
 DEMO_AGENT_MODEL = os.getenv("DEMO_AGENT_MODEL", "gemini-2.5-flash-native-audio-preview-12-2025")
@@ -41,8 +41,8 @@ GREETING_MESSAGE_OVERRIDE = os.getenv("GREETING_MESSAGE_OVERRIDE", "")
 
 # ── Custom Tools ─────────────────────────────────────────────────────
 CUSTOM_TOOLS_ENABLED = os.getenv("CUSTOM_TOOLS_ENABLED", "false").lower() == "true"
-ARTICOM_MANIFEST_URL = os.getenv("ARTICOM_MANIFEST_URL")
-ARTICOM_TOOLS_SECRET = os.getenv("ARTICOM_TOOLS_SECRET")
+MANIFEST_URL = os.getenv("MANIFEST_URL")
+TOOLS_SECRET = os.getenv("TOOLS_SECRET")
 
 # ── Knowledge Base (Qdrant) ──────────────────────────────────────────
 QDRANT_KB_ENABLED = os.getenv("QDRANT_KB_ENABLED", "false").lower() == "true"

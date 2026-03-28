@@ -27,7 +27,7 @@ class ADKSessionManager:
 
     Encapsulates:
     - ADK session creation
-    - Articom Core session start
+    - Core session start
     - Greeting message
     - Transcript handler init
     - Session cleanup (Langfuse reporting, Core session end, ADK teardown)
@@ -112,11 +112,11 @@ class ADKSessionManager:
                 call_id=self.call_id,
             )
             self.core_session_id = core_response.get("session_id") or core_response.get("id")
-            logger.debug(f"Started Articom Core session: {self.core_session_id}")
+            logger.debug(f"Started Core session: {self.core_session_id}")
         except requests.exceptions.HTTPError as e:
-            logger.warning(f"Articom Core session start failed (HTTP {e.response.status_code}): {e}")
+            logger.warning(f"Core session start failed (HTTP {e.response.status_code}): {e}")
         except requests.exceptions.RequestException as e:
-            logger.warning(f"Articom Core unreachable: {e}")
+            logger.warning(f"Core unreachable: {e}")
 
         latency.stop_timer("session_init", t_init, self.session_id)
         return self.live_request_queue
@@ -126,7 +126,7 @@ class ADKSessionManager:
 
         - Flushes partial transcript
         - Reports usage to Langfuse
-        - Ends Articom Core session
+        - Ends Core session
         - Deletes ADK in-memory session
         - Closes the live request queue
         """
@@ -146,14 +146,14 @@ class ADKSessionManager:
             usage_details=accumulated_usage,
         )
 
-        # End Articom Core session
+        # End Core session
         if self.core_session_id is not None:
             try:
                 final_transcript = self.transcript_handler.get_transcript()
                 end_assistant_session(session_id=self.core_session_id, history=final_transcript)
-                logger.debug(f"Ended Articom Core session: {self.core_session_id}")
+                logger.debug(f"Ended Core session: {self.core_session_id}")
             except requests.exceptions.RequestException as e:
-                logger.warning(f"Articom Core session end failed: {e}")
+                logger.warning(f"Core session end failed: {e}")
         else:
             logger.debug("Skipping Core session end — no core_session_id")
 

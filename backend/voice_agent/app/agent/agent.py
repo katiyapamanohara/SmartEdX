@@ -17,8 +17,8 @@ from app.agent.audio_clips import create_audio_clip_tool
 from app.agent.custom_tools import CustomToolHelper
 from app.agent.instructions import all_instructions
 from app.config import (
-    ARTICOM_MANIFEST_URL,
-    ARTICOM_TOOLS_SECRET,
+    MANIFEST_URL,
+    TOOLS_SECRET,
     AUDIO_CLIP_TOOL_MAP,
     APP_NAME,
     CUSTOM_TOOLS_ENABLED,
@@ -180,14 +180,14 @@ def _build_shared_tools() -> list:
     # Custom tools from manifest
     try:
         if CUSTOM_TOOLS_ENABLED:
-            if not ARTICOM_MANIFEST_URL:
-                raise ValueError("ARTICOM_MANIFEST_URL is not set")
-            if ARTICOM_TOOLS_SECRET is None:
-                raise ValueError("ARTICOM_TOOLS_SECRET is not set")
+            if not MANIFEST_URL:
+                raise ValueError("MANIFEST_URL is not set")
+            if TOOLS_SECRET is None:
+                raise ValueError("TOOLS_SECRET is not set")
             tool_helper = CustomToolHelper()
-            manifest = tool_helper.fetch_manifest(url=ARTICOM_MANIFEST_URL, secret=ARTICOM_TOOLS_SECRET)
+            manifest = tool_helper.fetch_manifest(url=MANIFEST_URL, secret=TOOLS_SECRET)
             all_custom_tools = tool_helper.create_custom_tools(
-                url=ARTICOM_MANIFEST_URL, manifest=manifest, secret=ARTICOM_TOOLS_SECRET
+                url=MANIFEST_URL, manifest=manifest, secret=TOOLS_SECRET
             )
             tools = [t for t in all_custom_tools if t.name not in AUDIO_CLIP_TOOL_MAP]
             skipped = [t.name for t in all_custom_tools if t.name in AUDIO_CLIP_TOOL_MAP]

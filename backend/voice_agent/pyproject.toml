@@ -1,12 +1,12 @@
 [project]
-name = "articom-voice-agent"
+name = "voice-agent"
 version = "0.1.0"
-description = "Articom Voice Agent Service - Real-time voice interaction platform"
+description = "Voice Agent Service - Real-time voice interaction platform"
 readme = "README.md"
 requires-python = ">=3.13"
 license = { text = "Apache-2.0" }
 authors = [
-    { name = "Articom" }
+    { name = "VoiceAgent" }
 ]
 
 dependencies = [
@@ -36,7 +36,7 @@ dev = [
 ]
 
 [project.scripts]
-articom-voice-agent = "app.cli:main"
+voice-agent = "app.cli:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -52,8 +52,8 @@ dev = [
 packages = ["app"]
 
 [tool.hatch.build.targets.wheel.shared-data]
-"app/static" = "share/articom-voice-agent/static"
-"app/.env" = "share/articom-voice-agent/.env.template"
+"app/static" = "share/voice-agent/static"
+"app/.env" = "share/voice-agent/.env.template"
 
 # ── Ruff ──────────────────────────────────────────────────────────────
 

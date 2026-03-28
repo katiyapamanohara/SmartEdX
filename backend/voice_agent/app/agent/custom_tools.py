@@ -110,7 +110,7 @@ class CustomTool:
         try:
             if self.secret:
                 signature = self._generate_signature(payload)
-                headers["x-articom-signature"] = signature
+                headers["x-signature"] = signature
         except Exception as e:
             return {"status": "error", "error_message": str(e), "error_type": "signature_error"}
 
@@ -156,7 +156,7 @@ class CustomToolHelper:
             empty_body = b""
             secret_bytes = secret.encode("utf-8")
             signature = hmac.new(key=secret_bytes, msg=empty_body, digestmod=hashlib.sha256).hexdigest()
-            headers["x-articom-signature"] = signature
+            headers["x-signature"] = signature
 
         try:
             response = requests.get(manifest_url, headers=headers, timeout=30)
