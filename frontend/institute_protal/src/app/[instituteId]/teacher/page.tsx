@@ -34,13 +34,15 @@ export default function TeacherDashboard() {
   const [enrollmentData, setEnrollmentData] = useState<number[]>(Array(12).fill(0));
   const [loading, setLoading] = useState(true);
 
+  const user = authService.getUser();
+  const firstName = user?.firstName ?? "there";
+
   useEffect(() => {
     if (!instituteId) return;
 
     (async () => {
       setLoading(true);
       try {
-        const user = authService.getUser();
         const teacherId = user?.id;
 
         const [students, allCourses, assessmentGroups, enrollment] = await Promise.all([
@@ -154,6 +156,34 @@ export default function TeacherDashboard() {
   return (
     <>
       <div className="grid grid-cols-12 gap-4 md:gap-6">
+
+        {/* ── Welcome Banner ── */}
+        <div className="col-span-12 rounded-2xl bg-linear-to-r from-brand-500 to-indigo-600 p-6 text-white flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold">Welcome back, {firstName}! 👋</h2>
+            <p className="text-sm text-white/80 mt-1">
+              {loading
+                ? "Loading your dashboard…"
+                : `You have ${metrics.courseCount} course${metrics.courseCount !== 1 ? "s" : ""} and ${metrics.assessmentCount} assessment${metrics.assessmentCount !== 1 ? "s" : ""} assigned.`}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Link
+              href={`/${instituteId}/teacher/assessments`}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-sm font-semibold transition-colors backdrop-blur-sm border border-white/25"
+            >
+              <FiAward className="w-4 h-4" />
+              Assessments
+            </Link>
+            <Link
+              href={`/${instituteId}/teacher/courses`}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-sm font-semibold transition-colors backdrop-blur-sm border border-white/25"
+            >
+              <FiBookOpen className="w-4 h-4" />
+              My Courses
+            </Link>
+          </div>
+        </div>
 
         {/* ── Metric Cards ── */}
         <div className="col-span-12">
