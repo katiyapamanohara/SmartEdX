@@ -47,6 +47,10 @@ export class Student {
   @Column({ nullable: true })
   batchNumber: string;
 
+  /** 128-d face descriptor stored as float array for identity verification */
+  @Column({ type: 'jsonb', nullable: true })
+  faceDescriptor: number[] | null;
+
   @ManyToMany(() => Course, (course) => course.students)
   @JoinTable({
     name: 'student_courses',

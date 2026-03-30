@@ -18,7 +18,27 @@ import { Request } from 'express';
 export class AiProxyController {
   constructor(private readonly aiProxyService: AiProxyService) {}
 
-  // ── File upload: quiz generation ──────────────────────────────
+  // ── JSON: quiz generation from text/description ───────────────
+  @Post('quiz/generate-from-text')
+  @ApiOperation({ summary: 'Generate quiz questions from text/description using AI' })
+  async generateQuizFromText(@Body() body: any, @Headers() headers: any) {
+    return this.aiProxyService.forwardRequest('api/quiz/generate-from-text', 'POST', body, headers);
+  }
+
+  // ── File upload: quiz generation from document ────────────────
+  @Post('quiz/generate-from-file')
+  @ApiOperation({ summary: 'Generate quiz questions from a document using AI (MCQ/essay/both)' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
+  async generateQuizFromFile(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: any,
+    @Headers() headers: any,
+  ) {
+    return this.aiProxyService.forwardFileUpload('api/quiz/generate-from-file', file, body, headers);
+  }
+
+  // ── File upload: quiz generation (legacy) ─────────────────────
   @Post('quiz/generate')
   @ApiOperation({ summary: 'Generate quiz questions from a document using AI' })
   @ApiConsumes('multipart/form-data')

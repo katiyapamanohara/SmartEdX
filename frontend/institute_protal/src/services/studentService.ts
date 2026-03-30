@@ -27,6 +27,29 @@ class StudentService {
     }
   }
 
+  async enrollFace(descriptor: number[]): Promise<{ faceEnrolled: boolean } | null> {
+    const token = authService.getToken();
+    if (!token) return null;
+    const res = await fetch(`${this.apiUrl}/api/institutes/auth/me/face`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ descriptor }),
+    });
+    if (!res.ok) return null;
+    return res.json();
+  }
+
+  async removeFace(): Promise<{ faceEnrolled: boolean } | null> {
+    const token = authService.getToken();
+    if (!token) return null;
+    const res = await fetch(`${this.apiUrl}/api/institutes/auth/me/face`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    return res.json();
+  }
+
   async updateMyProfile(data: any): Promise<any> {
     const token = authService.getToken();
     if (!token) throw new Error("No auth token");

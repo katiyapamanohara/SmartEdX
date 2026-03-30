@@ -30,6 +30,8 @@ import { MessageGateway } from './message.gateway';
 import { NotificationController } from './notification.controller';
 import { NotificationService } from './notification.service';
 import { NotificationGateway } from './notification.gateway';
+import { ExamController } from './exam.controller';
+import { ExamService } from './exam.service';
 import { LiveClassController } from './live-class.controller';
 import { LiveClassService } from './live-class.service';
 import { LiveGateway } from './live.gateway';
@@ -51,7 +53,7 @@ import { LiveGateway } from './live.gateway';
       inject: [ConfigService],
     }),
   ],
-  controllers: [AuthController, InstituteUserController, CourseController, CourseModuleController, ModuleContentController, RecordingController, MessageController, NotificationController, LiveClassController],
+  controllers: [AuthController, InstituteUserController, CourseController, CourseModuleController, ModuleContentController, RecordingController, MessageController, NotificationController, ExamController, LiveClassController],
   providers: [
     AuthService,
     CourseService,
@@ -62,6 +64,7 @@ import { LiveGateway } from './live.gateway';
     MessageGateway,
     NotificationService,
     NotificationGateway,
+    ExamService,
     LiveClassService,
     LiveGateway,
     JwtStrategy,
