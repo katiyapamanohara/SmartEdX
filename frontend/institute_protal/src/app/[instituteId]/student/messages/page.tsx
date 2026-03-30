@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { ChatIcon, PaperPlaneIcon } from "@/icons";
 import { messageService, MessageContact, Message } from "@/services/messageService";
 import { authService } from "@/services/authService";
@@ -103,6 +103,8 @@ function Avatar({ name, picture, size = 9 }: { name: string; picture?: string; s
 export default function StudentMessagesPage() {
   const params = useParams();
   const instituteId = params.instituteId as string;
+  const searchParams = useSearchParams();
+  const contactParam = searchParams.get("contact");
 
   const [contacts, setContacts] = useState<MessageContact[]>([]);
   const [selectedContact, setSelectedContact] = useState<MessageContact | null>(null);
@@ -140,6 +142,14 @@ export default function StudentMessagesPage() {
       setLoadingContacts(false);
     });
   }, [instituteId]);
+
+  // Auto-select contact from ?contact= query param (e.g. from notification click)
+  useEffect(() => {
+    if (!contactParam || contacts.length === 0 || selectedContact) return;
+    const target = contacts.find((c) => c.id === contactParam);
+    if (target) handleSelectContact(target);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contactParam, contacts]);
 
   // WebSocket: handle incoming messages
   const handleNewMessage = useCallback(

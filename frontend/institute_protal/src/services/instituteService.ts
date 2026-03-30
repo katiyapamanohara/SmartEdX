@@ -825,6 +825,38 @@ class InstituteService {
     }
   }
 
+  async getMonthlyStudentEnrollment(instituteId: string, year?: number): Promise<number[]> {
+    const token = authService.getToken();
+    if (!token) return Array(12).fill(0);
+    const y = year ?? new Date().getFullYear();
+    try {
+      const response = await fetch(
+        `${this.apiUrl}/api/institutes/auth/institutes/${instituteId}/enrollment-stats?year=${y}`,
+        { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } },
+      );
+      if (!response.ok) return Array(12).fill(0);
+      const data = await response.json();
+      return data.data ?? Array(12).fill(0);
+    } catch {
+      return Array(12).fill(0);
+    }
+  }
+
+  async getMyTeacherAssessments(instituteId: string): Promise<any[]> {
+    const token = authService.getToken();
+    if (!token) return [];
+    try {
+      const response = await fetch(
+        `${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/my-assessments`,
+        { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } },
+      );
+      if (!response.ok) return [];
+      return await response.json();
+    } catch {
+      return [];
+    }
+  }
+
   async getTeacherCount(instituteId: string): Promise<number> {
     const token = authService.getToken();
     if (!token) return 0;

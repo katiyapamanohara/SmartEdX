@@ -13,6 +13,7 @@ import { Recording } from '../../../modules/auth/entities/recording.entity';
 import { RecordingCategory } from '../../../modules/auth/entities/recording-category.entity';
 import { RecordingCourseAssignment } from '../../../modules/auth/entities/recording-course-assignment.entity';
 import { Message } from '../../../modules/auth/entities/message.entity';
+import { Notification } from '../../../modules/auth/entities/notification.entity';
 import { LiveSession } from '../../../modules/auth/entities/live-session.entity';
 import { LiveParticipant } from '../../../modules/auth/entities/live-participant.entity';
 
@@ -28,6 +29,7 @@ import { RecordingRepository } from './recording.repository';
 import { RecordingCategoryRepository } from './recording-category.repository';
 import { RecordingCourseAssignmentRepository } from './recording-course-assignment.repository';
 import { MessageRepository } from './message.repository';
+import { NotificationRepository } from './notification.repository';
 import { LiveSessionRepository } from './live-session.repository';
 import { LiveParticipantRepository } from './live-participant.repository';
 
@@ -42,6 +44,7 @@ import { LiveParticipantRepository } from './live-participant.repository';
       Course, CourseModule, ModuleContent,
       Recording, RecordingCategory, RecordingCourseAssignment,
       Message,
+      Notification,
       LiveSession,
       LiveParticipant,
     ]),
@@ -52,6 +55,7 @@ import { LiveParticipantRepository } from './live-participant.repository';
     CourseModuleRepository, ModuleContentRepository,
     RecordingRepository, RecordingCategoryRepository, RecordingCourseAssignmentRepository,
     MessageRepository,
+    NotificationRepository,
     LiveSessionRepository,
     LiveParticipantRepository,
   ],
@@ -61,6 +65,7 @@ import { LiveParticipantRepository } from './live-participant.repository';
     CourseModuleRepository, ModuleContentRepository,
     RecordingRepository, RecordingCategoryRepository, RecordingCourseAssignmentRepository,
     MessageRepository,
+    NotificationRepository,
     LiveSessionRepository,
     LiveParticipantRepository,
   ],

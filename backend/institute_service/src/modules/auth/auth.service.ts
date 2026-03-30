@@ -712,4 +712,9 @@ export class AuthService {
     const count = await this.teacherRepository.countByInstituteId(instituteId);
     return { count };
   }
+
+  async getMonthlyStudentEnrollment(instituteId: string, year: number): Promise<{ year: number; data: number[] }> {
+    const data = await this.instituteUserRepository.getMonthlyStudentEnrollment(instituteId, year);
+    return { year, data };
+  }
 }
