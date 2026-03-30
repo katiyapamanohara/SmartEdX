@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { authService } from "@/services/authService";
 import { instituteService } from "@/services/instituteService";
+import TeacherVoiceAgent from "@/components/teacher/TeacherVoiceAgent";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -46,11 +47,193 @@ export default function TeacherFloatingAiChat({ instituteId }: TeacherFloatingAi
   const [loading, setLoading]             = useState(false);
   const [contextLoaded, setContextLoaded] = useState(false);
   const [pendingFile, setPendingFile]     = useState<File | null>(null);
+  const [isRecording, setIsRecording]       = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [hasMicSupport, setHasMicSupport]   = useState(false);
+  const [voiceError, setVoiceError]         = useState<string | null>(null);
+  const [voiceAgentOpen, setVoiceAgentOpen] = useState(false);
 
-  const bottomRef   = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const bottomRef        = useRef<HTMLDivElement>(null);
+  const textareaRef      = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef     = useRef<HTMLInputElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef   = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef   = useRef<Blob[]>([]);
+  // Tracks the committed final text so interim results can be appended cleanly
+  const finalTranscriptRef = useRef("");
+  // Set to false when the user explicitly stops — prevents onend from restarting
+  const keepRecordingRef = useRef(false);
+
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+  // ── Voice support check (client-only) ────────────────────────────────────
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const _w = window as any;
+    const hasSpeech = !!(_w.SpeechRecognition ?? _w.webkitSpeechRecognition);
+    const hasMic = !!("mediaDevices" in navigator && "MediaRecorder" in window);
+    setHasMicSupport(hasSpeech || hasMic);
+  }, []);
+
+  const startMediaRecorder = useCallback(async () => {
+    setVoiceError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/ogg";
+      const ext = mimeType === "audio/webm" ? "webm" : "ogg";
+      const recorder = new MediaRecorder(stream, { mimeType });
+      audioChunksRef.current = [];
+
+      // Prevent overlapping transcription requests
+      let busy = false;
+
+      const transcribe = async (blob: Blob, isFinal: boolean) => {
+        if (busy && !isFinal) return;
+        busy = true;
+        setIsTranscribing(true);
+        try {
+          const token = authService.getToken();
+          const formData = new FormData();
+          formData.append("audio", blob, `recording.${ext}`);
+
+          const res = await fetch(`${apiUrl}/api/ai/transcribe`, {
+            method: "POST",
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            body: formData,
+          });
+          if (res.ok) {
+            const { transcript } = await res.json() as { transcript: string };
+            // Always replace with the latest full transcript (accumulated audio)
+            if (transcript) setInput(transcript);
+          } else {
+            const body = await res.json().catch(() => ({}));
+            const msg = body?.detail || body?.message || "Transcription failed";
+            console.error("Transcription API error:", msg);
+            if (isFinal) setVoiceError(msg);
+          }
+        } catch (err) {
+          console.error("Transcription fetch error:", err);
+          if (isFinal) setVoiceError("Could not reach transcription service.");
+        } finally {
+          busy = false;
+          setIsTranscribing(false);
+          if (isFinal) textareaRef.current?.focus();
+        }
+      };
+
+      // Fires every 3 s while recording — sends full accumulated audio for live updates
+      recorder.ondataavailable = async (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+          const fullBlob = new Blob(audioChunksRef.current, { type: mimeType });
+          await transcribe(fullBlob, false);
+        }
+      };
+
+      // Final pass when user stops recording
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        if (audioChunksRef.current.length > 0) {
+          const finalBlob = new Blob(audioChunksRef.current, { type: mimeType });
+          audioChunksRef.current = [];
+          await transcribe(finalBlob, true);
+        }
+      };
+
+      mediaRecorderRef.current = recorder;
+      recorder.start(3000); // fire ondataavailable every 3 seconds
+      setIsRecording(true);
+    } catch (err: any) {
+      setIsRecording(false);
+      const msg = err?.name === "NotAllowedError"
+        ? "Microphone access denied. Allow mic in browser settings."
+        : "Could not access microphone.";
+      console.error("MediaRecorder error:", err);
+      setVoiceError(msg);
+    }
+  }, [apiUrl]);
+
+  const toggleRecording = useCallback(async () => {
+    if (!hasMicSupport) return;
+
+    // ── Stop ──────────────────────────────────────────────────────────────
+    if (isRecording) {
+      keepRecordingRef.current = false;
+      recognitionRef.current?.stop();
+      mediaRecorderRef.current?.stop();
+      setIsRecording(false);
+      return;
+    }
+
+    // ── Try Web Speech API first (live interim results) ───────────────────
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any;
+    const SpeechAPI: (new () => any) | undefined = w.SpeechRecognition ?? w.webkitSpeechRecognition;
+
+    if (SpeechAPI) {
+      const recognition = new SpeechAPI();
+      recognition.lang = navigator.language || "en-US";
+      recognition.interimResults = true;
+      recognition.continuous = true;
+      finalTranscriptRef.current = input;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      recognition.onresult = (e: any) => {
+        let interim = "";
+        let newFinal = finalTranscriptRef.current;
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const t = e.results[i][0].transcript;
+          if (e.results[i].isFinal) {
+            newFinal += (newFinal ? " " : "") + t.trim();
+            finalTranscriptRef.current = newFinal;
+          } else {
+            interim = t;
+          }
+        }
+        setInput(interim ? `${newFinal} ${interim}` : newFinal);
+      };
+
+      recognition.onend = () => {
+        if (keepRecordingRef.current) {
+          try { recognition.start(); } catch { /* already started */ }
+        } else {
+          setIsRecording(false);
+          recognitionRef.current = null;
+          textareaRef.current?.focus();
+        }
+      };
+
+      recognition.onerror = (e: any) => {
+        if (keepRecordingRef.current && e?.error === "no-speech") {
+          try { recognition.start(); } catch { /* already started */ }
+          return;
+        }
+        keepRecordingRef.current = false;
+        setIsRecording(false);
+        recognitionRef.current = null;
+
+        if (e?.error === "network") {
+          // Browser Speech API is blocked — silently switch to backend STT
+          startMediaRecorder();
+        } else if (e?.error === "not-allowed") {
+          setVoiceError("Microphone access denied. Allow mic in browser settings.");
+        } else if (e?.error) {
+          setVoiceError(`Voice error: ${e.error}`);
+        }
+      };
+
+      setVoiceError(null);
+      keepRecordingRef.current = true;
+      recognitionRef.current = recognition;
+      recognition.start();
+      setIsRecording(true);
+      return;
+    }
+
+    // ── No Speech API — go straight to backend STT ────────────────────────
+    await startMediaRecorder();
+  }, [hasMicSupport, isRecording, input, startMediaRecorder]);
 
   // ── Load teacher context once ─────────────────────────────────────────────
   useEffect(() => {
@@ -115,6 +298,22 @@ export default function TeacherFloatingAiChat({ instituteId }: TeacherFloatingAi
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
+  }, []);
+
+  // ── Stop recording when chat closes or component unmounts ─────────────────
+  useEffect(() => {
+    if (!open && isRecording) {
+      mediaRecorderRef.current?.stop();
+      setIsRecording(false);
+    }
+  }, [open, isRecording]);
+
+  useEffect(() => {
+    return () => {
+      keepRecordingRef.current = false;
+      recognitionRef.current?.stop();
+      mediaRecorderRef.current?.stop();
+    };
   }, []);
 
   // ── Send message ──────────────────────────────────────────────────────────
@@ -229,6 +428,15 @@ export default function TeacherFloatingAiChat({ instituteId }: TeacherFloatingAi
                 Live
               </span>
               <button
+                onClick={() => setVoiceAgentOpen(true)}
+                title="Open Voice Agent"
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+              </button>
+              <button
                 onClick={() => setOpen(false)}
                 className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
               >
@@ -321,13 +529,33 @@ export default function TeacherFloatingAiChat({ instituteId }: TeacherFloatingAi
                 </svg>
               </button>
 
+              {/* Voice input button */}
+              {hasMicSupport && (
+                <button
+                  onClick={toggleRecording}
+                  disabled={loading || isTranscribing}
+                  title={isRecording ? "Stop recording" : isTranscribing ? "Transcribing…" : "Voice input"}
+                  className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-colors disabled:opacity-40 ${
+                    isRecording
+                      ? "text-red-500 bg-red-50 dark:bg-red-500/10 animate-pulse"
+                      : isTranscribing
+                      ? "text-violet-500 bg-violet-50 dark:bg-violet-500/10 animate-spin"
+                      : "text-gray-400 hover:text-violet-500 hover:bg-violet-50 dark:hover:bg-violet-500/10"
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+                  </svg>
+                </button>
+              )}
+
               <textarea
                 ref={textareaRef}
                 rows={1}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => { setInput(e.target.value); setVoiceError(null); }}
                 onKeyDown={handleKeyDown}
-                placeholder={pendingFile ? `Ask about ${pendingFile.name}…` : "Ask anything — lesson plans, students, quizzes…"}
+                placeholder={isTranscribing ? "Transcribing…" : isRecording ? "Listening…" : pendingFile ? `Ask about ${pendingFile.name}…` : "Ask anything — lesson plans, students, quizzes…"}
                 disabled={loading}
                 className="flex-1 resize-none bg-transparent text-sm text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 outline-none leading-relaxed disabled:opacity-50"
               />
@@ -341,12 +569,25 @@ export default function TeacherFloatingAiChat({ instituteId }: TeacherFloatingAi
                 </svg>
               </button>
             </div>
-            <p className="mt-1.5 text-center text-[10px] text-gray-400 dark:text-gray-600">
-              Enter to send · Shift+Enter for new line · Esc to close · Upload PDF/DOCX with the clip icon
-            </p>
+            {voiceError && (
+              <p className="mt-1.5 text-center text-[10px] text-red-500 dark:text-red-400">
+                {voiceError}
+              </p>
+            )}
+            {!voiceError && (
+              <p className="mt-1.5 text-center text-[10px] text-gray-400 dark:text-gray-600">
+                Enter to send · Shift+Enter for new line · Esc to close · Mic for voice input
+              </p>
+            )}
           </div>
         </div>
       </div>
+
+      <TeacherVoiceAgent
+        isOpen={voiceAgentOpen}
+        onClose={() => setVoiceAgentOpen(false)}
+        instituteId={instituteId}
+      />
 
       {/* ── Floating button ──────────────────────────────────────────────────── */}
       {!open && (

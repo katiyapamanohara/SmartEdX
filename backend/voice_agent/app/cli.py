@@ -135,13 +135,17 @@ def main(argv: list[str] | None = None) -> None:
     print(f"  Level : {args.log_level}")
     print()
 
+    # --reload and workers > 1 are mutually exclusive in uvicorn
+    workers = 1 if args.reload else args.workers
+
     uvicorn.run(
         "app.main:app",
         host=args.host,
         port=args.port,
         log_level=args.log_level,
         reload=args.reload,
-        workers=args.workers,
+        reload_dirs=["app"] if args.reload else None,
+        workers=workers,
     )
 
 

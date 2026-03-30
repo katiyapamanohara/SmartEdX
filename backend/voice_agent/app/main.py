@@ -17,7 +17,7 @@ from google.adk.sessions import InMemorySessionService
 # Load environment variables BEFORE importing agent (needs config at import time)
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-from app.agent import get_runner_for_course, get_runner_for_institute, search_knowledgebase  # noqa: E402
+from app.agent import get_runner_for_course, get_runner_for_institute, get_runner_for_teacher, search_knowledgebase  # noqa: E402
 from app.config import (  # noqa: E402
     APP_NAME,
     COURSE_KB_ENABLED,
@@ -320,6 +320,32 @@ else:
 # Query params:
 #   course_name (str) – human-readable course name for the system prompt
 #   language    (str, optional) – language hint passed to the session
+
+@app.websocket("/ws/teacher/{institute_id}/{teacher_id}/{session_id}")
+async def teacher_ws_endpoint(
+    websocket: WebSocket,
+    institute_id: str,
+    teacher_id: str,
+    session_id: str,
+    language: Optional[str] = None,
+) -> None:
+    """Teacher voice assistant — searches course materials in Qdrant."""
+    teacher_runner, _ = get_runner_for_teacher(
+        institute_id=institute_id,
+        teacher_id=teacher_id,
+        session_service=session_service,
+    )
+    await websocket_endpoint(
+        websocket=websocket,
+        institute_id=institute_id,
+        user_id=teacher_id,
+        session_id=session_id,
+        session_service=session_service,
+        transcript_store=transcript_store,
+        runner=teacher_runner,
+        language=language,
+    )
+
 
 @app.websocket("/ws/course-qa/{institute_id}/{course_id}/{user_id}/{session_id}")
 async def course_qa_ws_endpoint(

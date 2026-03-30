@@ -172,6 +172,7 @@ export default function TeacherDashboard() {
 
     </div>
       <TeacherFloatingAiChat instituteId={instituteId} />
+
     </>
   );
 }
