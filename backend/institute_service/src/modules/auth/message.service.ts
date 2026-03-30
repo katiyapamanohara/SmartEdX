@@ -1,16 +1,21 @@
 import { Injectable, ForbiddenException, Inject, forwardRef } from '@nestjs/common';
 import { MessageRepository } from '../../infra/database/repositories/message.repository';
 import { CourseRepository } from '../../infra/database/repositories/course.repository';
+import { InstituteUserRepository } from '../../infra/database/repositories/institute-user.repository';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { MessageGateway } from './message.gateway';
+import { NotificationService } from './notification.service';
 
 @Injectable()
 export class MessageService {
   constructor(
     private readonly messageRepository: MessageRepository,
     private readonly courseRepository: CourseRepository,
+    private readonly instituteUserRepository: InstituteUserRepository,
     @Inject(forwardRef(() => MessageGateway))
     private readonly messageGateway: MessageGateway,
+    @Inject(forwardRef(() => NotificationService))
+    private readonly notificationService: NotificationService,
   ) {}
 
   /**
@@ -139,6 +144,20 @@ export class MessageService {
     this.messageGateway.emitNewMessage(dto.recipientId, { ...payload, isMine: false });
     // Confirm delivery to sender for multi-tab sync
     this.messageGateway.emitMessageSent(senderId, { ...payload, isMine: true });
+
+    // Create a notification for the recipient
+    const sender = await this.instituteUserRepository.findById(senderId);
+    const senderName = sender
+      ? `${sender.firstName ?? ''} ${sender.lastName ?? ''}`.trim() || sender.email
+      : 'Someone';
+    await this.notificationService.notifyNewMessage(
+      dto.recipientId,
+      instituteId,
+      senderName,
+      message.content,
+      senderId,
+      message.id,
+    );
 
     return {
       id: message.id,

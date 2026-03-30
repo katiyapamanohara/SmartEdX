@@ -37,6 +37,7 @@ dev = [
     "pytest-cov>=5.0.0",
     "ruff>=0.8.0",
     "pre-commit>=4.0.0",
+    "watchfiles>=0.21.0",
 ]
 
 [project.scripts]
@@ -50,6 +51,7 @@ build-backend = "hatchling.build"
 dev = [
     "ruff>=0.8.0",
     "pre-commit>=4.0.0",
+    "watchfiles>=1.1.1",
 ]
 
 [tool.hatch.build.targets.wheel]

@@ -183,6 +183,25 @@ export class AuthController {
     return this.authService.getTeacherCount(id);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('institutes/:id/enrollment-stats')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get monthly student enrollment counts for a given year' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiQuery({ name: 'year', required: false, description: 'Year (defaults to current year)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns 12-element array of enrollment counts per month',
+    schema: { example: { year: 2025, data: [5, 3, 8, 12, 7, 4, 9, 11, 6, 3, 2, 0] } },
+  })
+  async getEnrollmentStats(
+    @Param('id') id: string,
+    @Query('year') year?: string,
+  ) {
+    const y = year ? parseInt(year, 10) : new Date().getFullYear();
+    return this.authService.getMonthlyStudentEnrollment(id, y);
+  }
+
 
 
 

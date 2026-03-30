@@ -645,12 +645,7 @@ export default function TeacherAssessmentsPage() {
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Quizzes across your assigned courses</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setVoiceOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white text-sm font-medium rounded-lg transition-all shadow-sm shadow-purple-500/25"
-          >
-            <FiMic className="w-4 h-4" /> Voice Assessment
-          </button>
+         
           <button
             onClick={() => setCreateOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"

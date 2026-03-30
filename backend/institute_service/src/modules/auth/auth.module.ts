@@ -27,6 +27,9 @@ import { RecordingService } from './recording.service';
 import { MessageController } from './message.controller';
 import { MessageService } from './message.service';
 import { MessageGateway } from './message.gateway';
+import { NotificationController } from './notification.controller';
+import { NotificationService } from './notification.service';
+import { NotificationGateway } from './notification.gateway';
 import { LiveClassController } from './live-class.controller';
 import { LiveClassService } from './live-class.service';
 import { LiveGateway } from './live.gateway';
@@ -48,7 +51,7 @@ import { LiveGateway } from './live.gateway';
       inject: [ConfigService],
     }),
   ],
-  controllers: [AuthController, InstituteUserController, CourseController, CourseModuleController, ModuleContentController, RecordingController, MessageController, LiveClassController],
+  controllers: [AuthController, InstituteUserController, CourseController, CourseModuleController, ModuleContentController, RecordingController, MessageController, NotificationController, LiveClassController],
   providers: [
     AuthService,
     CourseService,
@@ -57,6 +60,8 @@ import { LiveGateway } from './live.gateway';
     RecordingService,
     MessageService,
     MessageGateway,
+    NotificationService,
+    NotificationGateway,
     LiveClassService,
     LiveGateway,
     JwtStrategy,

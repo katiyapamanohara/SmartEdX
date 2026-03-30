@@ -275,6 +275,54 @@ export class AiProxyService {
     }
   }
 
+  async forwardAudioTranscription(
+    path: string,
+    audio: Express.Multer.File,
+    headers?: any,
+  ): Promise<any> {
+    const url = `${this.aiCoreUrl}/${path}`;
+    this.logger.log(`Forwarding audio transcription to ${url}`);
+
+    const formData = new FormData();
+    formData.append('audio', audio.buffer, {
+      filename: audio.originalname,
+      contentType: audio.mimetype,
+      knownLength: audio.size,
+    });
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.request({
+          method: 'POST',
+          url,
+          data: formData,
+          headers: {
+            ...formData.getHeaders(),
+            ...(headers?.authorization ? { authorization: headers.authorization } : {}),
+          },
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
+          validateStatus: (status) => status < 500,
+          timeout: 60_000,
+        }),
+      );
+
+      if (response.status >= 400) {
+        throw new HttpException(response.data, response.status);
+      }
+
+      return response.data;
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      if (error.response) {
+        this.logger.error(`Transcription error: ${error.response.status} - ${JSON.stringify(error.response.data)}`);
+        throw new HttpException(error.response.data, error.response.status);
+      }
+      this.logger.error(`Error forwarding audio transcription to ${url}: ${error.message}`);
+      throw error;
+    }
+  }
+
   private filterHeaders(headers: any): any {
     const allowed = ['authorization', 'content-type', 'accept', 'user-agent'];
     return Object.keys(headers).reduce((acc, key) => {

@@ -473,9 +473,113 @@ def get_runner_for_course(
     return _course_qa_cache[cache_key]
 
 
+# ── Per-teacher agent cache ───────────────────────────────────────────────────
+# Teachers get a voice agent that can search across course materials in Qdrant.
+
+_teacher_cache: dict[str, tuple[Runner, str]] = {}  # "{institute_id}:{teacher_id}" -> (runner, greeting)
+_teacher_lock = threading.Lock()
+
+
+def get_runner_for_teacher(
+    institute_id: str,
+    teacher_id: str,
+    session_service: InMemorySessionService,
+) -> tuple[Runner, str]:
+    """Return a cached (Runner, greeting) for the teacher voice assistant.
+
+    The agent can search course materials indexed in Qdrant for any course
+    that belongs to the institute, making it useful for lesson planning,
+    curriculum questions, and content queries.
+    """
+    cache_key = f"{institute_id}:{teacher_id}"
+
+    with _teacher_lock:
+        if cache_key in _teacher_cache:
+            return _teacher_cache[cache_key]
+
+    logger.info(f"Building teacher agent for institute={institute_id} teacher={teacher_id}")
+
+    def search_course_material(query: str, course_id: str = "", limit: int = 5) -> dict:
+        """Search course materials stored in Qdrant.
+
+        Use this tool whenever the teacher asks about course content, lesson topics,
+        or any information that may be in the course materials.
+
+        Args:
+            query:     Natural-language description of the information to find.
+            course_id: Optional specific course UUID to narrow the search.
+                       Leave empty to search across all indexed courses.
+            limit:     Maximum number of results to return (default 5).
+
+        Returns:
+            Matching excerpts from course materials with page references.
+        """
+        if not COURSE_KB_ENABLED:
+            return {"status": "error", "message": "Course knowledge base is not enabled."}
+        try:
+            from app.qdrant.course_kb import search_course
+
+            if course_id:
+                results = search_course(
+                    institute_id=institute_id,
+                    course_id=course_id,
+                    query=query,
+                    limit=limit,
+                )
+            else:
+                # No course_id supplied — search the general institute KB if available
+                if QDRANT_KB_ENABLED and _embedding_model is not None:
+                    return search_knowledgebase(query=query, limit=limit)
+                return {"status": "error", "message": "Please provide a course_id to search course materials."}
+
+            if not results:
+                return {"status": "no_results", "message": "No relevant information found in the course material."}
+            return {"status": "ok", "results": results}
+        except Exception as e:
+            logger.error(f"Teacher course KB search failed: {e}", exc_info=True)
+            return {"status": "error", "message": "Failed to search course material."}
+
+    system_instructions = all_instructions + (
+        "You are an AI voice assistant for teachers at SmartEdX.\n"
+        "Your role is to help teachers with course content, lesson planning, and curriculum questions.\n"
+        "- Use the search_course_material tool to look up information from course materials in Qdrant.\n"
+        "- When searching, provide a course_id if the teacher mentions a specific course.\n"
+        "- Give clear, concise answers based on the retrieved content.\n"
+        "- Cite page numbers when referencing specific material.\n"
+        "- If the answer is not in the course material, say so honestly.\n"
+        "- Be professional, supportive, and focused on helping the teacher.\n"
+        "\nCOURSE MATERIAL SEARCH: Use search_course_material before answering questions about course content."
+    )
+
+    safe_id = teacher_id.replace("-", "_")
+    teacher_agent = Agent(
+        name=f"smartedx_teacher_agent_{safe_id}",
+        model=DEMO_AGENT_MODEL,
+        tools=[
+            FunctionTool(func=search_course_material),
+            FunctionTool(func=end_call),
+        ],
+        instruction=system_instructions,
+    )
+
+    teacher_runner = Runner(
+        app_name=APP_NAME,
+        agent=teacher_agent,
+        session_service=session_service,
+    )
+
+    greeting = "Hello! I'm your AI teaching assistant. I can search your course materials and help with lesson planning. What would you like to know?"
+
+    with _teacher_lock:
+        if cache_key not in _teacher_cache:
+            _teacher_cache[cache_key] = (teacher_runner, greeting)
+    return _teacher_cache[cache_key]
+
+
 __all__ = [
     "get_runner_for_course",
     "get_runner_for_institute",
+    "get_runner_for_teacher",
     "register_call_guard",
     "search_knowledgebase",
     "unregister_call_guard",

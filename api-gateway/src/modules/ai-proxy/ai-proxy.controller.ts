@@ -101,6 +101,22 @@ export class AiProxyController {
     return this.aiProxyService.forwardTeacherChat('api/teacher-chat/message', file, body, headers);
   }
 
+  // ── Multipart: voice-to-text transcription ───────────────────
+  @Post('transcribe')
+  @ApiOperation({ summary: 'Transcribe an audio recording to text using Gemini' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('audio'))
+  async transcribeAudio(
+    @UploadedFile() audio: Express.Multer.File,
+    @Headers() headers: any,
+  ) {
+    return this.aiProxyService.forwardAudioTranscription(
+      'api/transcription/audio',
+      audio,
+      headers,
+    );
+  }
+
   // ── Catch-all for everything else (health, docs, etc.) ────────
   @All('*')
   @ApiOperation({ summary: 'Proxy all other AI Core requests' })
