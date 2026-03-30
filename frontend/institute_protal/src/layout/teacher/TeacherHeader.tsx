@@ -181,7 +181,7 @@ const TeacherHeader: React.FC = () => {
             <ThemeToggleButton />
             {/* <!-- Dark Mode Toggler --> */}
 
-           <NotificationDropdown /> 
+           <NotificationDropdown instituteId={user?.instituteId ?? ""} />
             {/* <!-- Notification Menu Area --> */}
           </div>
           {/* <!-- User Area --> */}

@@ -25,9 +25,13 @@ export default function StudentDashboard() {
   const [voicePlayerOpen, setVoicePlayerOpen] = useState(false);
   const [courseAssistantOpen, setCourseAssistantOpen] = useState(false);
 
-  const user = authService.getUser();
-  const userId = authService.getUserId();
-  const firstName = user?.firstName ?? "there";
+  const [user, setUser] = useState<ReturnType<typeof authService.getUser>>(null);
+  const userId = user?.id ?? null;
+  const firstName = user?.firstName ?? "";
+
+  useEffect(() => {
+    setUser(authService.getUser());
+  }, []);
 
   useEffect(() => {
     if (!instituteId) return;
@@ -82,7 +86,7 @@ export default function StudentDashboard() {
         {/* ── Welcome Banner ── */}
         <div className="col-span-12 rounded-2xl bg-linear-to-r from-brand-500 to-indigo-600 p-6 text-white flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-xl font-bold">Welcome back, {firstName}! 👋</h2>
+            <h2 className="text-xl font-bold">Welcome back{firstName ? `, ${firstName}` : ""}! 👋</h2>
             <p className="text-sm text-white/80 mt-1">
               {loading
                 ? "Loading your progress…"
