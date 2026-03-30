@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import { notificationService, Notification } from "@/services/notificationService";
@@ -47,14 +48,32 @@ function TypeIcon({ type }: { type: Notification["type"] }) {
   );
 }
 
+function getNotifUrl(notif: Notification, instituteId: string, role: string): string {
+  const seg =
+    role === "teacher" || role === "instructor" ? "teacher"
+    : role === "student" ? "student"
+    : "institute";
+
+  if (notif.type === "message" || notif.type === "email") {
+    const senderId = notif.metadata?.senderId;
+    const base = `/${instituteId}/${seg}/messages`;
+    return senderId ? `${base}?contact=${senderId}` : base;
+  }
+
+  // reminder → role dashboard
+  return `/${instituteId}/${seg}`;
+}
+
 interface Props {
   instituteId: string;
 }
 
 export default function NotificationDropdown({ instituteId }: Props) {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState("");
 
   const token = authService.getToken();
 
@@ -69,6 +88,11 @@ export default function NotificationDropdown({ instituteId }: Props) {
   }, [instituteId]);
 
   useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
+
+  useEffect(() => {
+    const u = authService.getUser();
+    if (u?.role) setUserRole(u.role);
+  }, []);
 
   // Real-time: prepend new notifications
   useNotificationSocket(token, (notif) => {
@@ -85,6 +109,19 @@ export default function NotificationDropdown({ instituteId }: Props) {
   };
 
   const handleClose = () => setIsOpen(false);
+
+  const handleNotifClick = async (notif: Notification) => {
+    handleClose();
+    // Mark individual as read if not yet
+    if (!notif.isRead && instituteId) {
+      notificationService.markAsRead(instituteId, notif.id);
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === notif.id ? { ...n, isRead: true } : n))
+      );
+    }
+    const url = getNotifUrl(notif, instituteId, userRole);
+    router.push(url);
+  };
 
   return (
     <div className="relative">
@@ -154,8 +191,8 @@ export default function NotificationDropdown({ instituteId }: Props) {
           {!loading && notifications.map((notif) => (
             <li key={notif.id}>
               <DropdownItem
-                onItemClick={handleClose}
-                className={`flex gap-3 rounded-lg border-b border-gray-100 px-3 py-3 hover:bg-gray-100 dark:border-gray-800 dark:hover:bg-white/5 transition-colors ${
+                onItemClick={() => handleNotifClick(notif)}
+                className={`flex gap-3 rounded-lg border-b border-gray-100 px-3 py-3 hover:bg-gray-100 dark:border-gray-800 dark:hover:bg-white/5 transition-colors cursor-pointer ${
                   !notif.isRead ? "bg-orange-50 dark:bg-orange-900/10" : ""
                 }`}
               >
