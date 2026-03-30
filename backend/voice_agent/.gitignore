@@ -4,7 +4,7 @@ __pycache__/
 *$py.class
 
 # Service account keys
-articom-dev-*.json
+voiceagent-dev-*.json
 
 # C extensions
 *.so

@@ -60,7 +60,7 @@ const ContentsPage = () => {
   const handleDeleteContent = async (contentId: string) => {
     if (confirm("Are you sure you want to delete this content?")) {
       try {
-        await instituteService.deleteModuleContent(instituteId, courseId, moduleId, contentId);
+        await instituteService.deleteTeacherContent(instituteId, courseId, moduleId, contentId);
         setContents(contents.filter((c) => c.id !== contentId));
       } catch (error) {
         console.error("Failed to delete content", error);
@@ -78,14 +78,25 @@ const ContentsPage = () => {
         );
         setContents(contents.map((c) => (c.id === editingContent.id ? updated : c)));
       } else {
+        const isFileType = rest.type === "pdf" || rest.type === "document" || rest.type === "video";
         let created;
-        if ((rest.type === "pdf" || rest.type === "document" || rest.type === "video") && pdfFile) {
-          created = await instituteService.uploadFileContent(
+        if (isFileType && pdfFile) {
+          // File selected — upload to MinIO then index into KB
+          created = await instituteService.uploadTeacherFileContent(
             instituteId, courseId, moduleId, pdfFile,
             { title: rest.title, type: rest.type, description: rest.description, order: rest.order }
           );
+        } else if (isFileType && rest.url?.trim()) {
+          // URL provided — create with URL (KB indexing triggered server-side)
+          created = await instituteService.createTeacherContent(
+            instituteId, courseId, moduleId, rest
+          );
+        } else if (isFileType) {
+          // Neither file nor URL — block submission
+          throw new Error("Please select a file to upload or enter a URL.");
         } else {
-          created = await instituteService.createModuleContent(
+          // Non-file types (quiz, link) — plain JSON create
+          created = await instituteService.createTeacherContent(
             instituteId, courseId, moduleId, rest
           );
         }

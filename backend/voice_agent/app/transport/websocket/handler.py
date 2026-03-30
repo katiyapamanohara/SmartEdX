@@ -4,7 +4,7 @@ import asyncio
 import base64
 import json
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import WebSocket, WebSocketDisconnect
 from google.adk.sessions import InMemorySessionService
@@ -34,15 +34,23 @@ async def websocket_endpoint(
     session_service: InMemorySessionService,
     transcript_store: dict,
     *,
+    runner: Optional[Any] = None,
     proactivity: bool = False,
     affective_dialog: bool = False,
     language: Optional[str] = None,
 ) -> None:
-    """WebSocket endpoint for bidirectional streaming with ADK."""
+    """WebSocket endpoint for bidirectional streaming with ADK.
+
+    Args:
+        runner: Pre-built ADK Runner.  When ``None`` (default) the institute
+                runner is resolved via ``get_runner_for_institute``.  Pass an
+                explicit runner to use a course-scoped or custom agent.
+    """
     await websocket.accept()
 
-    # Resolve runner and greeting for this institute (cached after first call)
-    runner, _ = get_runner_for_institute(institute_id, session_service)
+    # Resolve runner — callers may inject a course-specific runner
+    if runner is None:
+        runner, _ = get_runner_for_institute(institute_id, session_service)
 
     model_name = runner.agent.model
     run_config = build_run_config(model_name, proactivity=proactivity, affective_dialog=affective_dialog)
@@ -194,10 +202,32 @@ async def websocket_endpoint(
 
     async def downstream_task() -> None:
         """Receives events from run_live() and sends to WebSocket."""
+
         nonlocal first_response_recorded
-        # When an audio clip tool call is in flight, suppress model audio so the
-        # model cannot speak filler ("let me check") over or after the clip.
         suppress_model_audio = False
+
+        reminder_task = None
+        reminder_timeout_sec = 20
+
+        async def send_reminder_after_timeout():
+            try:
+                await asyncio.sleep(reminder_timeout_sec)
+                reminder_msg = json.dumps({
+                    "content": {"parts": [{"text": "Are you there? Please answer the question when you're ready."}]},
+                    "author": "system",
+                    "type": "reminder"
+                })
+                await websocket.send_text(reminder_msg)
+                logger.info(f"WS {session_id}: reminder sent to student after timeout")
+            except asyncio.CancelledError:
+                pass
+
+        def cancel_reminder():
+            nonlocal reminder_task
+            if reminder_task and not reminder_task.done():
+                reminder_task.cancel()
+            reminder_task = None
+
         try:
             async for event in runner.run_live(
                 user_id=user_id,
@@ -236,6 +266,31 @@ async def websocket_endpoint(
                 has_audio = '"inlineData"' in event_json
                 has_text = '"text"' in event_json
                 has_usage = '"usageMetadata"' in event_json
+
+
+                # --- Reminder logic ---
+                # If a question is sent (text from agent), start reminder task
+                try:
+                    evt = json.loads(event_json)
+                    author = evt.get("author")
+                    content = (evt.get("content") or {}).get("parts") or []
+                    # Detect agent question (agent text, not system or user)
+                    if author in ("agent", "bot") and any(p.get("text") for p in content):
+                        cancel_reminder()
+                        reminder_task = asyncio.create_task(send_reminder_after_timeout())
+                except Exception:
+                    pass
+
+                # If user responds, cancel reminder
+                try:
+                    evt = json.loads(event_json)
+                    author = evt.get("author")
+                    if author == "user":
+                        cancel_reminder()
+                except Exception:
+                    pass
+                # --- End reminder logic ---
+
                 if has_audio:
                     logger.info(f"WS {session_id}: sending audio event ({len(event_json)} bytes)")
                 elif has_text:

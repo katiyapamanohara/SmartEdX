@@ -753,6 +753,40 @@ class InstituteService {
     return await response.json();
   }
 
+  async uploadTeacherFileContent(
+    instituteId: string,
+    courseId: string,
+    moduleId: string,
+    file: File,
+    metadata: { title: string; type: string; description?: string; order?: number },
+  ): Promise<ModuleContent> {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token");
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("title", metadata.title);
+    formData.append("type", metadata.type);
+    if (metadata.description) formData.append("description", metadata.description);
+    if (metadata.order !== undefined) formData.append("order", String(metadata.order));
+
+    const response = await fetch(
+      `${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/${courseId}/teacher-modules/${moduleId}/contents/upload-file`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || "Failed to upload file");
+    }
+
+    return await response.json();
+  }
+
   async updateModuleContent(instituteId: string, courseId: string, moduleId: string, contentId: string, contentData: any): Promise<ModuleContent> {
     const token = authService.getToken();
     if (!token) throw new Error("No auth token");
