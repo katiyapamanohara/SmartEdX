@@ -99,13 +99,7 @@ export default function StudentDashboard() {
               </svg>
               Ask AI Tutor
             </button>
-            <button
-              onClick={() => setVoicePlayerOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-sm font-semibold transition-colors backdrop-blur-sm border border-white/25"
-            >
-              <FiMic className="w-4 h-4" />
-              Voice Assessment
-            </button>
+           
           </div>
         </div>
 
