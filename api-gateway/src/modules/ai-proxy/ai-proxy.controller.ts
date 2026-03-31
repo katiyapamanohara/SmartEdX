@@ -5,6 +5,7 @@ import {
   Req,
   Body,
   Headers,
+  HttpException,
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
@@ -135,6 +136,45 @@ export class AiProxyController {
       audio,
       headers,
     );
+  }
+
+  // ── Face recognition: enroll from file upload ─────────────────
+  @Post('face/enroll')
+  @ApiOperation({ summary: 'Enroll student face — upload image and get descriptor' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
+  async enrollFace(
+    @UploadedFile() file: Express.Multer.File,
+    @Headers() headers: any,
+  ) {
+    return this.aiProxyService.forwardFaceUpload('api/face/enroll', file, headers);
+  }
+
+  // ── Face recognition: enroll from base64 webcam capture ───────
+  @Post('face/enroll-base64')
+  @ApiOperation({ summary: 'Enroll student face from base64 webcam image' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('_unused', { limits: { fieldSize: 10 * 1024 * 1024 } }))
+  async enrollFaceBase64(@Body() body: any, @Headers() headers: any) {
+    const imageB64: string | undefined = body?.image_b64;
+    if (!imageB64) {
+      throw new HttpException('image_b64 field is missing or empty', 400);
+    }
+    return this.aiProxyService.forwardFaceBase64('api/face/enroll-base64', imageB64, headers);
+  }
+
+  // ── Face recognition: compare two descriptors ─────────────────
+  @Post('face/verify')
+  @ApiOperation({ summary: 'Verify identity by comparing two face descriptors' })
+  async verifyFace(@Body() body: any, @Headers() headers: any) {
+    return this.aiProxyService.forwardFaceJson('api/face/verify', 'POST', body, headers);
+  }
+
+  // ── Face recognition: verify live image vs stored descriptor ──
+  @Post('face/verify-image')
+  @ApiOperation({ summary: 'Verify identity: stored descriptor vs live webcam image' })
+  async verifyFaceImage(@Body() body: any, @Headers() headers: any) {
+    return this.aiProxyService.forwardFaceJson('api/face/verify-image', 'POST', body, headers);
   }
 
   // ── Catch-all for everything else (health, docs, etc.) ────────

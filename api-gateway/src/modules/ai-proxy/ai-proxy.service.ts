@@ -8,6 +8,7 @@ import * as FormData from 'form-data';
 export class AiProxyService {
   private readonly logger = new Logger(AiProxyService.name);
   private readonly aiCoreUrl: string;
+  private readonly faceRecUrl: string;
 
   constructor(
     private readonly httpService: HttpService,
@@ -15,6 +16,8 @@ export class AiProxyService {
   ) {
     this.aiCoreUrl =
       this.configService.get<string>('AI_CORE_URL') || 'http://localhost:8001';
+    this.faceRecUrl =
+      this.configService.get<string>('FACE_REC_URL') || 'http://localhost:8003';
   }
 
   async forwardRequest(
@@ -319,6 +322,84 @@ export class AiProxyService {
         throw new HttpException(error.response.data, error.response.status);
       }
       this.logger.error(`Error forwarding audio transcription to ${url}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async forwardFaceBase64(path: string, imageB64: string, headers: any): Promise<any> {
+    const url = `${this.faceRecUrl}/${path}`;
+    this.logger.log(`Forwarding face base64 enrollment to ${url}`);
+    const form = new FormData();
+    form.append('image_b64', imageB64);
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(url, form, {
+          headers: {
+            ...form.getHeaders(),
+            ...(headers?.authorization ? { authorization: headers.authorization } : {}),
+          },
+          maxBodyLength: Infinity,
+          timeout: 120_000, // DeepFace model loading + inference can be slow
+          validateStatus: (s) => s < 600,
+        }),
+      );
+      if (response.status >= 400) throw new HttpException(response.data, response.status);
+      return response.data;
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      if (error.response) {
+        this.logger.error(`Face server error ${error.response.status}: ${JSON.stringify(error.response.data)}`);
+        throw new HttpException(error.response.data, error.response.status);
+      }
+      this.logger.error(`Face base64 connection error: ${error.message} — is the face server running on ${this.faceRecUrl}?`);
+      throw new HttpException({ detail: `Cannot reach face recognition server: ${error.message}` }, 502);
+    }
+  }
+
+  async forwardFaceJson(path: string, method: string, body: any, headers: any): Promise<any> {
+    const url = `${this.faceRecUrl}/${path}`;
+    this.logger.log(`Forwarding face ${method} ${url}`);
+    try {
+      const response = await firstValueFrom(
+        this.httpService.request({
+          url,
+          method,
+          data: body,
+          headers: { ...this.filterHeaders(headers), 'content-type': 'application/json' },
+          timeout: 30_000,
+          validateStatus: (s) => s < 500,
+        }),
+      );
+      if (response.status >= 400) throw new HttpException(response.data, response.status);
+      return response.data;
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      if (error.response) throw new HttpException(error.response.data, error.response.status);
+      this.logger.error(`Face proxy error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async forwardFaceUpload(path: string, file: Express.Multer.File, headers: any): Promise<any> {
+    const url = `${this.faceRecUrl}/${path}`;
+    this.logger.log(`Forwarding face upload ${url}`);
+    const form = new FormData();
+    form.append('file', file.buffer, { filename: file.originalname, contentType: file.mimetype });
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(url, form, {
+          headers: { authorization: headers.authorization, ...form.getHeaders() },
+          maxBodyLength: Infinity,
+          timeout: 30_000,
+          validateStatus: (s) => s < 500,
+        }),
+      );
+      if (response.status >= 400) throw new HttpException(response.data, response.status);
+      return response.data;
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      if (error.response) throw new HttpException(error.response.data, error.response.status);
+      this.logger.error(`Face upload proxy error: ${error.message}`);
       throw error;
     }
   }
