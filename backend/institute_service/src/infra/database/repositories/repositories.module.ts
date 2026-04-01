@@ -14,6 +14,7 @@ import { RecordingCategory } from '../../../modules/auth/entities/recording-cate
 import { RecordingCourseAssignment } from '../../../modules/auth/entities/recording-course-assignment.entity';
 import { Message } from '../../../modules/auth/entities/message.entity';
 import { Notification } from '../../../modules/auth/entities/notification.entity';
+import { Exam } from '../../../modules/auth/entities/exam.entity';
 import { LiveSession } from '../../../modules/auth/entities/live-session.entity';
 import { LiveParticipant } from '../../../modules/auth/entities/live-participant.entity';
 
@@ -30,6 +31,7 @@ import { RecordingCategoryRepository } from './recording-category.repository';
 import { RecordingCourseAssignmentRepository } from './recording-course-assignment.repository';
 import { MessageRepository } from './message.repository';
 import { NotificationRepository } from './notification.repository';
+import { ExamRepository } from './exam.repository';
 import { LiveSessionRepository } from './live-session.repository';
 import { LiveParticipantRepository } from './live-participant.repository';
 
@@ -45,6 +47,7 @@ import { LiveParticipantRepository } from './live-participant.repository';
       Recording, RecordingCategory, RecordingCourseAssignment,
       Message,
       Notification,
+      Exam,
       LiveSession,
       LiveParticipant,
     ]),
@@ -56,6 +59,7 @@ import { LiveParticipantRepository } from './live-participant.repository';
     RecordingRepository, RecordingCategoryRepository, RecordingCourseAssignmentRepository,
     MessageRepository,
     NotificationRepository,
+    ExamRepository,
     LiveSessionRepository,
     LiveParticipantRepository,
   ],
@@ -66,6 +70,7 @@ import { LiveParticipantRepository } from './live-participant.repository';
     RecordingRepository, RecordingCategoryRepository, RecordingCourseAssignmentRepository,
     MessageRepository,
     NotificationRepository,
+    ExamRepository,
     LiveSessionRepository,
     LiveParticipantRepository,
   ],

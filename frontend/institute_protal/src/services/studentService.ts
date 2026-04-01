@@ -27,6 +27,46 @@ class StudentService {
     }
   }
 
+  async enrollFaceFromBase64(imageB64: string): Promise<{ descriptor: number[]; dimensions: number } | null> {
+    const token = authService.getToken();
+    if (!token) return null;
+    const form = new FormData();
+    form.append("image_b64", imageB64);
+    const res = await fetch(`${this.apiUrl}/api/ai/face/enroll-base64`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Face extraction failed");
+    }
+    return res.json();
+  }
+
+  async enrollFace(descriptor: number[]): Promise<{ faceEnrolled: boolean } | null> {
+    const token = authService.getToken();
+    if (!token) return null;
+    const res = await fetch(`${this.apiUrl}/api/institutes/auth/me/face`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ descriptor }),
+    });
+    if (!res.ok) return null;
+    return res.json();
+  }
+
+  async removeFace(): Promise<{ faceEnrolled: boolean } | null> {
+    const token = authService.getToken();
+    if (!token) return null;
+    const res = await fetch(`${this.apiUrl}/api/institutes/auth/me/face`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    return res.json();
+  }
+
   async updateMyProfile(data: any): Promise<any> {
     const token = authService.getToken();
     if (!token) throw new Error("No auth token");

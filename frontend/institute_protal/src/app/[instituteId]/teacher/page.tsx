@@ -33,9 +33,13 @@ export default function TeacherDashboard() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [enrollmentData, setEnrollmentData] = useState<number[]>(Array(12).fill(0));
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<ReturnType<typeof authService.getUser>>(null);
 
-  const user = authService.getUser();
-  const firstName = user?.firstName ?? "there";
+  useEffect(() => {
+    setUser(authService.getUser());
+  }, []);
+
+  const firstName = user?.firstName ?? "";
 
   useEffect(() => {
     if (!instituteId) return;
@@ -160,7 +164,7 @@ export default function TeacherDashboard() {
         {/* ── Welcome Banner ── */}
         <div className="col-span-12 rounded-2xl bg-linear-to-r from-brand-500 to-indigo-600 p-6 text-white flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-xl font-bold">Welcome back, {firstName}! 👋</h2>
+            <h2 className="text-xl font-bold">Welcome back{firstName ? `, ${firstName}` : ""}! 👋</h2>
             <p className="text-sm text-white/80 mt-1">
               {loading
                 ? "Loading your dashboard…"

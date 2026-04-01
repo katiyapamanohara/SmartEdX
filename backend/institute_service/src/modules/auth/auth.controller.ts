@@ -113,6 +113,28 @@ export class AuthController {
     return this.authService.updateMyProfile(user.userId, updateDto);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Post('me/face')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Enroll face descriptor for the current student' })
+  @ApiBody({ schema: { properties: { descriptor: { type: 'array', items: { type: 'number' } } } } })
+  @ApiResponse({ status: 200, description: 'Face descriptor saved' })
+  async enrollFace(
+    @CurrentUser() user: any,
+    @Body('descriptor') descriptor: number[],
+  ) {
+    return this.authService.saveFaceDescriptor(user.userId, descriptor);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('me/face')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Remove enrolled face for the current student' })
+  @ApiResponse({ status: 200, description: 'Face descriptor removed' })
+  async removeFace(@CurrentUser() user: any) {
+    return this.authService.saveFaceDescriptor(user.userId, null);
+  }
+
   // Admin Management Endpoints
 
   @Public()

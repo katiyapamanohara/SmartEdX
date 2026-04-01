@@ -1,0 +1,26 @@
+[project]
+name = "facial-recognition-server"
+version = "1.0.0"
+description = "SmartEdX Facial Recognition Server — DeepFace-powered face enrollment and verification"
+requires-python = ">=3.12"
+dependencies = [
+    "deepface>=0.0.93",
+    "fastapi>=0.135.2",
+    "numpy>=2.4.4",
+    "opencv-python-headless>=4.13.0.92",
+    "pydantic-settings>=2.13.1",
+    "python-dotenv>=1.2.2",
+    "python-multipart>=0.0.22",
+    "tf-keras>=2.21.0",
+    "uvicorn[standard]>=0.42.0",
+]
+
+[project.scripts]
+start = "main:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = false
