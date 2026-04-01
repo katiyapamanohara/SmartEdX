@@ -1,7 +1,8 @@
-"""Agno-based quiz generation agent."""
+"""Agno-based quiz generation agent — supports MCQ, Essay, and mixed types."""
 
 from __future__ import annotations
 
+import json
 import uuid
 from typing import Literal, Optional
 
@@ -10,23 +11,58 @@ from pydantic import BaseModel, Field
 
 from config import settings
 
+QuestionType = Literal["mcq", "essay", "both"]
 
-# ─── Output schema ────────────────────────────────────────────────
+
+# ─── Output schemas ───────────────────────────────────────────────────────────
 
 
-class QuizQuestionOut(BaseModel):
+class MCQQuestionOut(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    type: Literal["mcq"] = "mcq"
     question: str
     options: list[str] = Field(..., min_length=4, max_length=4)
     correctAnswer: int = Field(..., ge=0, le=3)
     explanation: Optional[str] = None
+    marks: int = Field(default=1, ge=1)
+
+
+class EssayQuestionOut(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    type: Literal["essay"] = "essay"
+    question: str
+    sampleAnswer: Optional[str] = None   # Model answer visible to teacher only
+    marks: int = Field(default=5, ge=1)
+
+
+# Union type used by the response_model
+class UnifiedQuestion(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    type: Literal["mcq", "essay"]
+    question: str
+    # MCQ only
+    options: Optional[list[str]] = None
+    correctAnswer: Optional[int] = None
+    explanation: Optional[str] = None
+    # Essay only
+    sampleAnswer: Optional[str] = None
+    marks: int = Field(default=1, ge=1)
+
+
+class UnifiedQuizOut(BaseModel):
+    questions: list[UnifiedQuestion]
+
+
+# Keep backwards-compatible alias for existing consumers
+class QuizQuestionOut(MCQQuestionOut):
+    pass
 
 
 class QuizOut(BaseModel):
-    questions: list[QuizQuestionOut]
+    questions: list[MCQQuestionOut]
 
 
-# ─── Agent factory ────────────────────────────────────────────────
+# ─── Model factory ────────────────────────────────────────────────────────────
 
 
 def _make_model():
@@ -42,30 +78,69 @@ def _make_model():
     return Claude(id=settings.MODEL_ID, api_key=settings.ANTHROPIC_API_KEY)
 
 
-def _build_agent() -> Agent:
+# ─── Agent builders ───────────────────────────────────────────────────────────
+
+
+def _build_mcq_agent() -> Agent:
     return Agent(
         model=_make_model(),
         description=(
             "You are an expert educational quiz creator. "
-            "When given document content, you generate high-quality multiple-choice quiz questions "
-            "that test understanding of the key concepts."
+            "Generate high-quality multiple-choice questions that test deep understanding."
         ),
         instructions=[
-            "Read the provided document content carefully.",
-            "Generate exactly the requested number of multiple-choice questions.",
-            "Each question must have EXACTLY 4 answer options (A, B, C, D).",
+            "Generate exactly the requested number of MCQ questions.",
+            "Each question must have EXACTLY 4 answer options.",
             "correctAnswer is the 0-based index of the correct option (0=A, 1=B, 2=C, 3=D).",
-            "Vary question difficulty according to the requested level.",
-            "Questions should test understanding, not just memorisation.",
-            "Provide a brief explanation for the correct answer.",
-            "Return ONLY valid JSON matching the QuizOut schema.",
+            "Vary difficulty according to the requested level.",
+            "Provide a concise explanation for the correct answer.",
+            "Set marks = 1 for easy, 2 for medium, 3 for hard.",
+            "Return ONLY valid JSON matching the UnifiedQuizOut schema.",
         ],
-        response_model=QuizOut,
+        response_model=UnifiedQuizOut,
         structured_outputs=True,
     )
 
 
-# ─── Public API ───────────────────────────────────────────────────
+def _build_essay_agent() -> Agent:
+    return Agent(
+        model=_make_model(),
+        description=(
+            "You are an expert educator creating open-ended essay exam questions. "
+            "Generate thought-provoking questions that require detailed written responses."
+        ),
+        instructions=[
+            "Generate exactly the requested number of essay questions.",
+            "Set type = 'essay' for every question.",
+            "options, correctAnswer, and explanation must be null/omitted.",
+            "Provide a sampleAnswer: a concise model answer (2-5 sentences) the teacher can use as a guide.",
+            "Set marks based on difficulty: easy=3, medium=5, hard=10.",
+            "Return ONLY valid JSON matching the UnifiedQuizOut schema.",
+        ],
+        response_model=UnifiedQuizOut,
+        structured_outputs=True,
+    )
+
+
+def _build_mixed_agent() -> Agent:
+    return Agent(
+        model=_make_model(),
+        description=(
+            "You are an expert educator creating a mixed exam with both MCQ and essay questions."
+        ),
+        instructions=[
+            "Generate the requested number of questions, split roughly 60% MCQ and 40% essay.",
+            "For MCQ questions: set type='mcq', include 4 options, correctAnswer (0-3), explanation.",
+            "For essay questions: set type='essay', include sampleAnswer, leave options/correctAnswer null.",
+            "Set marks: MCQ easy=1/medium=2/hard=3, Essay easy=3/medium=5/hard=10.",
+            "Return ONLY valid JSON matching the UnifiedQuizOut schema.",
+        ],
+        response_model=UnifiedQuizOut,
+        structured_outputs=True,
+    )
+
+
+# ─── Public API ───────────────────────────────────────────────────────────────
 
 
 async def generate_quiz(
@@ -73,25 +148,56 @@ async def generate_quiz(
     num_questions: int = 5,
     difficulty: Literal["easy", "medium", "hard"] = "medium",
 ) -> QuizOut:
-    """Generate quiz questions from extracted document text."""
+    """Legacy: generate MCQ-only quiz from document text (backwards compatible)."""
+    result = await generate_questions(text, num_questions, difficulty, "mcq")
+    # Convert to legacy QuizOut
+    mcq_qs = []
+    for q in result.questions:
+        mcq_qs.append(MCQQuestionOut(
+            id=q.id,
+            type="mcq",
+            question=q.question,
+            options=q.options or ["", "", "", ""],
+            correctAnswer=q.correctAnswer or 0,
+            explanation=q.explanation,
+            marks=q.marks,
+        ))
+    return QuizOut(questions=mcq_qs)
 
-    agent = _build_agent()
+
+async def generate_questions(
+    text: str,
+    num_questions: int = 5,
+    difficulty: Literal["easy", "medium", "hard"] = "medium",
+    question_type: QuestionType = "mcq",
+) -> UnifiedQuizOut:
+    """Generate questions (MCQ, essay, or both) from any text source."""
+
+    agent_map = {
+        "mcq": _build_mcq_agent,
+        "essay": _build_essay_agent,
+        "both": _build_mixed_agent,
+    }
+    agent = agent_map[question_type]()
+
+    type_label = {
+        "mcq": "multiple-choice",
+        "essay": "open-ended essay",
+        "both": "mixed (MCQ and essay)",
+    }[question_type]
 
     prompt = (
-        f"Generate {num_questions} {difficulty}-difficulty multiple-choice quiz questions "
-        f"based on the following document content.\n\n"
-        f"--- DOCUMENT CONTENT START ---\n"
-        f"{text[:12000]}\n"          # cap at ~12 k chars to stay within context limits
-        f"--- DOCUMENT CONTENT END ---"
+        f"Generate {num_questions} {difficulty}-difficulty {type_label} questions "
+        f"based on the following content.\n\n"
+        f"--- CONTENT START ---\n"
+        f"{text[:12000]}\n"
+        f"--- CONTENT END ---"
     )
 
     result = await agent.arun(prompt)
 
-    # Agno returns the parsed response_model directly on result.content
-    if isinstance(result.content, QuizOut):
+    if isinstance(result.content, UnifiedQuizOut):
         return result.content
 
-    # Fallback: if raw string returned, attempt JSON parse
-    import json
     raw = result.content if isinstance(result.content, str) else str(result.content)
-    return QuizOut.model_validate(json.loads(raw))
+    return UnifiedQuizOut.model_validate(json.loads(raw))

@@ -15,6 +15,7 @@ import { RecordingCategory } from '../../modules/auth/entities/recording-categor
 import { RecordingCourseAssignment } from '../../modules/auth/entities/recording-course-assignment.entity';
 import { Message } from '../../modules/auth/entities/message.entity';
 import { Notification } from '../../modules/auth/entities/notification.entity';
+import { Exam } from '../../modules/auth/entities/exam.entity';
 import { LiveSession } from '../../modules/auth/entities/live-session.entity';
 import { LiveParticipant } from '../../modules/auth/entities/live-participant.entity';
 
@@ -35,6 +36,7 @@ import { LiveParticipant } from '../../modules/auth/entities/live-participant.en
           Recording, RecordingCategory, RecordingCourseAssignment,
           Message,
           Notification,
+          Exam,
           LiveSession, LiveParticipant,
         ],
         synchronize: true, // Auto-sync for dev

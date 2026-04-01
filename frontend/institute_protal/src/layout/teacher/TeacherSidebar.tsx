@@ -45,6 +45,11 @@ const navItems: NavItem[] = [
     path: "/teacher/assessments",
   },
   {
+    icon: <DocsIcon />,
+    name: "Exams",
+    path: "/teacher/exams",
+  },
+  {
     icon: <MdVideoLibrary className="w-6 h-6" />,
     name: "Recordings",
     path: "/teacher/recordings",

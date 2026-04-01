@@ -140,12 +140,10 @@ export class AuthService {
 
     if (user.role?.name === 'student') {
       try {
-        // Find the student record natively, using student repository
-        // Since authService doesn't have student repository injected directly, we can use the entity manager or add repository if needed.
-        // Wait, looking at the imports AuthService has TeacherRepository, not StudentRepository.
-        // Let's rely on instituteUserRepository to get the user, and we'll just return what's there. 
-        // For the full student record, we might need the StudentRepository. Let's see if we can get it or just return basic user info for now.
-        // ACTUALLY: Let's fetch Student if possible. If not injected, we'll just handle basic fields first, then fix if needed.
+        const student = await this.studentRepository.findOne({ where: { userId } });
+        if (student) {
+          return { ...result, faceEnrolled: student.faceDescriptor !== null && student.faceDescriptor !== undefined };
+        }
       } catch (e) {
         // Ignore
       }
@@ -174,6 +172,16 @@ export class AuthService {
     return result;
   }
 
+
+  async saveFaceDescriptor(userId: string, descriptor: number[] | null) {
+    const student = await this.studentRepository.findOne({ where: { userId } });
+    if (!student) {
+      throw new NotFoundException('Student record not found');
+    }
+    student.faceDescriptor = descriptor;
+    await this.studentRepository.save(student);
+    return { faceEnrolled: descriptor !== null };
+  }
 
   async firebaseLogin(firebaseLoginDto: FirebaseLoginDto) {
     try {
