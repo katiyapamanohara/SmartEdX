@@ -23,12 +23,7 @@ interface StudentContext {
   selected_course?: string;
 }
 
-const FALLBACK_SUGGESTED = [
-  { label: "📚 List modules",    text: "What modules are in this course?" },
-  { label: "🧠 Key concepts",    text: "Explain the key concepts in this course" },
-  { label: "📝 Study plan",      text: "Create a 2-week study plan for this course" },
-  { label: "📋 Practice quiz",   text: "Give me 5 practice questions from this course" },
-];
+
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -39,17 +34,34 @@ export default function AiChatPage() {
   const [courses, setCourses]               = useState<Course[]>([]);
   const [coursesLoading, setCoursesLoading] = useState(true);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
-  const [suggested, setSuggested]           = useState<{ label: string; text: string }[]>([]);
   const [context, setContext]               = useState<StudentContext>({});
+  const [instituteLogo, setInstituteLogo]   = useState<string | null>(null);
   const [messages, setMessages]           = useState<ChatMessage[]>([]);
   const [input, setInput]                 = useState("");
   const [loading, setLoading]             = useState(false);
   const [pendingFile, setPendingFile]     = useState<File | null>(null);
 
+  // voice mode
+  const [voiceMode, setVoiceMode]         = useState(false);
+  const [micMuted, setMicMuted]           = useState(false);
+  const [isListening, setIsListening]     = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState("");
+  const recognitionRef = useRef<any>(null);
+
+  const [isDark, setIsDark] = useState(false);
+
   const bottomRef    = useRef<HTMLDivElement>(null);
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+  useEffect(() => {
+    const check = () => setIsDark(document.documentElement.classList.contains("dark"));
+    check();
+    const obs = new MutationObserver(check);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
 
   // ── Load enrolled courses ─────────────────────────────────────────────────
   useEffect(() => {
@@ -63,6 +75,7 @@ export default function AiChatPage() {
           instituteService.getMyEnrolledCourses(instituteId),
         ]);
         setCourses(enrolled);
+        setInstituteLogo(institute?.logo ?? null);
         setContext({
           student_name:  user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() : undefined,
           institute_name: institute?.name,
@@ -96,23 +109,6 @@ export default function AiChatPage() {
         `What would you like to learn today?`,
     }]);
 
-    // Build suggested prompts from course modules
-    try {
-      const modules = await instituteService.getCourseModules(instituteId, course.id);
-      if (modules.length > 0) {
-        const prompts = modules.slice(0, 4).map((m) => ({
-          label: `📖 ${m.title}`,
-          text: `Explain the module "${m.title}" and its key concepts`,
-        }));
-        prompts.push({ label: "📋 Practice quiz", text: `Give me 5 practice questions covering the modules in ${course.name}` });
-        prompts.push({ label: "📝 Study plan",    text: `Create a study plan for all modules in ${course.name}` });
-        setSuggested(prompts);
-      } else {
-        setSuggested(FALLBACK_SUGGESTED);
-      }
-    } catch {
-      setSuggested(FALLBACK_SUGGESTED);
-    }
   }
 
   // ── Auto-scroll ───────────────────────────────────────────────────────────
@@ -177,6 +173,59 @@ export default function AiChatPage() {
       e.preventDefault();
       sendMessage(input, pendingFile);
     }
+  }
+
+  // ── Voice helpers ─────────────────────────────────────────────────────────
+  function startListening() {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+    const rec = new SR();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang = "en-US";
+    rec.onresult = (e: any) => {
+      let t = "";
+      for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
+      setVoiceTranscript(t);
+    };
+    rec.onend = () => setIsListening(false);
+    rec.start();
+    recognitionRef.current = rec;
+    setIsListening(true);
+  }
+
+  function stopListening() {
+    if (recognitionRef.current) {
+      recognitionRef.current.onend = null; // prevent auto-restart callbacks
+      recognitionRef.current.onresult = null;
+      try { recognitionRef.current.abort(); } catch { /* ignore */ }
+      recognitionRef.current = null;
+    }
+    setIsListening(false);
+  }
+
+  // Ensure mic is released when the component unmounts
+  useEffect(() => () => { stopListening(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function openVoiceMode() {
+    setVoiceTranscript("");
+    setMicMuted(false);
+    setVoiceMode(true);
+    startListening();
+  }
+
+  function closeVoiceMode(send = false) {
+    stopListening();
+    setVoiceMode(false);
+    if (send && voiceTranscript.trim()) {
+      sendMessage(voiceTranscript);
+      setVoiceTranscript("");
+    }
+  }
+
+  function toggleMute() {
+    if (micMuted) { setMicMuted(false); startListening(); }
+    else          { setMicMuted(true);  stopListening(); }
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -311,24 +360,10 @@ export default function AiChatPage() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Suggested prompts (only on greeting) */}
-      {messages.length <= 1 && !loading && (
-        <div className="px-6 pb-3 flex flex-wrap gap-2 shrink-0">
-          {suggested.map((p) => (
-            <button
-              key={p.text}
-              onClick={() => sendMessage(p.text)}
-              className="text-[11px] px-3 py-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors whitespace-nowrap"
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* File pending badge */}
       {pendingFile && (
-        <div className="mx-6 mb-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-brand-50 dark:bg-brand-500/10">
+        <div className="mx-6 mb-2 flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-brand-50 dark:bg-brand-500/10">
           <svg className="w-4 h-4 text-brand-500 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
           </svg>
@@ -342,20 +377,23 @@ export default function AiChatPage() {
       )}
 
       {/* Input area */}
-      <div className="px-6 pb-6 pt-3 shrink-0">
-        <div className="flex items-end gap-2 rounded-xl bg-gray-50 dark:bg-gray-800/60 px-3 py-2.5 transition-colors">
+      <div className="px-6 pb-6 pt-1 shrink-0">
+        <div className="flex items-center gap-2 rounded-full bg-white dark:bg-gray-800 shadow-md px-4 py-3">
+          {/* Hidden file input */}
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf,.docx,.txt,.csv,.md"
+            accept=".pdf,.docx,.txt,.csv,.md,.png,.jpg,.jpeg,.webp"
             onChange={handleFileChange}
             className="hidden"
           />
+
+          {/* Attachment button */}
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={loading}
-            title="Upload notes or document (PDF, DOCX, TXT)"
-            className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-brand-500 hover:bg-brand-50 dark:hover:bg-brand-500/10 transition-colors disabled:opacity-40"
+            title="Attach file"
+            className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-40"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
@@ -368,29 +406,138 @@ export default function AiChatPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={
-              pendingFile
-                ? `Ask a question about ${pendingFile.name}…`
-                : `Ask anything about ${selectedCourse.name}…`
-            }
+            placeholder={pendingFile ? `Ask about ${pendingFile.name}…` : "Ask anything..."}
             disabled={loading}
-            className="flex-1 resize-none bg-transparent text-sm text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 outline-none leading-relaxed disabled:opacity-50"
+            className="flex-1 resize-none bg-transparent text-sm text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 outline-none leading-relaxed disabled:opacity-50 max-h-[120px]"
           />
 
+          {/* Send / mic button */}
           <button
-            onClick={() => sendMessage(input, pendingFile)}
-            disabled={(!input.trim() && !pendingFile) || loading}
-            className="shrink-0 w-8 h-8 rounded-lg bg-linear-to-br from-brand-400 to-indigo-500 hover:from-brand-500 hover:to-indigo-600 disabled:from-gray-200 disabled:to-gray-200 dark:disabled:from-gray-700 dark:disabled:to-gray-700 text-white disabled:text-gray-400 flex items-center justify-center transition-all hover:scale-105 disabled:scale-100 shadow-sm"
+            onClick={() => input.trim() || pendingFile ? sendMessage(input, pendingFile) : openVoiceMode()}
+            disabled={loading}
+            className="shrink-0 w-9 h-9 rounded-full bg-gray-700 dark:bg-gray-600 hover:bg-gray-800 dark:hover:bg-gray-500 text-white flex items-center justify-center transition-all hover:scale-105 shadow-sm disabled:opacity-50"
           >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
-            </svg>
+            {input.trim() || pendingFile ? (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+              </svg>
+            )}
           </button>
         </div>
-        <p className="mt-1.5 text-center text-[10px] text-gray-400 dark:text-gray-600">
-          Enter to send · Shift+Enter for new line · Upload notes with the clip icon
+        <p className="mt-2 text-center text-[10px] text-gray-400 dark:text-gray-600">
+          This AI can make mistakes. Please verify important info.
         </p>
       </div>
+
+      {/* ── Full-screen voice overlay ─────────────────────────────────────── */}
+      {voiceMode && (
+        <div
+          className="fixed inset-0 flex flex-col items-center justify-center"
+          style={{ zIndex: 300000, background: isDark ? "#000000" : "#ffffff" }}
+        >
+          {/* ── Institute + course ── */}
+          <div className="flex flex-col items-center gap-3 mb-10">
+            {/* Logo */}
+            {instituteLogo ? (
+              <img
+                src={instituteLogo}
+                alt="logo"
+                className="w-16 h-16 rounded-2xl object-contain shadow-lg"
+                style={{ background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }}
+              />
+            ) : (
+              <div
+                className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold shadow-lg"
+                style={{
+                  background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+                  color: isDark ? "#ffffff" : "#111827",
+                }}
+              >
+                {context.institute_name?.charAt(0).toUpperCase() ?? "S"}
+              </div>
+            )}
+            {/* Institute name */}
+            <p className="text-xl font-bold tracking-tight" style={{ color: isDark ? "#ffffff" : "#111827" }}>
+              {context.institute_name || "SmartEdX"}
+            </p>
+            {/* Course pill */}
+            {selectedCourse && (
+              <span
+                className="text-sm font-medium px-4 py-1.5 rounded-full"
+                style={{
+                  background: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)",
+                  color: isDark ? "#d1d5db" : "#374151",
+                }}
+              >
+                {selectedCourse.name}
+              </span>
+            )}
+          </div>
+
+          {/* ── Orb ── */}
+          <div className="relative flex items-center justify-center mb-16">
+            {isListening && !micMuted && (
+              <>
+                <span className="absolute w-80 h-80 rounded-full bg-blue-400/15 animate-ping" style={{ animationDuration: "2s" }} />
+                <span className="absolute w-72 h-72 rounded-full bg-blue-400/20 animate-ping" style={{ animationDuration: "2.5s" }} />
+                <span className="absolute w-64 h-64 rounded-full bg-blue-300/25 animate-ping" style={{ animationDuration: "1.8s" }} />
+              </>
+            )}
+            <div
+              className="w-56 h-56 rounded-full"
+              style={{
+                background: "radial-gradient(circle at 38% 35%, #93c5fd 0%, #3b82f6 45%, #1d4ed8 80%, #1e3a8a 100%)",
+                boxShadow: "0 30px 90px rgba(59,130,246,0.5), inset 0 -12px 32px rgba(0,0,0,0.18)",
+              }}
+            />
+          </div>
+
+          {/* ── Transcript ── */}
+          <p
+            className="text-base text-center max-w-sm px-8 min-h-10 mb-12 font-medium"
+            style={{ color: micMuted ? "#9ca3af" : isDark ? "#f3f4f6" : "#111827" }}
+          >
+            {voiceTranscript || (micMuted ? "Microphone muted" : "Listening…")}
+          </p>
+
+          {/* ── Controls ── */}
+          <div className="flex items-center gap-4">
+            {/* Mute / unmute */}
+            <button
+              onClick={toggleMute}
+              className={`w-16 h-16 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95 ${isDark ? "text-white" : "text-gray-900"}`}
+              style={{ background: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)", backdropFilter: "blur(12px)" }}
+              title={micMuted ? "Unmute microphone" : "Mute microphone"}
+            >
+              {micMuted ? (
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 19L5 5M12 18.75a6 6 0 0 1-6-6v-1.5M12 18.75a6 6 0 0 0 6-6v-1.5M12 18.75v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5m3 11.25a3 3 0 0 0 3-3V4.5m0 0a3 3 0 1 0-6 0v8.25" />
+                </svg>
+              ) : (
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+                </svg>
+              )}
+            </button>
+
+            {/* Close / send */}
+            <button
+              onClick={() => closeVoiceMode(true)}
+              className={`w-16 h-16 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95 ${isDark ? "text-white" : "text-gray-900"}`}
+              style={{ background: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)", backdropFilter: "blur(12px)" }}
+              title="Send & close"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
