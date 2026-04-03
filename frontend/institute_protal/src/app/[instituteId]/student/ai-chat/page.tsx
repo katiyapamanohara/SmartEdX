@@ -176,9 +176,9 @@ export default function AiChatPage() {
   // ── Course selection screen ───────────────────────────────────────────────
   if (!selectedCourse) {
     return (
-      <div className="flex flex-col h-[calc(100vh-8rem)] max-h-[900px] rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+      <div className="flex flex-col h-[calc(100vh-8rem)] max-h-[900px] rounded-2xl bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
         {/* Header */}
-        <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-200 dark:border-gray-800 shrink-0
+        <div className="flex items-center gap-3 px-6 py-4 shrink-0
           bg-linear-to-r from-brand-50 to-indigo-50 dark:from-brand-500/5 dark:to-indigo-500/5">
           <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-linear-to-br from-brand-400 to-indigo-500 shadow-md shadow-brand-500/25">
             <BotIcon className="w-5 h-5 text-white" />
@@ -222,7 +222,7 @@ export default function AiChatPage() {
                   <button
                     key={course.id}
                     onClick={() => handleSelectCourse(course)}
-                    className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 hover:border-brand-400 hover:bg-brand-50/50 dark:hover:border-brand-500 dark:hover:bg-brand-500/5 transition-all text-left group"
+                    className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl bg-white dark:bg-gray-800/50 hover:bg-brand-50/50 dark:hover:bg-brand-500/5 transition-all text-left group"
                   >
                     {course.coverImage ? (
                       <img
@@ -259,10 +259,10 @@ export default function AiChatPage() {
 
   // ── Chat screen ───────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] max-h-[900px] rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-8rem)] max-h-[900px] rounded-2xl bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
 
       {/* Header */}
-      <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-200 dark:border-gray-800 shrink-0
+      <div className="flex items-center gap-3 px-6 py-4 shrink-0
         bg-linear-to-r from-brand-50 to-indigo-50 dark:from-brand-500/5 dark:to-indigo-500/5">
         <button
           onClick={() => { setSelectedCourse(null); setMessages([]); }}
@@ -306,7 +306,7 @@ export default function AiChatPage() {
             <button
               key={p.text}
               onClick={() => sendMessage(p.text)}
-              className="text-[11px] px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-brand-300 hover:text-brand-600 dark:hover:border-brand-500 dark:hover:text-brand-400 transition-colors whitespace-nowrap"
+              className="text-[11px] px-3 py-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors whitespace-nowrap"
             >
               {p.label}
             </button>
@@ -316,7 +316,7 @@ export default function AiChatPage() {
 
       {/* File pending badge */}
       {pendingFile && (
-        <div className="mx-6 mb-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-brand-50 dark:bg-brand-500/10 border border-brand-200 dark:border-brand-500/20">
+        <div className="mx-6 mb-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-brand-50 dark:bg-brand-500/10">
           <svg className="w-4 h-4 text-brand-500 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
           </svg>
@@ -330,8 +330,8 @@ export default function AiChatPage() {
       )}
 
       {/* Input area */}
-      <div className="px-6 pb-6 pt-3 shrink-0 border-t border-gray-100 dark:border-gray-800">
-        <div className="flex items-end gap-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 px-3 py-2.5 focus-within:border-brand-400 dark:focus-within:border-brand-600 transition-colors">
+      <div className="px-6 pb-6 pt-3 shrink-0">
+        <div className="flex items-end gap-2 rounded-xl bg-gray-50 dark:bg-gray-800/60 px-3 py-2.5 transition-colors">
           <input
             ref={fileInputRef}
             type="file"
