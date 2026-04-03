@@ -23,15 +23,11 @@ interface StudentContext {
   selected_course?: string;
 }
 
-// ─── Suggested prompts ────────────────────────────────────────────────────────
-
-const SUGGESTED = [
-  { label: "📚 Course modules",  text: "What modules are in this course?" },
-  { label: "🧠 Explain concept", text: "Explain the key concepts in this course" },
+const FALLBACK_SUGGESTED = [
+  { label: "📚 List modules",    text: "What modules are in this course?" },
+  { label: "🧠 Key concepts",    text: "Explain the key concepts in this course" },
   { label: "📝 Study plan",      text: "Create a 2-week study plan for this course" },
   { label: "📋 Practice quiz",   text: "Give me 5 practice questions from this course" },
-  { label: "🔍 Find a topic",    text: "I want to learn about a specific topic" },
-  { label: "❓ Ask a doubt",     text: "I have a doubt about something in this course" },
 ];
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -40,13 +36,11 @@ export default function AiChatPage() {
   const params = useParams();
   const instituteId = params?.instituteId as string;
 
-  // course selection state
-  const [courses, setCourses]           = useState<Course[]>([]);
+  const [courses, setCourses]               = useState<Course[]>([]);
   const [coursesLoading, setCoursesLoading] = useState(true);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
-
-  // chat state
-  const [context, setContext]             = useState<StudentContext>({});
+  const [suggested, setSuggested]           = useState<{ label: string; text: string }[]>([]);
+  const [context, setContext]               = useState<StudentContext>({});
   const [messages, setMessages]           = useState<ChatMessage[]>([]);
   const [input, setInput]                 = useState("");
   const [loading, setLoading]             = useState(false);
@@ -84,7 +78,7 @@ export default function AiChatPage() {
   }, [instituteId]);
 
   // ── Init chat after course is chosen ─────────────────────────────────────
-  function handleSelectCourse(course: Course) {
+  async function handleSelectCourse(course: Course) {
     setSelectedCourse(course);
     const ctx = { ...context, selected_course: course.name };
     setContext(ctx);
@@ -101,6 +95,24 @@ export default function AiChatPage() {
         `• ❓ Resolve any doubts — anytime!\n\n` +
         `What would you like to learn today?`,
     }]);
+
+    // Build suggested prompts from course modules
+    try {
+      const modules = await instituteService.getCourseModules(instituteId, course.id);
+      if (modules.length > 0) {
+        const prompts = modules.slice(0, 4).map((m) => ({
+          label: `📖 ${m.title}`,
+          text: `Explain the module "${m.title}" and its key concepts`,
+        }));
+        prompts.push({ label: "📋 Practice quiz", text: `Give me 5 practice questions covering the modules in ${course.name}` });
+        prompts.push({ label: "📝 Study plan",    text: `Create a study plan for all modules in ${course.name}` });
+        setSuggested(prompts);
+      } else {
+        setSuggested(FALLBACK_SUGGESTED);
+      }
+    } catch {
+      setSuggested(FALLBACK_SUGGESTED);
+    }
   }
 
   // ── Auto-scroll ───────────────────────────────────────────────────────────
@@ -302,7 +314,7 @@ export default function AiChatPage() {
       {/* Suggested prompts (only on greeting) */}
       {messages.length <= 1 && !loading && (
         <div className="px-6 pb-3 flex flex-wrap gap-2 shrink-0">
-          {SUGGESTED.map((p) => (
+          {suggested.map((p) => (
             <button
               key={p.text}
               onClick={() => sendMessage(p.text)}
