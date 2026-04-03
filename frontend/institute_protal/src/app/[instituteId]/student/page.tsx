@@ -9,7 +9,6 @@ import { instituteService, Course, StudentAssessmentGroup } from "@/services/ins
 import { authService } from "@/services/authService";
 import { BoxIconLine, ArrowUpIcon, TaskIcon } from "@/icons";
 import { FiMic, FiCheckCircle, FiClock, FiBookOpen } from "react-icons/fi";
-import StudentFloatingAiChat from "@/components/student/StudentFloatingAiChat";
 import VoiceAssessmentPlayer from "@/components/student/VoiceAssessmentPlayer";
 import CourseVoiceAssistant from "@/components/student/CourseVoiceAssistant";
 
@@ -364,7 +363,23 @@ export default function StudentDashboard() {
 
       </div>
 
-      <StudentFloatingAiChat instituteId={instituteId} />
+      {/* Floating AI Tutor button → navigates to dedicated page */}
+      <Link
+        href={`/${instituteId}/student/ai-chat`}
+        className="fixed bottom-6 right-6 z-99997 group"
+        aria-label="Open AI learning companion"
+      >
+        <span className="absolute inset-0 rounded-full bg-brand-500/20 animate-ping" />
+        <span className="relative flex items-center justify-center w-14 h-14 rounded-full bg-linear-to-br from-brand-400 to-indigo-500 shadow-xl shadow-brand-500/30 transition-all duration-200 hover:scale-110 group-hover:shadow-brand-500/45">
+          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 9.75a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375m-13.5 3.01c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.184-4.183a1.14 1.14 0 0 1 .778-.332 48.294 48.294 0 0 0 5.83-.498c1.585-.233 2.708-1.626 2.708-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
+          </svg>
+        </span>
+        <span className="absolute bottom-full right-0 mb-2.5 px-2.5 py-1.5 rounded-lg bg-gray-900 dark:bg-gray-700 text-white text-xs font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-lg">
+          AI Learning Companion
+          <span className="absolute top-full right-4 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700" />
+        </span>
+      </Link>
       <VoiceAssessmentPlayer
         isOpen={voicePlayerOpen}
         onClose={() => setVoicePlayerOpen(false)}
