@@ -43,12 +43,7 @@ export default function AiChatPage() {
   const [loading, setLoading]             = useState(false);
   const [pendingFile, setPendingFile]     = useState<File | null>(null);
 
-  // voice mode
-  const [voiceMode, setVoiceMode]         = useState(false);
-  const [micMuted, setMicMuted]           = useState(false);
-  const [isListening, setIsListening]     = useState(false);
-  const [voiceTranscript, setVoiceTranscript] = useState("");
-  const recognitionRef = useRef<any>(null);
+  const [voiceMode, setVoiceMode] = useState(false);
 
   const [isDark, setIsDark] = useState(false);
 
@@ -187,58 +182,9 @@ export default function AiChatPage() {
     }
   }
 
-  // ── Voice helpers ─────────────────────────────────────────────────────────
-  function startListening() {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return;
-    const rec = new SR();
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.lang = "en-US";
-    rec.onresult = (e: any) => {
-      let t = "";
-      for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
-      setVoiceTranscript(t);
-    };
-    rec.onend = () => setIsListening(false);
-    rec.start();
-    recognitionRef.current = rec;
-    setIsListening(true);
-  }
-
-  function stopListening() {
-    if (recognitionRef.current) {
-      recognitionRef.current.onend = null; // prevent auto-restart callbacks
-      recognitionRef.current.onresult = null;
-      try { recognitionRef.current.abort(); } catch { /* ignore */ }
-      recognitionRef.current = null;
-    }
-    setIsListening(false);
-  }
-
-  // Ensure mic is released when the component unmounts
-  useEffect(() => () => { stopListening(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  function openVoiceMode() {
-    setVoiceTranscript("");
-    setMicMuted(false);
-    setVoiceMode(true);
-    startListening();
-  }
-
-  function closeVoiceMode(send = false) {
-    stopListening();
-    setVoiceMode(false);
-    if (send && voiceTranscript.trim()) {
-      sendMessage(voiceTranscript);
-      setVoiceTranscript("");
-    }
-  }
-
-  function toggleMute() {
-    if (micMuted) { setMicMuted(false); startListening(); }
-    else          { setMicMuted(true);  stopListening(); }
-  }
+  // ── Voice mode ────────────────────────────────────────────────────────────
+  function openVoiceMode()  { setVoiceMode(true);  }
+  function closeVoiceMode() { setVoiceMode(false); }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
@@ -441,10 +387,7 @@ export default function AiChatPage() {
           instituteLogo={instituteLogo}
           context={context}
           selectedCourse={selectedCourse}
-          isListening={isListening}
-          micMuted={micMuted}
-          voiceTranscript={voiceTranscript}
-          onToggleMute={toggleMute}
+          instituteId={instituteId}
           onClose={closeVoiceMode}
         />
       )}
