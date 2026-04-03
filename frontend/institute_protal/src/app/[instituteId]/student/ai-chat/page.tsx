@@ -92,14 +92,15 @@ export default function AiChatPage() {
     load();
   }, [instituteId]);
 
-  // ── Auto-select course from ?courseId query param ─────────────────────────
+  // ── Auto-select course from query params (fast-forward, no wait) ──────────
   useEffect(() => {
-    const courseId = searchParams?.get("courseId");
-    if (!courseId || courses.length === 0 || selectedCourse) return;
-    const match = courses.find((c) => c.id === courseId);
-    if (match) handleSelectCourse(match);
+    const courseId   = searchParams?.get("courseId");
+    const courseName = searchParams?.get("courseName");
+    if (!courseId || !courseName || selectedCourse) return;
+    const courseCode = searchParams?.get("courseCode") ?? "";
+    handleSelectCourse({ id: courseId, name: courseName, code: courseCode } as any);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courses, searchParams]);
+  }, []);
 
   // ── Init chat after course is chosen ─────────────────────────────────────
   async function handleSelectCourse(course: Course) {

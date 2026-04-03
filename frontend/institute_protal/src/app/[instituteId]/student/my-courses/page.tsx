@@ -27,7 +27,12 @@ export default function StudentMyCoursesPage() {
   }, [instituteId]);
 
   function openAiTutor(course: Course) {
-    router.push(`/${instituteId}/student/ai-chat?courseId=${course.id}`);
+    const params = new URLSearchParams({
+      courseId:   course.id,
+      courseName: course.name,
+      courseCode: course.code ?? "",
+    });
+    router.push(`/${instituteId}/student/ai-chat?${params.toString()}`);
   }
 
   return (
