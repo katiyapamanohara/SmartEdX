@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import uuid
 from typing import Literal, Optional
@@ -14,10 +15,32 @@ from config import settings
 QuestionType = Literal["mcq", "essay", "both"]
 
 
+# ─── Gemini-compatible base ───────────────────────────────────────────────────
+# Gemini rejects response schemas that contain "default" values.
+# Overriding model_json_schema to strip them keeps Pydantic defaults for
+# Python-side validation while sending a clean schema to the API.
+
+def _strip_defaults(obj: object) -> object:
+    if isinstance(obj, dict):
+        obj.pop("default", None)
+        for v in obj.values():
+            _strip_defaults(v)
+    elif isinstance(obj, list):
+        for item in obj:
+            _strip_defaults(item)
+    return obj
+
+
+class _GeminiSafe(BaseModel):
+    @classmethod
+    def model_json_schema(cls, **kwargs):
+        return _strip_defaults(copy.deepcopy(super().model_json_schema(**kwargs)))
+
+
 # ─── Output schemas ───────────────────────────────────────────────────────────
 
 
-class MCQQuestionOut(BaseModel):
+class MCQQuestionOut(_GeminiSafe):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     type: Literal["mcq"] = "mcq"
     question: str
@@ -27,7 +50,7 @@ class MCQQuestionOut(BaseModel):
     marks: int = Field(default=1, ge=1)
 
 
-class EssayQuestionOut(BaseModel):
+class EssayQuestionOut(_GeminiSafe):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     type: Literal["essay"] = "essay"
     question: str
@@ -36,7 +59,7 @@ class EssayQuestionOut(BaseModel):
 
 
 # Union type used by the response_model
-class UnifiedQuestion(BaseModel):
+class UnifiedQuestion(_GeminiSafe):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     type: Literal["mcq", "essay"]
     question: str
@@ -49,7 +72,7 @@ class UnifiedQuestion(BaseModel):
     marks: int = Field(default=1, ge=1)
 
 
-class UnifiedQuizOut(BaseModel):
+class UnifiedQuizOut(_GeminiSafe):
     questions: list[UnifiedQuestion]
 
 

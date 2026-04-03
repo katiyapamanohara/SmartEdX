@@ -272,6 +272,7 @@ type AssessmentItem = {
   timeLimit: number;
   totalMarks?: number;
   voiceQuestions?: VoiceQuestion[];
+  requireFaceId: boolean;
   createdAt?: string;
 };
 
@@ -291,9 +292,13 @@ export default function StudentAssignmentsPage() {
   const [verifyOpen, setVerifyOpen] = useState(false);
   const pendingActionRef = useRef<(() => void) | null>(null);
 
-  const openWithVerification = useCallback((action: () => void) => {
-    pendingActionRef.current = action;
-    setVerifyOpen(true);
+  const openWithVerification = useCallback((action: () => void, needsFaceId: boolean) => {
+    if (needsFaceId) {
+      pendingActionRef.current = action;
+      setVerifyOpen(true);
+    } else {
+      action();
+    }
   }, []);
 
   const handleVerified = useCallback(() => {
@@ -359,6 +364,7 @@ export default function StudentAssignmentsPage() {
           timeLimit: content.quizData?.timeLimit ?? 0,
           totalMarks: (content.quizData as any)?.totalMarks,
           voiceQuestions: isVoice ? (content.quizData as any)?.voiceQuestions : undefined,
+          requireFaceId: !!((content.quizData as any)?.requireFaceId),
           createdAt: content.createdAt,
         };
       }),
@@ -481,7 +487,7 @@ export default function StudentAssignmentsPage() {
                       onClick={() => openWithVerification(() => {
                         setActiveVoiceItem(item);
                         setVoicePlayerOpen(true);
-                      })}
+                      }, item.requireFaceId)}
                       className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white bg-linear-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 transition-all shadow-sm shadow-purple-500/20"
                     >
                       <FiMic className="w-3 h-3" /> Start Interview
@@ -505,7 +511,7 @@ export default function StudentAssignmentsPage() {
                   </div>
                 ) : (
                   <button
-                    onClick={() => openWithVerification(() => router.push(`/${instituteId}/student/assignments/${item.id}`))}
+                    onClick={() => openWithVerification(() => router.push(`/${instituteId}/student/assignments/${item.id}`), item.requireFaceId)}
                     className="font-medium text-brand-500 hover:underline text-sm"
                   >
                     Start

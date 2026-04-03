@@ -433,6 +433,7 @@ function ExamModal({ courses, initial, onSave, onClose }: ExamModalProps) {
   const [durationMinutes, setDurationMinutes] = useState(initial?.durationMinutes ?? 60);
   const [passingScore, setPassingScore] = useState(initial?.passingScore ?? 50);
   const [questions, setQuestions] = useState<ExamQuestion[]>(initial?.questions ?? []);
+  const [requireFaceId, setRequireFaceId] = useState(initial?.requireFaceId ?? false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -463,6 +464,7 @@ function ExamModal({ courses, initial, onSave, onClose }: ExamModalProps) {
       scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
       durationMinutes,
       passingScore,
+      requireFaceId,
       questions,
       ...(publish && scheduledAt ? { status: "scheduled" as ExamStatus } : {}),
     });
@@ -551,6 +553,34 @@ function ExamModal({ courses, initial, onSave, onClose }: ExamModalProps) {
                   className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-800 dark:text-white outline-none focus:border-brand-400 resize-none"
                   placeholder="e.g. Read each question carefully before answering." />
               </div>
+
+              {/* Face ID toggle */}
+              <button
+                type="button"
+                onClick={() => setRequireFaceId((p) => !p)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left ${
+                  requireFaceId
+                    ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10"
+                    : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+                }`}
+              >
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${requireFaceId ? "bg-brand-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-400"}`}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <p className={`text-sm font-semibold ${requireFaceId ? "text-brand-700 dark:text-brand-300" : "text-gray-700 dark:text-gray-300"}`}>
+                    Require Face Identification
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Students must verify their identity with face recognition before starting
+                  </p>
+                </div>
+                <div className={`w-10 h-6 rounded-full relative transition-colors ${requireFaceId ? "bg-brand-500" : "bg-gray-200 dark:bg-gray-700"}`}>
+                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${requireFaceId ? "translate-x-5" : "translate-x-1"}`} />
+                </div>
+              </button>
             </>
           )}
 

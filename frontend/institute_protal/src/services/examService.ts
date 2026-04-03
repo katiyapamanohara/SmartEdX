@@ -39,6 +39,7 @@ export interface Exam {
   totalMarks: number;
   questionCount: number;
   questions: ExamQuestion[];
+  requireFaceId: boolean;
   createdByUserId: string;
   createdAt: string;
   updatedAt: string;
@@ -53,6 +54,7 @@ export interface CreateExamPayload {
   scheduledAt?: string;
   durationMinutes: number;
   passingScore: number;
+  requireFaceId?: boolean;
   questions: ExamQuestion[];
 }
 

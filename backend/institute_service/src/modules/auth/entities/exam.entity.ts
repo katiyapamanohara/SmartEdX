@@ -87,6 +87,10 @@ export class Exam {
   @Column({ default: 50 })
   passingScore: number;
 
+  /** Whether students must verify their identity via face recognition before starting */
+  @Column({ default: false })
+  requireFaceId: boolean;
+
   /** Attempts keyed by student userId */
   @Column({ type: 'jsonb', default: '{}' })
   studentAttempts: Record<string, ExamAttempt>;
