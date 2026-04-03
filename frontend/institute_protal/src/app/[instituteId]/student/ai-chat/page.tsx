@@ -237,24 +237,13 @@ export default function AiChatPage() {
   // ── Course selection screen ───────────────────────────────────────────────
   if (!selectedCourse) {
     return (
-      <div className="flex flex-col h-[calc(100vh-8rem)] max-h-[900px] rounded-2xl bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+      <div className="flex flex-col items-center justify-start h-[calc(100vh-8rem)] max-h-[900px] rounded-2xl bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
         {/* Header */}
-        <div className="flex items-center gap-3 px-6 py-4 shrink-0
-          bg-linear-to-r from-brand-50 to-indigo-50 dark:from-brand-500/5 dark:to-indigo-500/5">
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-linear-to-br from-brand-400 to-indigo-500 shadow-md shadow-brand-500/25">
-            <BotIcon className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90">AI Learning Companion</h3>
-            <p className="text-[11px] text-gray-500 dark:text-gray-400">
-              {context.institute_name || "SmartEdX"}
-            </p>
-          </div>
-        </div>
+        
 
         {/* Course picker body */}
-        <div className="flex-1 overflow-y-auto px-6 py-8">
-          <div className="max-w-xl mx-auto">
+        <div className="w-full flex-1 flex items-start justify-center pt-16 px-6 pb-8">
+          <div className="max-w-xl w-full">
             <div className="text-center mb-8">
               <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand-50 dark:bg-brand-500/10 mb-4">
                 <FiBookOpen className="w-7 h-7 text-brand-500" />
