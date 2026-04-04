@@ -135,11 +135,25 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Native SIP server disabled (SIP_ENABLED=false)")
 
+    _warmup_embeddings()
+
     yield
 
     if sip_enabled:
         logger.info("Stopping native SIP server...")
         await stop_native_sip_server()
+
+def _warmup_embeddings():
+    """Ensure FastEmbed model is loaded in the background to avoid first-query latency."""
+    try:
+        from app.config import COURSE_KB_ENABLED, QDRANT_KB_ENABLED
+        if COURSE_KB_ENABLED or QDRANT_KB_ENABLED:
+            logger.info("Warming up embedding models...")
+            from app.qdrant.course_kb import _get_embedding_model
+            import threading
+            threading.Thread(target=_get_embedding_model, daemon=True).start()
+    except Exception as e:
+        logger.warning(f"Failed to preload embeddings model: {e}")
 
 
 app = FastAPI(lifespan=lifespan)

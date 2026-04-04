@@ -72,20 +72,7 @@ function base64ToArrayBuffer(b64: string): ArrayBuffer {
   return buf;
 }
 
-function pcmToWav(pcmBuf: ArrayBuffer, sampleRate: number): ArrayBuffer {
-  const dataLen = pcmBuf.byteLength;
-  const wav = new ArrayBuffer(44 + dataLen);
-  const v   = new DataView(wav);
-  const wr  = (o: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
-  wr(0, "RIFF"); v.setUint32(4, 36 + dataLen, true);
-  wr(8, "WAVE"); wr(12, "fmt "); v.setUint32(16, 16, true);
-  v.setUint16(20, 1, true); v.setUint16(22, 1, true);
-  v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true);
-  v.setUint16(32, 2, true); v.setUint16(34, 16, true);
-  wr(36, "data"); v.setUint32(40, dataLen, true);
-  new Uint8Array(wav, 44).set(new Uint8Array(pcmBuf));
-  return wav;
-}
+
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -187,26 +174,34 @@ export default function VoiceModal({
     setAvatarState("speaking");
 
     const version = playVersionRef.current;
-    const wavBuf  = pcmToWav(base64ToArrayBuffer(base64Pcm), 24000);
+    
+    const rawBuf = base64ToArrayBuffer(base64Pcm);
+    const int16Array = new Int16Array(rawBuf);
+    const numSamples = int16Array.length;
+    
+    // Direct conversion to avoid async decoding overhead and latency
+    const audioBuffer = ctx.createBuffer(1, numSamples, 24000);
+    const channelData = audioBuffer.getChannelData(0);
+    for (let i = 0; i < numSamples; i++) {
+      channelData[i] = int16Array[i] / 32768.0;
+    }
 
-    ctx.decodeAudioData(wavBuf, (audioBuffer) => {
-      if (playVersionRef.current !== version) return;
-      const now     = ctx.currentTime;
-      const startAt = Math.max(nextPlayTimeRef.current, now + 0.02);
-      nextPlayTimeRef.current = startAt + audioBuffer.duration;
-      const source  = ctx.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(playMasterRef.current ?? ctx.destination);
-      activeSourcesRef.current.push(source);
-      source.start(startAt);
-      source.onended = () => {
-        activeSourcesRef.current = activeSourcesRef.current.filter((s) => s !== source);
-        if (activeSourcesRef.current.length === 0 && playVersionRef.current === version) {
-          isAISpeakingRef.current = false;
-          setAvatarState((prev) => (prev === "speaking" ? "listening" : prev));
-        }
-      };
-    }, (err) => console.error("[VoiceModal] decodeAudioData:", err));
+    if (playVersionRef.current !== version) return;
+    const now     = ctx.currentTime;
+    const startAt = Math.max(nextPlayTimeRef.current, now + 0.01);
+    nextPlayTimeRef.current = startAt + audioBuffer.duration;
+    const source  = ctx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(playMasterRef.current ?? ctx.destination);
+    activeSourcesRef.current.push(source);
+    source.start(startAt);
+    source.onended = () => {
+      activeSourcesRef.current = activeSourcesRef.current.filter((s) => s !== source);
+      if (activeSourcesRef.current.length === 0 && playVersionRef.current === version) {
+        isAISpeakingRef.current = false;
+        setAvatarState((prev) => (prev === "speaking" ? "listening" : prev));
+      }
+    };
   }, []);
 
   // ── Parse WebSocket events ─────────────────────────────────────────────────
@@ -355,21 +350,36 @@ export default function VoiceModal({
         const micAnalyser = micCtx.createAnalyser();
         micAnalyser.fftSize = 256;
         micAnalyserRef.current = micAnalyser;
-        const processor = micCtx.createScriptProcessor(2048, 1, 1);
+        const processor        = micCtx.createScriptProcessor(1024, 1, 1);
         processorRef.current = processor;
 
         const BARGE_IN_THRESHOLD = 0.022;
         const BARGE_IN_FRAMES    = 1;
         let bargeInCount = 0;
 
+        const VAD_THRESHOLD = 0.01;
+        const VAD_HANG_FRAMES = 7; // Half second hangover
+        let vadSilenceCount = 0;
+
         processor.onaudioprocess = (e: AudioProcessingEvent) => {
           const samples = e.inputBuffer.getChannelData(0);
-          if (ws.readyState === WebSocket.OPEN) ws.send(float32ToInt16(samples));
+          
+          let sum = 0;
+          for (let k = 0; k < samples.length; k++) sum += samples[k] * samples[k];
+          const rms = Math.sqrt(sum / samples.length);
+
+          if (rms > VAD_THRESHOLD) {
+            vadSilenceCount = 0;
+          } else {
+            vadSilenceCount++;
+          }
+
+          if (vadSilenceCount <= VAD_HANG_FRAMES) {
+             if (ws.readyState === WebSocket.OPEN) ws.send(float32ToInt16(samples));
+          }
 
           if (isAISpeakingRef.current) {
-            let sum = 0;
-            for (let k = 0; k < samples.length; k++) sum += samples[k] * samples[k];
-            if (Math.sqrt(sum / samples.length) > BARGE_IN_THRESHOLD) {
+            if (rms > BARGE_IN_THRESHOLD) {
               if (++bargeInCount >= BARGE_IN_FRAMES) { bargeInCount = 0; stopAllAudioRef.current(); }
             } else { bargeInCount = 0; }
           } else { bargeInCount = 0; }
@@ -446,7 +456,7 @@ export default function VoiceModal({
         const micAnalyser = micCtx.createAnalyser();
         micAnalyser.fftSize    = 256;
         micAnalyserRef.current = micAnalyser;
-        const processor        = micCtx.createScriptProcessor(2048, 1, 1);
+        const processor        = micCtx.createScriptProcessor(1024, 1, 1);
         processorRef.current   = processor;
 
         const ws = wsRef.current;
@@ -454,13 +464,29 @@ export default function VoiceModal({
         const BARGE_IN_FRAMES    = 1;
         let bargeInCount = 0;
 
+        const VAD_THRESHOLD = 0.01;
+        const VAD_HANG_FRAMES = 7; 
+        let vadSilenceCount = 0;
+
         processor.onaudioprocess = (e: AudioProcessingEvent) => {
           const samples = e.inputBuffer.getChannelData(0);
-          if (ws && ws.readyState === WebSocket.OPEN) ws.send(float32ToInt16(samples));
+          
+          let sum = 0;
+          for (let k = 0; k < samples.length; k++) sum += samples[k] * samples[k];
+          const rms = Math.sqrt(sum / samples.length);
+
+          if (rms > VAD_THRESHOLD) {
+            vadSilenceCount = 0;
+          } else {
+            vadSilenceCount++;
+          }
+
+          if (vadSilenceCount <= VAD_HANG_FRAMES) {
+             if (ws && ws.readyState === WebSocket.OPEN) ws.send(float32ToInt16(samples));
+          }
+
           if (isAISpeakingRef.current) {
-            let sum = 0;
-            for (let k = 0; k < samples.length; k++) sum += samples[k] * samples[k];
-            if (Math.sqrt(sum / samples.length) > BARGE_IN_THRESHOLD) {
+            if (rms > BARGE_IN_THRESHOLD) {
               if (++bargeInCount >= BARGE_IN_FRAMES) { bargeInCount = 0; stopAllAudioRef.current(); }
             } else { bargeInCount = 0; }
           } else { bargeInCount = 0; }

@@ -18,17 +18,12 @@ def _make_speech_config(voice_name: str) -> types.SpeechConfig:
 
 _VAD_CONFIG = types.RealtimeInputConfig(
     automatic_activity_detection=types.AutomaticActivityDetection(
-        # HIGH start sensitivity = model detects student speaking quickly →
-        # faster barge-in so the student can interrupt the AI mid-sentence.
         start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_HIGH,
-        # HIGH end sensitivity = cut off sooner after student stops speaking →
-        # snappier turn-taking and faster AI response.
         end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_HIGH,
-        prefix_padding_ms=100,   # was 200 — detect speech start 100ms faster
-        silence_duration_ms=300, # was 600 — snappy turn-taking for live conversation
+        prefix_padding_ms=100,
+        silence_duration_ms=180, # Dropped from 300 to 150ms for lightning-fast turn taking
     )
 )
-
 
 def build_run_config(
     model_name: str,
@@ -36,19 +31,6 @@ def build_run_config(
     proactivity: bool = False,
     affective_dialog: bool = False,
 ) -> RunConfig:
-    """Build a RunConfig based on the model architecture.
-
-    Native audio models (containing "native-audio" in name) use AUDIO
-    response modality with transcription.  Half-cascade models use TEXT.
-
-    Args:
-        model_name: The Gemini model identifier.
-        proactivity: Enable proactive audio (native audio only).
-        affective_dialog: Enable affective dialog (native audio only).
-
-    Returns:
-        Configured RunConfig for ``runner.run_live()``.
-    """
     is_native_audio = "native-audio" in model_name.lower()
 
     if is_native_audio:
@@ -76,16 +58,9 @@ def build_run_config(
             session_resumption=types.SessionResumptionConfig(),
         )
         logger.debug(f"Half-cascade model: {model_name}, TEXT modality")
-        if proactivity or affective_dialog:
-            logger.warning(
-                f"Proactivity and affective dialog only supported on native "
-                f"audio models. Current model: {model_name}. Ignored."
-            )
     return run_config
 
-
 def build_sip_run_config() -> RunConfig:
-    """Build a RunConfig for SIP transports (always native audio BIDI)."""
     return RunConfig(
         streaming_mode=StreamingMode.BIDI,
         response_modalities=["AUDIO"],
