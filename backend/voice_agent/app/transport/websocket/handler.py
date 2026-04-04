@@ -195,10 +195,29 @@ async def websocket_endpoint(
                     logger.info(f"WS {session_id}: end_assessment early-exit signal sent")
 
                 elif json_message.get("type") == "image":
+                    # Screen frame sent by client — feed directly into Gemini Live as realtime vision
                     image_data = base64.b64decode(json_message["data"])
                     mime_type = json_message.get("mimeType", "image/jpeg")
                     image_blob = types.Blob(mime_type=mime_type, data=image_data)
                     live_request_queue.send_realtime(image_blob)
+                    logger.debug(f"WS {session_id}: screen frame received ({len(image_data)} bytes, {mime_type})")
+
+                elif json_message.get("type") == "screen_share_start":
+                    # Student started screen sharing — inject context note for the AI
+                    ctx = types.Content(
+                        parts=[types.Part(text="[The student has started sharing their screen. You can now see their screen in the video frames being sent. Use this visual context to better assist them.]")],
+                        role="user",
+                    )
+                    live_request_queue.send_content(ctx)
+                    logger.info(f"WS {session_id}: screen share started")
+
+                elif json_message.get("type") == "screen_share_stop":
+                    ctx = types.Content(
+                        parts=[types.Part(text="[The student has stopped sharing their screen.]")],
+                        role="user",
+                    )
+                    live_request_queue.send_content(ctx)
+                    logger.info(f"WS {session_id}: screen share stopped")
 
     async def downstream_task() -> None:
         """Receives events from run_live() and sends to WebSocket."""
