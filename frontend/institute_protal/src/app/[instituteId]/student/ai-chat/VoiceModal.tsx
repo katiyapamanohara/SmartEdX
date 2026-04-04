@@ -100,19 +100,9 @@ export default function VoiceModal({
   const [avatarState, setAvatarState] = useState<AvatarState>("idle");
   const [micMuted, setMicMuted]       = useState(false);
   const [errorMsg, setErrorMsg]       = useState("");
-  const [instName, setInstName]       = useState(context.institute_name ?? "");
-  const [instLogo, setInstLogo]       = useState(instituteLogo ?? "");
+  const instName = context.institute_name ?? "";
+  const instLogo = instituteLogo ?? "";
   const [screenSharing, setScreenSharing] = useState(false);
-
-  // Fetch institute info on mount to get live logo + name
-  useEffect(() => {
-    instituteService.getInstituteById(instituteId).then((info) => {
-      if (info) {
-        if (info.name) setInstName(info.name);
-        if (info.logo) setInstLogo(info.logo);
-      }
-    });
-  }, [instituteId]);
 
   // Generation counter — incremented on disconnect to cancel stale in-flight connects
   const connectGenRef    = useRef(0);
@@ -324,7 +314,15 @@ export default function VoiceModal({
     // Acquire mic permission before opening WS so both happen concurrently
     let preStream: MediaStream;
     try {
-      preStream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } as any });
+      preStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        } as any,
+      });
     } catch {
       setErrorMsg("Microphone access denied. Please allow microphone and try again.");
       setStep("error");
@@ -357,7 +355,7 @@ export default function VoiceModal({
         const micAnalyser = micCtx.createAnalyser();
         micAnalyser.fftSize = 256;
         micAnalyserRef.current = micAnalyser;
-        const processor = micCtx.createScriptProcessor(512, 1, 1);
+        const processor = micCtx.createScriptProcessor(2048, 1, 1);
         processorRef.current = processor;
 
         const BARGE_IN_THRESHOLD = 0.022;

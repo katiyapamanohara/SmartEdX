@@ -77,6 +77,11 @@ const navItems: NavItem[] = [
   },
 
   {
+    icon: <PieChartIcon />,
+    name: "Performance",
+    path: "/teacher/performance",
+  },
+  {
     icon: <DocsIcon />,
     name: "Reports",
     path: "/teacher/reports",

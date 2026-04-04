@@ -857,6 +857,36 @@ class InstituteService {
     }
   }
 
+  async getStudentExams(instituteId: string): Promise<any[]> {
+    const token = authService.getToken();
+    if (!token) return [];
+    try {
+      const response = await fetch(
+        `${this.apiUrl}/api/institutes/institutes/${instituteId}/exams/student`,
+        { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } },
+      );
+      if (!response.ok) return [];
+      return await response.json();
+    } catch {
+      return [];
+    }
+  }
+
+  async getTeacherExams(instituteId: string): Promise<any[]> {
+    const token = authService.getToken();
+    if (!token) return [];
+    try {
+      const response = await fetch(
+        `${this.apiUrl}/api/institutes/institutes/${instituteId}/exams/my`,
+        { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } },
+      );
+      if (!response.ok) return [];
+      return await response.json();
+    } catch {
+      return [];
+    }
+  }
+
   async getTeacherCount(instituteId: string): Promise<number> {
     const token = authService.getToken();
     if (!token) return 0;
