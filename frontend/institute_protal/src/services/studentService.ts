@@ -67,6 +67,21 @@ class StudentService {
     return res.json();
   }
 
+  async verifyFace(imageB64: string): Promise<{ verified: boolean; distance: number; threshold: number }> {
+    const token = authService.getToken();
+    if (!token) throw new Error("Not authenticated");
+    const res = await fetch(`${this.apiUrl}/api/institutes/auth/me/face/verify`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ image_b64: imageB64 }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as any).detail || "Face verification failed");
+    }
+    return res.json();
+  }
+
   async updateMyProfile(data: any): Promise<any> {
     const token = authService.getToken();
     if (!token) throw new Error("No auth token");

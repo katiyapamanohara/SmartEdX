@@ -450,10 +450,13 @@ export class CourseService {
       throw new NotFoundException('Quiz content not found');
     }
 
-    // Check if student already attempted
+    // Check if student has remaining attempts
+    const maxAttempts: number = content.quizData?.maxAttempts ?? 1;
     const existing = content.studentAttempts || {};
-    if (existing[userId]) {
-      throw new ConflictException('Quiz already attempted. Only one attempt is allowed.');
+    const prevAttempt = existing[userId];
+    const attemptCount: number = prevAttempt?.attemptCount ?? 0;
+    if (attemptCount >= maxAttempts) {
+      throw new ConflictException(`Maximum attempts (${maxAttempts}) reached for this assessment.`);
     }
 
     // Build a new object so TypeORM detects the JSONB change
@@ -461,6 +464,7 @@ export class CourseService {
       score,
       answers: answers ?? {},
       attemptedAt: new Date().toISOString(),
+      attemptCount: attemptCount + 1,
     };
 
     if (voiceResult) {

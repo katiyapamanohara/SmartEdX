@@ -24,6 +24,7 @@ import { InstituteRepository, InstituteUserRepository, InstituteRoleRepository, 
 import { AssignUserDto } from './dto/assign-user.dto';
 import { Course } from './entities/course.entity';
 import { MinioService } from '../../infra/storage/minio.service';
+import { FaceRecClient } from '../../infra/http/face-rec.client';
 
 @Injectable()
 export class AuthService {
@@ -39,6 +40,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly minioService: MinioService,
+    private readonly faceRecClient: FaceRecClient,
     @Inject('FIREBASE_APP') private firebaseApp: admin.app.App,
   ) {}
 
@@ -181,6 +183,17 @@ export class AuthService {
     student.faceDescriptor = descriptor;
     await this.studentRepository.save(student);
     return { faceEnrolled: descriptor !== null };
+  }
+
+  async verifyFaceFromImage(userId: string, imageB64: string) {
+    const student = await this.studentRepository.findOne({ where: { userId } });
+    if (!student) {
+      throw new NotFoundException('Student record not found');
+    }
+    if (!student.faceDescriptor) {
+      throw new HttpException({ detail: 'No face enrolled. Please enroll your face in account settings first.' }, 422);
+    }
+    return this.faceRecClient.verifyImage(student.faceDescriptor, imageB64);
   }
 
   async firebaseLogin(firebaseLoginDto: FirebaseLoginDto) {

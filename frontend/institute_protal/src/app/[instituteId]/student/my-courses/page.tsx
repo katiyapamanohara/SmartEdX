@@ -1,16 +1,15 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { instituteService, Course } from "@/services/instituteService";
 import { BoxIconLine } from "@/icons";
-import CourseVoiceAssistant from "@/components/student/CourseVoiceAssistant";
 
 export default function StudentMyCoursesPage() {
   const params = useParams();
+  const router = useRouter();
   const instituteId = params?.instituteId as string;
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tutorCourse, setTutorCourse] = useState<Course | null>(null);
 
   useEffect(() => {
     if (!instituteId) return;
@@ -26,6 +25,15 @@ export default function StudentMyCoursesPage() {
       }
     })();
   }, [instituteId]);
+
+  function openAiTutor(course: Course) {
+    const params = new URLSearchParams({
+      courseId:   course.id,
+      courseName: course.name,
+      courseCode: course.code ?? "",
+    });
+    router.push(`/${instituteId}/student/ai-chat?${params.toString()}`);
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -106,7 +114,7 @@ export default function StudentMyCoursesPage() {
                   </span>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => setTutorCourse(course)}
+                      onClick={() => openAiTutor(course)}
                       className="inline-flex items-center gap-1 text-xs font-medium text-white bg-brand-500 hover:bg-brand-600 px-2.5 py-1 rounded-lg transition-colors"
                     >
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -127,12 +135,6 @@ export default function StudentMyCoursesPage() {
           ))}
         </div>
       )}
-
-      <CourseVoiceAssistant
-        isOpen={tutorCourse !== null}
-        onClose={() => setTutorCourse(null)}
-        initialCourse={tutorCourse ?? undefined}
-      />
     </div>
   );
 }
