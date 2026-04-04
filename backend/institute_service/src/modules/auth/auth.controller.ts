@@ -135,6 +135,19 @@ export class AuthController {
     return this.authService.saveFaceDescriptor(user.userId, null);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Post('me/face/verify')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Verify student identity via live webcam image' })
+  @ApiBody({ schema: { properties: { image_b64: { type: 'string' } } } })
+  @ApiResponse({ status: 200, description: 'Returns verification result' })
+  async verifyFace(
+    @CurrentUser() user: any,
+    @Body('image_b64') imageB64: string,
+  ) {
+    return this.authService.verifyFaceFromImage(user.userId, imageB64);
+  }
+
   // Admin Management Endpoints
 
   @Public()

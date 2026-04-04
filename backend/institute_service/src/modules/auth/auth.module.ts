@@ -14,6 +14,7 @@ import { RepositoriesModule } from '../../infra/database/repositories';
 import { FirebaseModule } from '../../infra/firebase/firebase.module';
 import { MinioModule } from '../../infra/storage/minio.module';
 import { VoiceAgentClient } from '../../infra/http/voice-agent.client';
+import { FaceRecClient } from '../../infra/http/face-rec.client';
 
 import { InstituteUserController } from './institute-user.controller';
 import { CourseController } from './course.controller';
@@ -74,6 +75,7 @@ import { LiveGateway } from './live.gateway';
     RolesGuard,
     SeedService,
     VoiceAgentClient,
+    FaceRecClient,
   ],
   exports: [
     AuthService,

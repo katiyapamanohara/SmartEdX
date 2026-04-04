@@ -254,6 +254,10 @@ export default function CreateAssessmentModal({
   const [submitting, setSubmitting]           = useState(false);
   const [error, setError]                     = useState<string | null>(null);
 
+  // ── Shared: face ID + max attempts ──────────────────────────────────────
+  const [requireFaceId, setRequireFaceId]     = useState(false);
+  const [maxAttempts, setMaxAttempts]         = useState(1);
+
   // ── MCQ-specific ─────────────────────────────────────────────────────────
   const [passingScore, setPassingScore]       = useState(70);
   const [timeLimit, setTimeLimit]             = useState(0);
@@ -278,6 +282,7 @@ export default function CreateAssessmentModal({
       setAssessmentType("mcq");
       setCourseId(""); setModuleMode("existing"); setModuleId(""); setNewModuleName(""); setModules([]);
       setTitle(""); setDescription(""); setPassingScore(70); setTimeLimit(0);
+      setRequireFaceId(false); setMaxAttempts(1);
       setQuestions([newQuestion()]); setError(null);
       setVoiceInstructions(""); setVoiceFile(null); setVoiceNumQ(5); setVoiceMarksPerQ(10);
       setVoiceGenerating(false); setVoiceGenError(""); setVoiceQuestions([]); setVoiceStep("config");
@@ -338,7 +343,7 @@ export default function CreateAssessmentModal({
           ...(moduleMode === "existing" ? { moduleId } : { moduleName: newModuleName.trim() }),
           title: title.trim(),
           description: description.trim() || undefined,
-          quizData: { questions: filled, passingScore, timeLimit, assessmentType: "mcq" },
+          quizData: { questions: filled, passingScore, timeLimit, assessmentType: "mcq", requireFaceId, maxAttempts },
         });
         const modTitle = moduleMode === "existing"
           ? (modules.find((m) => m.id === moduleId)?.title ?? "") : newModuleName.trim();
@@ -362,6 +367,8 @@ export default function CreateAssessmentModal({
             passingScore: 50,
             timeLimit: 0,
             totalMarks: voiceQuestions.reduce((s, q) => s + q.marks, 0),
+            requireFaceId,
+            maxAttempts,
           },
         });
         const modTitle = moduleMode === "existing"
@@ -580,10 +587,10 @@ export default function CreateAssessmentModal({
                         "Upload lecture notes, textbook excerpt, or assignment PDF"
                       )}
                       {voiceFile && (
-                        <button type="button" onClick={(e) => { e.stopPropagation(); setVoiceFile(null); }}
-                          className="ml-auto text-gray-400 hover:text-red-500 transition-colors">
+                        <span role="button" onClick={(e) => { e.stopPropagation(); setVoiceFile(null); }}
+                          className="ml-auto text-gray-400 hover:text-red-500 transition-colors cursor-pointer">
                           <FiX className="w-3.5 h-3.5" />
-                        </button>
+                        </span>
                       )}
                     </button>
                   </div>
@@ -656,6 +663,58 @@ export default function CreateAssessmentModal({
               )}
             </div>
           )}
+
+          {/* ── Max attempts (shared for all types) ── */}
+          <div className="flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-gray-700">
+            <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0">
+              <FiChevronRight className="w-4 h-4 text-gray-500" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Max Attempts</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">How many times a student can attempt this assessment</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setMaxAttempts((p) => Math.max(1, p - 1))}
+                className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors font-bold text-lg leading-none"
+              >−</button>
+              <span className="w-6 text-center text-sm font-bold text-gray-900 dark:text-white">{maxAttempts}</span>
+              <button
+                type="button"
+                onClick={() => setMaxAttempts((p) => Math.min(10, p + 1))}
+                className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors font-bold text-lg leading-none"
+              >+</button>
+            </div>
+          </div>
+
+          {/* ── Face ID toggle (shared for all types) ── */}
+          <button
+            type="button"
+            onClick={() => setRequireFaceId((p) => !p)}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left ${
+              requireFaceId
+                ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10"
+                : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+            }`}
+          >
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${requireFaceId ? "bg-blue-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-400"}`}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className={`text-sm font-semibold ${requireFaceId ? "text-blue-700 dark:text-blue-300" : "text-gray-700 dark:text-gray-300"}`}>
+                Require Face Identification
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Students must verify their identity before starting this assessment
+              </p>
+            </div>
+            <div className={`w-10 h-6 rounded-full relative transition-colors shrink-0 ${requireFaceId ? "bg-blue-500" : "bg-gray-200 dark:bg-gray-700"}`}>
+              <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${requireFaceId ? "translate-x-5" : "translate-x-1"}`} />
+            </div>
+          </button>
 
           {error && (
             <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">

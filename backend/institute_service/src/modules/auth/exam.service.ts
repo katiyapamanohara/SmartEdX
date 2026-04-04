@@ -56,6 +56,8 @@ export class ExamService {
       durationMinutes: exam.durationMinutes,
       status,
       passingScore: exam.passingScore,
+      maxAttempts: exam.maxAttempts ?? 1,
+      requireFaceId: exam.requireFaceId ?? false,
       totalMarks,
       questionCount: exam.questions.length,
       questions,
@@ -97,6 +99,8 @@ export class ExamService {
       scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : undefined,
       durationMinutes: dto.durationMinutes,
       passingScore: dto.passingScore,
+      maxAttempts: dto.maxAttempts ?? 1,
+      requireFaceId: dto.requireFaceId ?? false,
       questions: dto.questions as any,
       status,
       studentAttempts: {},
@@ -187,8 +191,11 @@ export class ExamService {
       throw new BadRequestException('Exam is not currently active');
     }
 
-    if (exam.studentAttempts?.[userId]) {
-      throw new BadRequestException('You have already submitted this exam');
+    const maxAttempts = exam.maxAttempts ?? 1;
+    const prevAttempt = exam.studentAttempts?.[userId];
+    const usedAttempts: number = prevAttempt?.attemptCount ?? (prevAttempt ? 1 : 0);
+    if (usedAttempts >= maxAttempts) {
+      throw new BadRequestException(`Maximum attempts (${maxAttempts}) reached for this exam`);
     }
 
     // Score calculation (MCQ auto-graded, essay pending review)
@@ -213,13 +220,14 @@ export class ExamService {
     const percentage = mcqTotal > 0 ? Math.round((score / totalMarks) * 100) : 0;
     const passed = !hasPendingEssay && percentage >= exam.passingScore;
 
-    const attempt: ExamAttempt = {
+    const attempt: ExamAttempt & { attemptCount: number } = {
       answers: dto.answers,
       score,
       totalMarks,
       passed,
       submittedAt: new Date().toISOString(),
       pendingEssayReview: hasPendingEssay,
+      attemptCount: usedAttempts + 1,
     };
 
     const updatedAttempts = { ...(exam.studentAttempts ?? {}), [userId]: attempt };

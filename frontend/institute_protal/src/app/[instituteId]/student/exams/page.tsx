@@ -283,6 +283,10 @@ function ResultModal({
 function ExamCard({ exam, onStart }: { exam: Exam; onStart: (exam: Exam) => void }) {
   const attempt = exam.myAttempt;
   const pct = attempt ? Math.round((attempt.score / attempt.totalMarks) * 100) : null;
+  const maxAttempts = exam.maxAttempts ?? 1;
+  const usedAttempts = attempt?.attemptCount ?? (attempt ? 1 : 0);
+  const attemptsLeft = maxAttempts - usedAttempts;
+  const canRetry = !!attempt && attemptsLeft > 0 && exam.status === "active";
 
   return (
     <div className={`rounded-2xl border bg-white dark:bg-white/3 p-5 flex flex-col gap-3 ${exam.status === "active" ? "border-green-300 dark:border-green-700 ring-1 ring-green-200 dark:ring-green-900" : "border-gray-200 dark:border-gray-800"}`}>
@@ -301,9 +305,10 @@ function ExamCard({ exam, onStart }: { exam: Exam; onStart: (exam: Exam) => void
         <span>⏱ {exam.durationMinutes} min</span>
         <span>📝 {exam.questionCount} questions</span>
         <span>🎯 Pass: {exam.passingScore}%</span>
+        {maxAttempts > 1 && <span>🔁 {usedAttempts}/{maxAttempts} attempts</span>}
       </div>
 
-      {attempt ? (
+      {attempt && (
         attempt.pendingEssayReview ? (
           <div className="flex items-center gap-3 rounded-xl px-4 py-3 bg-yellow-50 dark:bg-yellow-900/20">
             <span className="text-lg font-bold text-yellow-600 dark:text-yellow-400">{pct}%</span>
@@ -321,18 +326,32 @@ function ExamCard({ exam, onStart }: { exam: Exam; onStart: (exam: Exam) => void
             </div>
           </div>
         )
-      ) : exam.status === "active" ? (
+      )}
+
+      {canRetry && (
+        <button
+          onClick={() => onStart(exam)}
+          className="w-full py-2.5 rounded-xl bg-green-500 text-white font-semibold text-sm hover:bg-green-600 transition-colors"
+        >
+          Retry Exam ({attemptsLeft} attempt{attemptsLeft !== 1 ? "s" : ""} left)
+        </button>
+      )}
+
+      {!attempt && exam.status === "active" && (
         <button
           onClick={() => onStart(exam)}
           className="mt-1 w-full py-2.5 rounded-xl bg-green-500 text-white font-semibold text-sm hover:bg-green-600 transition-colors"
         >
           Start Exam
         </button>
-      ) : exam.status === "scheduled" ? (
+      )}
+
+      {!attempt && exam.status === "scheduled" && (
         <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Starts {fmtDate(exam.scheduledAt)}</p>
-      ) : exam.status === "completed" ? (
+      )}
+      {!attempt && exam.status === "completed" && (
         <p className="text-xs text-gray-400">Exam has ended · not attempted</p>
-      ) : null}
+      )}
     </div>
   );
 }

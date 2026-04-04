@@ -23,6 +23,7 @@ export interface ExamAttempt {
   passed: boolean;
   submittedAt: string;
   pendingEssayReview?: boolean;
+  attemptCount?: number;
 }
 
 export interface Exam {
@@ -39,6 +40,8 @@ export interface Exam {
   totalMarks: number;
   questionCount: number;
   questions: ExamQuestion[];
+  requireFaceId: boolean;
+  maxAttempts: number;
   createdByUserId: string;
   createdAt: string;
   updatedAt: string;
@@ -53,6 +56,8 @@ export interface CreateExamPayload {
   scheduledAt?: string;
   durationMinutes: number;
   passingScore: number;
+  requireFaceId?: boolean;
+  maxAttempts?: number;
   questions: ExamQuestion[];
 }
 

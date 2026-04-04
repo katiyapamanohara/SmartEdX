@@ -87,9 +87,17 @@ export class Exam {
   @Column({ default: 50 })
   passingScore: number;
 
+  /** Whether students must verify their identity via face recognition before starting */
+  @Column({ default: false })
+  requireFaceId: boolean;
+
+  /** Maximum number of attempts allowed per student (default 1) */
+  @Column({ default: 1 })
+  maxAttempts: number;
+
   /** Attempts keyed by student userId */
   @Column({ type: 'jsonb', default: '{}' })
-  studentAttempts: Record<string, ExamAttempt>;
+  studentAttempts: Record<string, ExamAttempt & { attemptCount?: number }>;
 
   @CreateDateColumn()
   createdAt: Date;
