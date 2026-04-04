@@ -100,6 +100,18 @@ export default function VoiceModal({
   const [avatarState, setAvatarState] = useState<AvatarState>("idle");
   const [micMuted, setMicMuted]       = useState(false);
   const [errorMsg, setErrorMsg]       = useState("");
+  const [instName, setInstName]       = useState(context.institute_name ?? "");
+  const [instLogo, setInstLogo]       = useState(instituteLogo ?? "");
+
+  // Fetch institute info on mount to get live logo + name
+  useEffect(() => {
+    instituteService.getInstituteById(instituteId).then((info) => {
+      if (info) {
+        if (info.name) setInstName(info.name);
+        if (info.logo) setInstLogo(info.logo);
+      }
+    });
+  }, [instituteId]);
 
   // Audio / WebSocket refs
   const wsRef            = useRef<WebSocket | null>(null);
@@ -440,17 +452,25 @@ export default function VoiceModal({
 
   const handleClose = () => { disconnect(); onClose(); };
 
+  // Extract assessment data from initMessage for display
+  const assessmentData = initMessage?.type === "assessment_init"
+    ? (initMessage.data as { title?: string; instructions?: string; questions?: Array<{ marks: number }> } | undefined)
+    : undefined;
+  const totalMarks = assessmentData?.questions?.reduce((s, q) => s + (q.marks ?? 0), 0) ?? 0;
+  const questionCount = assessmentData?.questions?.length ?? 0;
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div
-      className="fixed inset-0 flex flex-col items-center justify-center"
+      className="fixed inset-0 flex flex-col items-center justify-center overflow-y-auto py-8"
       style={{ zIndex: 300000, background: isDark ? "#000000" : "#ffffff" }}
     >
-      {/* Institute + course */}
-      <div className="flex flex-col items-center gap-3 mb-10">
-        {instituteLogo ? (
+      {/* ── Header: Institute + Course + Assessment details ── */}
+      <div className="flex flex-col items-center gap-3 mb-8 px-6 w-full max-w-sm">
+        {/* Logo */}
+        {instLogo ? (
           <img
-            src={instituteLogo}
+            src={instLogo}
             alt="logo"
             className="w-16 h-16 rounded-2xl object-contain shadow-lg"
             style={{ background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }}
@@ -463,12 +483,16 @@ export default function VoiceModal({
               color: isDark ? "#ffffff" : "#111827",
             }}
           >
-            {context.institute_name?.charAt(0).toUpperCase() ?? "S"}
+            {instName?.charAt(0).toUpperCase() ?? "S"}
           </div>
         )}
-        <p className="text-xl font-bold tracking-tight" style={{ color: isDark ? "#ffffff" : "#111827" }}>
-          {context.institute_name || "SmartEdX"}
+
+        {/* Institute name */}
+        <p className="text-xl font-bold tracking-tight text-center" style={{ color: isDark ? "#ffffff" : "#111827" }}>
+          {instName || "SmartEdX"}
         </p>
+
+        {/* Course pill */}
         {selectedCourse && (
           <span
             className="text-sm font-medium px-4 py-1.5 rounded-full"
@@ -480,16 +504,19 @@ export default function VoiceModal({
             {selectedCourse.name}
           </span>
         )}
+
+        {/* Label (e.g. "Interview") */}
         {label && (
-          <span className="text-xs font-semibold uppercase tracking-widest mt-1"
+          <span className="text-xs font-semibold uppercase tracking-widest"
             style={{ color: isDark ? "#6b7280" : "#9ca3af" }}>
             {label}
           </span>
         )}
+
       </div>
 
       {/* Orb */}
-      <div className="relative flex items-center justify-center mb-8">
+      <div className="relative flex items-center justify-center mb-6">
         <div
           ref={orbRef}
           className="w-56 h-56 rounded-full flex items-center justify-center"
@@ -509,6 +536,40 @@ export default function VoiceModal({
           )}
         </div>
       </div>
+
+      {/* Assessment info under the orb */}
+      {assessmentData && (
+        <div className="flex flex-col items-center gap-2 mb-5 px-6 w-full max-w-xs text-center">
+          {assessmentData.title && (
+            <p className="text-base font-semibold" style={{ color: isDark ? "#f3f4f6" : "#111827" }}>
+              {assessmentData.title}
+            </p>
+          )}
+          {assessmentData.instructions && (
+            <p className="text-xs line-clamp-2" style={{ color: isDark ? "#9ca3af" : "#6b7280" }}>
+              {assessmentData.instructions}
+            </p>
+          )}
+          <div className="flex items-center gap-2 mt-1">
+            {questionCount > 0 && (
+              <span
+                className="text-xs font-semibold px-3 py-1 rounded-full"
+                style={{ background: isDark ? "rgba(99,102,241,0.2)" : "rgba(99,102,241,0.1)", color: isDark ? "#a5b4fc" : "#4338ca" }}
+              >
+                {questionCount} question{questionCount !== 1 ? "s" : ""}
+              </span>
+            )}
+            {totalMarks > 0 && (
+              <span
+                className="text-xs font-semibold px-3 py-1 rounded-full"
+                style={{ background: isDark ? "rgba(16,185,129,0.2)" : "rgba(16,185,129,0.1)", color: isDark ? "#6ee7b7" : "#065f46" }}
+              >
+                {totalMarks} marks
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Status pill */}
       <div className="mb-12 flex items-center gap-2 px-4 py-1.5 rounded-full"
