@@ -21,11 +21,11 @@ _VAD_CONFIG = types.RealtimeInputConfig(
         # HIGH start sensitivity = model detects student speaking quickly →
         # faster barge-in so the student can interrupt the AI mid-sentence.
         start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_HIGH,
-        # LOW end sensitivity = wait longer before deciding the student has
-        # finished speaking, giving them time to think between sentences.
-        end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_LOW,
-        prefix_padding_ms=200,
-        silence_duration_ms=1200,
+        # HIGH end sensitivity = cut off sooner after student stops speaking →
+        # snappier turn-taking and faster AI response.
+        end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_HIGH,
+        prefix_padding_ms=100,   # was 200 — detect speech start 100ms faster
+        silence_duration_ms=300, # was 600 — snappy turn-taking for live conversation
     )
 )
 

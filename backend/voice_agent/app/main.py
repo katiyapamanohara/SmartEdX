@@ -356,6 +356,7 @@ async def course_qa_ws_endpoint(
     session_id: str,
     course_name: str = "",
     language: Optional[str] = None,
+    greet: bool = True,
 ) -> None:
     """Course Q&A voice assistant — answers student questions from course content."""
     course_runner, _ = get_runner_for_course(
@@ -373,4 +374,5 @@ async def course_qa_ws_endpoint(
         transcript_store=transcript_store,
         runner=course_runner,
         language=language,
+        greet=greet,
     )

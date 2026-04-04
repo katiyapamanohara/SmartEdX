@@ -114,6 +114,8 @@ export default function VoiceModal({
     });
   }, [instituteId]);
 
+  // Generation counter — incremented on disconnect to cancel stale in-flight connects
+  const connectGenRef    = useRef(0);
   // Audio / WebSocket refs
   const wsRef            = useRef<WebSocket | null>(null);
   const playCtxRef       = useRef<AudioContext | null>(null);
@@ -200,7 +202,7 @@ export default function VoiceModal({
     ctx.decodeAudioData(wavBuf, (audioBuffer) => {
       if (playVersionRef.current !== version) return;
       const now     = ctx.currentTime;
-      const startAt = Math.max(nextPlayTimeRef.current, now + 0.05);
+      const startAt = Math.max(nextPlayTimeRef.current, now + 0.02);
       nextPlayTimeRef.current = startAt + audioBuffer.duration;
       const source  = ctx.createBufferSource();
       source.buffer = audioBuffer;
@@ -287,11 +289,16 @@ export default function VoiceModal({
     if (wsRef.current && wsRef.current.readyState <= WebSocket.OPEN) wsRef.current.close();
     wsRef.current = null;
     nextPlayTimeRef.current = 0;
+    // Increment generation so any in-flight connect() bails out after its next await
+    connectGenRef.current++;
   }, []);
 
   // ── Connect to voice agent ─────────────────────────────────────────────────
   const connect = useCallback(async () => {
     if (!selectedCourse) return;
+    // Claim this generation — any previous in-flight connect with a smaller gen
+    // will bail out after its next await, preventing React StrictMode double-sessions.
+    const myGen = ++connectGenRef.current;
     setStep("connecting");
     setErrorMsg("");
 
@@ -310,7 +317,22 @@ export default function VoiceModal({
     const userId    = authService.getUserId() ?? "student";
     const sessionId = `cva-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const wsBase    = process.env.NEXT_PUBLIC_VOICE_AGENT_WS_URL ?? "ws://localhost:5001/voice-agent";
-    const wsUrl     = wsUrlProp ?? `${wsBase}/ws/course-qa/${instituteId}/${selectedCourse.id}/${userId}/${sessionId}?course_name=${encodeURIComponent(selectedCourse.name)}`;
+    // Suppress backend greeting for assessment sessions — they send their own init prompt
+    const greetParam = initMessage ? "&greet=false" : "";
+    const wsUrl     = wsUrlProp ?? `${wsBase}/ws/course-qa/${instituteId}/${selectedCourse.id}/${userId}/${sessionId}?course_name=${encodeURIComponent(selectedCourse.name)}${greetParam}`;
+
+    // Acquire mic permission before opening WS so both happen concurrently
+    let preStream: MediaStream;
+    try {
+      preStream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } as any });
+    } catch {
+      setErrorMsg("Microphone access denied. Please allow microphone and try again.");
+      setStep("error");
+      return;
+    }
+
+    // Bail if disconnect() was called while getUserMedia was pending
+    if (connectGenRef.current !== myGen) { preStream.getTracks().forEach((t) => t.stop()); return; }
 
     let ws: WebSocket;
     try {
@@ -318,6 +340,7 @@ export default function VoiceModal({
       ws.binaryType = "arraybuffer";
       wsRef.current = ws;
     } catch {
+      preStream.getTracks().forEach((t) => t.stop());
       setErrorMsg("Failed to open WebSocket connection.");
       setStep("error");
       return;
@@ -325,7 +348,7 @@ export default function VoiceModal({
 
     ws.onopen = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } as any });
+        const stream = preStream;
         streamRef.current = stream;
 
         const micCtx  = new AudioContext({ sampleRate: 16000 });
@@ -334,11 +357,11 @@ export default function VoiceModal({
         const micAnalyser = micCtx.createAnalyser();
         micAnalyser.fftSize = 256;
         micAnalyserRef.current = micAnalyser;
-        const processor = micCtx.createScriptProcessor(2048, 1, 1);
+        const processor = micCtx.createScriptProcessor(512, 1, 1);
         processorRef.current = processor;
 
         const BARGE_IN_THRESHOLD = 0.022;
-        const BARGE_IN_FRAMES    = 2;
+        const BARGE_IN_FRAMES    = 1;
         let bargeInCount = 0;
 
         processor.onaudioprocess = (e: AudioProcessingEvent) => {
@@ -368,8 +391,8 @@ export default function VoiceModal({
         startOrbAnimation();
         setStep("session");
         setAvatarState("listening");
-      } catch {
-        setErrorMsg("Microphone access denied. Please allow microphone and try again.");
+      } catch (err) {
+        setErrorMsg("Audio setup failed. Please refresh and try again.");
         setStep("error");
         ws.close();
       }
@@ -430,7 +453,7 @@ export default function VoiceModal({
 
         const ws = wsRef.current;
         const BARGE_IN_THRESHOLD = 0.022;
-        const BARGE_IN_FRAMES    = 2;
+        const BARGE_IN_FRAMES    = 1;
         let bargeInCount = 0;
 
         processor.onaudioprocess = (e: AudioProcessingEvent) => {

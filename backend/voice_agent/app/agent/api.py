@@ -18,7 +18,7 @@ def fetch_institute_config(institute_id: str) -> Dict[str, Any]:
     """
     url = f"{INSTITUTE_SERVICE_URL}/auth/institutes/{institute_id}/voice-config"
     with latency.measure("api_fetch_config"):
-        response = requests.get(url, timeout=15)
+        response = requests.get(url, timeout=5)
     if response.status_code == 404:
         logger.warning(f"Institute {institute_id} voice-config not found (404), using defaults")
         return {}
@@ -47,7 +47,7 @@ def start_assistant_session(
         "meta_data": meta_data,
     }
     with latency.measure("api_start_session"):
-        response = requests.post(url, headers=headers, json=body, timeout=30)
+        response = requests.post(url, headers=headers, json=body, timeout=8)
     response.raise_for_status()
     return response.json()
 
@@ -61,6 +61,6 @@ def end_assistant_session(session_id: str, history: List[dict]) -> Dict[str, Any
         "chat_history": history,
     }
     with latency.measure("api_end_session"):
-        response = requests.post(url, headers=headers, json=body, timeout=30)
+        response = requests.post(url, headers=headers, json=body, timeout=8)
     response.raise_for_status()
     return response.json()
