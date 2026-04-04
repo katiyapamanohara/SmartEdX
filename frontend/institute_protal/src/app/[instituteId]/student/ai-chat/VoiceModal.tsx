@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Course } from "@/services/instituteService";
+import { Course, instituteService } from "@/services/instituteService";
 import { authService } from "@/services/authService";
 
 export interface StudentContext {
@@ -11,6 +11,27 @@ export interface StudentContext {
   selected_course?: string;
 }
 
+export interface QuestionResult {
+  question_id: string;
+  question: string;
+  student_answer: string;
+  expected_answer: string;
+  score: number;
+  marks_available: number;
+  percentage: number;
+  feedback: string;
+}
+
+export interface EvalResult {
+  results: QuestionResult[];
+  total_score: number;
+  total_marks: number;
+  percentage: number;
+  grade: string;
+  passed: boolean;
+  overall_feedback: string;
+}
+
 export interface VoiceModalProps {
   isDark: boolean;
   instituteLogo: string | null;
@@ -18,6 +39,16 @@ export interface VoiceModalProps {
   selectedCourse: Course | null;
   instituteId: string;
   onClose: () => void;
+  /** Override the WebSocket URL — if omitted, uses the default course-qa endpoint */
+  wsUrl?: string;
+  /** Label shown under the course pill (e.g. "Interview") */
+  label?: string;
+  /** JSON message sent over WebSocket immediately after connection (e.g. assessment_init) */
+  initMessage?: Record<string, unknown>;
+  /** Content ID used to submit evaluation results to the backend */
+  assessmentId?: string;
+  /** Called with the evaluation result when the voice agent finishes scoring */
+  onCompleted?: (result: EvalResult) => void;
 }
 
 // ─── PCM / WAV helpers ────────────────────────────────────────────────────────
@@ -63,6 +94,7 @@ type AvatarState = "idle" | "speaking" | "listening";
 
 export default function VoiceModal({
   isDark, instituteLogo, context, selectedCourse, instituteId, onClose,
+  wsUrl: wsUrlProp, label, initMessage, assessmentId, onCompleted,
 }: VoiceModalProps) {
   const [step, setStep]               = useState<Step>("connecting");
   const [avatarState, setAvatarState] = useState<AvatarState>("idle");
@@ -176,8 +208,42 @@ export default function VoiceModal({
     const parts = ((event.content as any)?.parts as any[]) ?? [];
     for (const p of parts) {
       if (p?.inlineData?.data) enqueueAudio(p.inlineData.data);
+
+      // Evaluation result from voice agent
+      const fnResp = p?.functionResponse as Record<string, unknown> | undefined;
+      if (fnResp?.name === "evaluate_voice_assessment") {
+        const response = fnResp.response as EvalResult | { error: string } | undefined;
+        if (response && !("error" in response)) {
+          const result = response as EvalResult;
+          stopAllAudio();
+          // Submit to backend if this is an assessment session
+          if (assessmentId && instituteId) {
+            instituteService.submitVoiceAssessmentResult(instituteId, assessmentId, {
+              score: result.percentage,
+              voiceResult: {
+                totalScore: result.total_score,
+                totalMarks: result.total_marks,
+                grade: result.grade,
+                passed: result.passed,
+                overallFeedback: result.overall_feedback,
+                questionResults: result.results.map((r) => ({
+                  questionId: r.question_id,
+                  question: r.question,
+                  studentAnswer: r.student_answer,
+                  expectedAnswer: r.expected_answer,
+                  score: r.score,
+                  marksAvailable: r.marks_available,
+                  percentage: r.percentage,
+                  feedback: r.feedback,
+                })),
+              },
+            }).catch(() => {/* ignore save errors */});
+          }
+          onCompleted?.(result);
+        }
+      }
     }
-  }, [enqueueAudio, stopAllAudio]);
+  }, [enqueueAudio, stopAllAudio, assessmentId, instituteId, onCompleted]);
 
   // ── Disconnect everything ─────────────────────────────────────────────────
   const disconnect = useCallback(() => {
@@ -223,7 +289,7 @@ export default function VoiceModal({
     const userId    = authService.getUserId() ?? "student";
     const sessionId = `cva-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const wsBase    = process.env.NEXT_PUBLIC_VOICE_AGENT_WS_URL ?? "ws://localhost:5001/voice-agent";
-    const wsUrl     = `${wsBase}/ws/course-qa/${instituteId}/${selectedCourse.id}/${userId}/${sessionId}?course_name=${encodeURIComponent(selectedCourse.name)}`;
+    const wsUrl     = wsUrlProp ?? `${wsBase}/ws/course-qa/${instituteId}/${selectedCourse.id}/${userId}/${sessionId}?course_name=${encodeURIComponent(selectedCourse.name)}`;
 
     let ws: WebSocket;
     try {
@@ -274,6 +340,10 @@ export default function VoiceModal({
         processor.connect(silence);
         silence.connect(micCtx.destination);
 
+        if (initMessage && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(initMessage));
+        }
+
         startOrbAnimation();
         setStep("session");
         setAvatarState("listening");
@@ -300,7 +370,7 @@ export default function VoiceModal({
         setStep("error");
       }
     };
-  }, [selectedCourse, instituteId, handleEvent]);
+  }, [selectedCourse, instituteId, handleEvent, initMessage]);
 
   // ── Connect on mount, disconnect on unmount ────────────────────────────────
   useEffect(() => {
@@ -408,6 +478,12 @@ export default function VoiceModal({
             }}
           >
             {selectedCourse.name}
+          </span>
+        )}
+        {label && (
+          <span className="text-xs font-semibold uppercase tracking-widest mt-1"
+            style={{ color: isDark ? "#6b7280" : "#9ca3af" }}>
+            {label}
           </span>
         )}
       </div>

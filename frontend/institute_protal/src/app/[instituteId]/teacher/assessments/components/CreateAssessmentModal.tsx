@@ -585,10 +585,10 @@ export default function CreateAssessmentModal({
                         "Upload lecture notes, textbook excerpt, or assignment PDF"
                       )}
                       {voiceFile && (
-                        <button type="button" onClick={(e) => { e.stopPropagation(); setVoiceFile(null); }}
-                          className="ml-auto text-gray-400 hover:text-red-500 transition-colors">
+                        <span role="button" onClick={(e) => { e.stopPropagation(); setVoiceFile(null); }}
+                          className="ml-auto text-gray-400 hover:text-red-500 transition-colors cursor-pointer">
                           <FiX className="w-3.5 h-3.5" />
-                        </button>
+                        </span>
                       )}
                     </button>
                   </div>

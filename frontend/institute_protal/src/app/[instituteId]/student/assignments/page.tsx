@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { TaskIcon } from "@/icons";
 import { FiMic } from "react-icons/fi";
 import { instituteService, StudentAssessmentGroup } from "@/services/instituteService";
 import { authService } from "@/services/authService";
 import { studentService } from "@/services/studentService";
-import VoiceAssessmentPlayer from "@/components/student/VoiceAssessmentPlayer";
+import VoiceModal, { EvalResult } from "@/app/[instituteId]/student/ai-chat/VoiceModal";
 
 // ─── Face Verification Modal ──────────────────────────────────────────────────
 
@@ -287,6 +287,16 @@ export default function StudentAssignmentsPage() {
   const [attemptScores, setAttemptScores] = useState<Record<string, number>>({});
   const [voicePlayerOpen, setVoicePlayerOpen] = useState(false);
   const [activeVoiceItem, setActiveVoiceItem] = useState<AssessmentItem | null>(null);
+  const [evalResult, setEvalResult] = useState<EvalResult | null>(null);
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsDark(document.documentElement.classList.contains("dark"));
+    check();
+    const obs = new MutationObserver(check);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
 
   // Face verification gate
   const [verifyOpen, setVerifyOpen] = useState(false);
@@ -523,21 +533,104 @@ export default function StudentAssignmentsPage() {
         </div>
       )}
 
-      <VoiceAssessmentPlayer
-        isOpen={voicePlayerOpen}
-        onClose={() => { setVoicePlayerOpen(false); setActiveVoiceItem(null); }}
-        assessmentData={activeVoiceItem ? {
-          id: activeVoiceItem.id,
-          title: activeVoiceItem.title,
-          instructions: activeVoiceItem.description,
-          questions: activeVoiceItem.voiceQuestions ?? [],
-        } : undefined}
-        onCompleted={(result) => {
-          if (!activeVoiceItem) return;
-          setAttemptedIds((prev) => new Set([...prev, activeVoiceItem.id]));
-          setAttemptScores((prev) => ({ ...prev, [activeVoiceItem.id]: result.percentage }));
-        }}
-      />
+      {voicePlayerOpen && activeVoiceItem && (() => {
+        const wsBase = process.env.NEXT_PUBLIC_VOICE_AGENT_WS_URL ?? "ws://localhost:5001/voice-agent";
+        const userId = authService.getUserId() ?? "student";
+        const sessionId = `va-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const wsUrl = `${wsBase}/ws/${instituteId}/${userId}/${sessionId}`;
+        return (
+          <VoiceModal
+            isDark={isDark}
+            instituteLogo={null}
+            context={{}}
+            selectedCourse={{ id: activeVoiceItem.id, name: activeVoiceItem.title, code: "" } as any}
+            instituteId={instituteId}
+            wsUrl={wsUrl}
+            label="Interview"
+            assessmentId={activeVoiceItem.id}
+            initMessage={{
+              type: "assessment_init",
+              data: {
+                title: activeVoiceItem.title,
+                instructions: activeVoiceItem.description ?? "",
+                questions: activeVoiceItem.voiceQuestions ?? [],
+              },
+            }}
+            onCompleted={(result) => {
+              setVoicePlayerOpen(false);
+              setEvalResult(result);
+            }}
+            onClose={() => { setVoicePlayerOpen(false); setActiveVoiceItem(null); }}
+          />
+        );
+      })()}
+
+      {evalResult && (
+        <div
+          className="fixed inset-0 z-200001 flex items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)" }}
+        >
+          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-gray-900 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className={`px-6 py-5 border-b border-gray-100 dark:border-gray-800 ${evalResult.passed ? "bg-green-50 dark:bg-green-900/20" : "bg-red-50 dark:bg-red-900/20"}`}>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className={`text-2xl font-bold ${evalResult.passed ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}>
+                    {evalResult.total_score} / {evalResult.total_marks}
+                    <span className="text-base font-semibold ml-2">({evalResult.percentage}%)</span>
+                  </p>
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{evalResult.overall_feedback}</p>
+                </div>
+                <span className={`shrink-0 rounded-full px-3 py-1 text-sm font-bold ${evalResult.passed ? "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300" : "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300"}`}>
+                  {evalResult.grade}
+                </span>
+              </div>
+            </div>
+
+            {/* Per-question breakdown */}
+            <div className="overflow-y-auto flex-1 p-5 space-y-3">
+              {evalResult.results.map((r, i) => (
+                <div key={r.question_id} className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-white/3 p-4">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                      {i + 1}. {r.question}
+                    </p>
+                    <span className={`shrink-0 text-xs font-bold px-2 py-0.5 rounded-full ${
+                      r.percentage >= 70
+                        ? "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300"
+                        : r.percentage >= 40
+                        ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300"
+                        : "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300"
+                    }`}>
+                      {r.score}/{r.marks_available}
+                    </span>
+                  </div>
+                  {r.student_answer && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 italic mb-1.5">
+                      Your answer: &ldquo;{r.student_answer}&rdquo;
+                    </p>
+                  )}
+                  {r.feedback && (
+                    <p className="text-xs text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 rounded-lg px-3 py-2">
+                      {r.feedback}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Close */}
+            <div className="p-5 border-t border-gray-100 dark:border-gray-800">
+              <button
+                onClick={() => { setEvalResult(null); setActiveVoiceItem(null); }}
+                className="w-full py-3 rounded-2xl text-sm font-bold text-white bg-linear-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 transition-all"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {verifyOpen && (
         <FaceVerificationModal
