@@ -263,6 +263,7 @@ interface VoiceQuestion {
 type AssessmentItem = {
   id: string;
   type: "exam" | "quiz" | "voice";
+  courseId: string;
   courseName: string;
   moduleTitle: string;
   title: string;
@@ -368,6 +369,7 @@ export default function StudentAssignmentsPage() {
         return {
           id: content.id,
           type,
+          courseId: g.course.id,
           courseName: g.course.name,
           moduleTitle: module.title,
           title: content.title,
@@ -573,13 +575,14 @@ export default function StudentAssignmentsPage() {
         const wsBase = process.env.NEXT_PUBLIC_VOICE_AGENT_WS_URL ?? "ws://localhost:5001/voice-agent";
         const userId = authService.getUserId() ?? "student";
         const sessionId = `va-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        const wsUrl = `${wsBase}/ws/${instituteId}/${userId}/${sessionId}`;
+        const encodedCourseName = encodeURIComponent(activeVoiceItem.courseName);
+        const wsUrl = `${wsBase}/ws/course-qa/${instituteId}/${activeVoiceItem.courseId}/${userId}/${sessionId}?course_name=${encodedCourseName}&greet=false`;
         return (
           <VoiceModal
             isDark={isDark}
             instituteLogo={null}
             context={{}}
-            selectedCourse={{ id: activeVoiceItem.id, name: activeVoiceItem.title, code: "" } as any}
+            selectedCourse={{ id: activeVoiceItem.courseId, name: activeVoiceItem.courseName, code: "" } as any}
             instituteId={instituteId}
             wsUrl={wsUrl}
             label="Interview"
