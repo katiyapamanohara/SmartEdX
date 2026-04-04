@@ -254,8 +254,9 @@ export default function CreateAssessmentModal({
   const [submitting, setSubmitting]           = useState(false);
   const [error, setError]                     = useState<string | null>(null);
 
-  // ── Shared: face ID ──────────────────────────────────────────────────────
+  // ── Shared: face ID + max attempts ──────────────────────────────────────
   const [requireFaceId, setRequireFaceId]     = useState(false);
+  const [maxAttempts, setMaxAttempts]         = useState(1);
 
   // ── MCQ-specific ─────────────────────────────────────────────────────────
   const [passingScore, setPassingScore]       = useState(70);
@@ -281,7 +282,7 @@ export default function CreateAssessmentModal({
       setAssessmentType("mcq");
       setCourseId(""); setModuleMode("existing"); setModuleId(""); setNewModuleName(""); setModules([]);
       setTitle(""); setDescription(""); setPassingScore(70); setTimeLimit(0);
-      setRequireFaceId(false);
+      setRequireFaceId(false); setMaxAttempts(1);
       setQuestions([newQuestion()]); setError(null);
       setVoiceInstructions(""); setVoiceFile(null); setVoiceNumQ(5); setVoiceMarksPerQ(10);
       setVoiceGenerating(false); setVoiceGenError(""); setVoiceQuestions([]); setVoiceStep("config");
@@ -342,7 +343,7 @@ export default function CreateAssessmentModal({
           ...(moduleMode === "existing" ? { moduleId } : { moduleName: newModuleName.trim() }),
           title: title.trim(),
           description: description.trim() || undefined,
-          quizData: { questions: filled, passingScore, timeLimit, assessmentType: "mcq", requireFaceId },
+          quizData: { questions: filled, passingScore, timeLimit, assessmentType: "mcq", requireFaceId, maxAttempts },
         });
         const modTitle = moduleMode === "existing"
           ? (modules.find((m) => m.id === moduleId)?.title ?? "") : newModuleName.trim();
@@ -367,6 +368,7 @@ export default function CreateAssessmentModal({
             timeLimit: 0,
             totalMarks: voiceQuestions.reduce((s, q) => s + q.marks, 0),
             requireFaceId,
+            maxAttempts,
           },
         });
         const modTitle = moduleMode === "existing"
@@ -661,6 +663,30 @@ export default function CreateAssessmentModal({
               )}
             </div>
           )}
+
+          {/* ── Max attempts (shared for all types) ── */}
+          <div className="flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-gray-700">
+            <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0">
+              <FiChevronRight className="w-4 h-4 text-gray-500" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Max Attempts</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">How many times a student can attempt this assessment</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setMaxAttempts((p) => Math.max(1, p - 1))}
+                className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors font-bold text-lg leading-none"
+              >−</button>
+              <span className="w-6 text-center text-sm font-bold text-gray-900 dark:text-white">{maxAttempts}</span>
+              <button
+                type="button"
+                onClick={() => setMaxAttempts((p) => Math.min(10, p + 1))}
+                className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors font-bold text-lg leading-none"
+              >+</button>
+            </div>
+          </div>
 
           {/* ── Face ID toggle (shared for all types) ── */}
           <button

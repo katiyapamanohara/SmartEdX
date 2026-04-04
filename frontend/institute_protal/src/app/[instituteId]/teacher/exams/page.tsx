@@ -434,6 +434,7 @@ function ExamModal({ courses, initial, onSave, onClose }: ExamModalProps) {
   const [passingScore, setPassingScore] = useState(initial?.passingScore ?? 50);
   const [questions, setQuestions] = useState<ExamQuestion[]>(initial?.questions ?? []);
   const [requireFaceId, setRequireFaceId] = useState(initial?.requireFaceId ?? false);
+  const [maxAttempts, setMaxAttempts] = useState(initial?.maxAttempts ?? 1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -465,6 +466,7 @@ function ExamModal({ courses, initial, onSave, onClose }: ExamModalProps) {
       durationMinutes,
       passingScore,
       requireFaceId,
+      maxAttempts,
       questions,
       ...(publish && scheduledAt ? { status: "scheduled" as ExamStatus } : {}),
     });
@@ -552,6 +554,24 @@ function ExamModal({ courses, initial, onSave, onClose }: ExamModalProps) {
                 <textarea value={instructions} onChange={(e) => setInstructions(e.target.value)} rows={2}
                   className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-800 dark:text-white outline-none focus:border-brand-400 resize-none"
                   placeholder="e.g. Read each question carefully before answering." />
+              </div>
+
+              {/* Max Attempts */}
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-gray-700">
+                <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0 text-gray-500 dark:text-gray-400 font-bold text-sm">
+                  #
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Max Attempts</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">How many times a student can attempt this exam</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button type="button" onClick={() => setMaxAttempts((p) => Math.max(1, p - 1))}
+                    className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors font-bold text-lg leading-none">−</button>
+                  <span className="w-6 text-center text-sm font-bold text-gray-900 dark:text-white">{maxAttempts}</span>
+                  <button type="button" onClick={() => setMaxAttempts((p) => Math.min(10, p + 1))}
+                    className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors font-bold text-lg leading-none">+</button>
+                </div>
               </div>
 
               {/* Face ID toggle */}

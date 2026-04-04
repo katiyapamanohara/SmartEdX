@@ -273,6 +273,7 @@ type AssessmentItem = {
   totalMarks?: number;
   voiceQuestions?: VoiceQuestion[];
   requireFaceId: boolean;
+  maxAttempts: number;
   createdAt?: string;
 };
 
@@ -285,6 +286,7 @@ export default function StudentAssignmentsPage() {
   const [groups, setGroups] = useState<StudentAssessmentGroup[]>([]);
   const [attemptedIds, setAttemptedIds] = useState<Set<string>>(new Set());
   const [attemptScores, setAttemptScores] = useState<Record<string, number>>({});
+  const [attemptCounts, setAttemptCounts] = useState<Record<string, number>>({});
   const [voicePlayerOpen, setVoicePlayerOpen] = useState(false);
   const [activeVoiceItem, setActiveVoiceItem] = useState<AssessmentItem | null>(null);
   const [evalResult, setEvalResult] = useState<EvalResult | null>(null);
@@ -330,17 +332,20 @@ export default function StudentAssignmentsPage() {
         if (userId) {
           const attempted = new Set<string>();
           const scores: Record<string, number> = {};
+          const counts: Record<string, number> = {};
           for (const g of data) {
             for (const q of g.quizzes) {
               const attempts = q.content.studentAttempts || {};
               if (attempts[userId]) {
                 attempted.add(q.content.id);
                 scores[q.content.id] = attempts[userId].score ?? 0;
+                counts[q.content.id] = attempts[userId].attemptCount ?? 1;
               }
             }
           }
           setAttemptedIds(attempted);
           setAttemptScores(scores);
+          setAttemptCounts(counts);
         }
       } catch (e) {
         console.error(e);
@@ -375,6 +380,7 @@ export default function StudentAssignmentsPage() {
           totalMarks: (content.quizData as any)?.totalMarks,
           voiceQuestions: isVoice ? (content.quizData as any)?.voiceQuestions : undefined,
           requireFaceId: !!((content.quizData as any)?.requireFaceId),
+          maxAttempts: (content.quizData as any)?.maxAttempts ?? 1,
           createdAt: content.createdAt,
         };
       }),
@@ -483,50 +489,80 @@ export default function StudentAssignmentsPage() {
                   {item.type !== "voice" ? ` • Pass ${item.passingScore}%` : ""}
                 </span>
 
-                {item.type === "voice" ? (
-                  attemptedIds.has(item.id) ? (
-                    <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                      (attemptScores[item.id] ?? 0) >= (item.passingScore || 50)
-                        ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400"
-                        : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
-                    }`}>
-                      {(attemptScores[item.id] ?? 0) >= (item.passingScore || 50) ? "Passed" : "Failed"} · {attemptScores[item.id] ?? 0}%
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => openWithVerification(() => {
-                        setActiveVoiceItem(item);
-                        setVoicePlayerOpen(true);
-                      }, item.requireFaceId)}
-                      className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white bg-linear-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 transition-all shadow-sm shadow-purple-500/20"
-                    >
-                      <FiMic className="w-3 h-3" /> Start Interview
-                    </button>
-                  )
-                ) : attemptedIds.has(item.id) ? (
-                  <div className="flex items-center gap-2">
-                    <span className={`rounded-full px-2 py-1 text-xs font-medium ${
-                      (attemptScores[item.id] ?? 0) >= item.passingScore
-                        ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400"
-                        : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
-                    }`}>
-                      {(attemptScores[item.id] ?? 0) >= item.passingScore ? "Passed" : "Failed"} · {attemptScores[item.id] ?? 0}%
-                    </span>
-                    <Link
-                      href={`/${instituteId}/student/assignments/${item.id}`}
-                      className="rounded-lg border border-gray-200 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
-                    >
-                      View Review
-                    </Link>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => openWithVerification(() => router.push(`/${instituteId}/student/assignments/${item.id}`), item.requireFaceId)}
-                    className="font-medium text-brand-500 hover:underline text-sm"
-                  >
-                    Start
-                  </button>
-                )}
+                {(() => {
+                  const used = attemptCounts[item.id] ?? 0;
+                  const max = item.maxAttempts;
+                  const hasAttempted = attemptedIds.has(item.id);
+                  const attemptsLeft = max - used;
+                  const canRetry = hasAttempted && attemptsLeft > 0;
+
+                  if (item.type === "voice") {
+                    return (
+                      <div className="flex items-center gap-2 flex-wrap justify-end">
+                        {hasAttempted && (
+                          <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                            (attemptScores[item.id] ?? 0) >= (item.passingScore || 50)
+                              ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400"
+                              : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
+                          }`}>
+                            {(attemptScores[item.id] ?? 0) >= (item.passingScore || 50) ? "Passed" : "Failed"} · {attemptScores[item.id] ?? 0}%
+                          </span>
+                        )}
+                        {max > 1 && (
+                          <span className="text-xs text-gray-400 dark:text-gray-500">
+                            {used}/{max} attempts
+                          </span>
+                        )}
+                        {(!hasAttempted || canRetry) && (
+                          <button
+                            onClick={() => openWithVerification(() => {
+                              setActiveVoiceItem(item);
+                              setVoicePlayerOpen(true);
+                            }, item.requireFaceId)}
+                            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white bg-linear-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 transition-all shadow-sm shadow-purple-500/20"
+                          >
+                            <FiMic className="w-3 h-3" /> {hasAttempted ? "Retry" : "Start Interview"}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                      {hasAttempted && (
+                        <>
+                          <span className={`rounded-full px-2 py-1 text-xs font-medium ${
+                            (attemptScores[item.id] ?? 0) >= item.passingScore
+                              ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400"
+                              : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
+                          }`}>
+                            {(attemptScores[item.id] ?? 0) >= item.passingScore ? "Passed" : "Failed"} · {attemptScores[item.id] ?? 0}%
+                          </span>
+                          <Link
+                            href={`/${instituteId}/student/assignments/${item.id}`}
+                            className="rounded-lg border border-gray-200 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                          >
+                            View Review
+                          </Link>
+                        </>
+                      )}
+                      {max > 1 && hasAttempted && (
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                          {used}/{max} attempts
+                        </span>
+                      )}
+                      {(!hasAttempted || canRetry) && (
+                        <button
+                          onClick={() => openWithVerification(() => router.push(`/${instituteId}/student/assignments/${item.id}`), item.requireFaceId)}
+                          className="font-medium text-brand-500 hover:underline text-sm"
+                        >
+                          {hasAttempted ? "Retry" : "Start"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           ))}
