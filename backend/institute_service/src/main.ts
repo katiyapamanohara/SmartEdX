@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, Logger } from '@nestjs/common';
+import { ValidationPipe, Logger, RequestMethod } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { LoggingInterceptor } from './core/interceptors/logging.interceptor';
@@ -43,7 +43,14 @@ async function bootstrap() {
   app.useGlobalInterceptors(new LoggingInterceptor());
 
   // Global prefix — must match the gateway's URL construction: ${serviceUrl}/api/institutes/${path}
-  app.setGlobalPrefix('api/institutes');
+  // Voice session endpoints are called directly by the voice agent, not via the gateway,
+  // so they must be excluded from the prefix.
+  app.setGlobalPrefix('api/institutes', {
+    exclude: [
+      { path: 'api/session/voice/start', method: RequestMethod.POST },
+      { path: 'api/session/voice/end', method: RequestMethod.POST },
+    ],
+  });
 
   // Swagger configuration
   const config = new DocumentBuilder()
