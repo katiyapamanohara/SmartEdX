@@ -65,6 +65,8 @@ export class ExamService {
       createdAt: exam.createdAt,
       updatedAt: exam.updatedAt,
       ...(attempt !== undefined ? { myAttempt: attempt } : {}),
+      // Include all student attempts for teacher/admin views (no specific userId)
+      ...(userId === undefined ? { studentAttempts: exam.studentAttempts ?? {} } : {}),
     };
   }
 

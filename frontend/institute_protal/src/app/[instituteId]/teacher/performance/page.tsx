@@ -26,6 +26,17 @@ type ExamStat = {
   status: string;
 };
 
+type ClassWeakArea = {
+  id: string;
+  source: "exam" | "quiz-voice" | "quiz-mcq";
+  sourceTitle: string;
+  courseName: string;
+  questionText: string;
+  failCount: number;
+  totalAttempts: number;
+  failRate: number; // % of students who got it wrong / scored low
+};
+
 const EXAM_STATUS_COLORS: Record<string, string> = {
   completed: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400",
   active: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400",
@@ -40,6 +51,7 @@ export default function TeacherPerformancePage() {
   const [loading, setLoading] = useState(true);
   const [courseStats, setCourseStats] = useState<CourseStat[]>([]);
   const [examStats, setExamStats] = useState<ExamStat[]>([]);
+  const [classWeakAreas, setClassWeakAreas] = useState<ClassWeakArea[]>([]);
   const [totalStudents, setTotalStudents] = useState(0);
   const [overallAvg, setOverallAvg] = useState<number | null>(null);
   const [totalSubmissions, setTotalSubmissions] = useState(0);
@@ -173,6 +185,112 @@ export default function TeacherPerformancePage() {
           for (const sid of Object.keys(exam.studentAttempts ?? {})) studentIds.add(sid);
         }
         setTotalStudents(studentIds.size);
+
+        // ── Class Weak Areas Analysis ────────────────────────────────────────
+        const weakAreas: ClassWeakArea[] = [];
+
+        // 1. Exam MCQ questions — find questions where most students got wrong
+        for (const exam of exams as any[]) {
+          const attempts: Record<string, any> = exam.studentAttempts ?? {};
+          const attemptList = Object.values(attempts);
+          if (attemptList.length === 0) continue;
+
+          for (const q of exam.questions ?? []) {
+            if (q.type !== "mcq" || q.correctAnswer === undefined) continue;
+            const failCount = attemptList.filter(
+              (a) => a.answers?.[q.id] !== undefined && a.answers[q.id] !== q.correctAnswer
+            ).length;
+            const answeredCount = attemptList.filter(
+              (a) => a.answers?.[q.id] !== undefined
+            ).length;
+            if (answeredCount === 0) continue;
+            const failRate = Math.round((failCount / answeredCount) * 100);
+            if (failRate < 30) continue; // only flag if 30%+ students got it wrong
+            weakAreas.push({
+              id: `exam-${exam.id}-${q.id}`,
+              source: "exam",
+              sourceTitle: exam.title,
+              courseName: exam.courseName ?? "—",
+              questionText: q.question,
+              failCount,
+              totalAttempts: answeredCount,
+              failRate,
+            });
+          }
+        }
+
+        // 2. Voice quiz questionResults — aggregate per question across all students
+        for (const group of assessmentGroups as any[]) {
+          for (const { content } of group.quizzes ?? []) {
+            const allAttempts = Object.values(content.studentAttempts ?? {}) as any[];
+            const voiceAttempts = allAttempts.filter((a) => a.type === "voice" && a.questionResults);
+            if (voiceAttempts.length === 0) continue;
+
+            const qAgg: Record<string, { text: string; totalPct: number; count: number }> = {};
+            for (const attempt of voiceAttempts) {
+              for (const qr of attempt.questionResults as any[]) {
+                if (!qAgg[qr.questionId]) {
+                  qAgg[qr.questionId] = { text: qr.question, totalPct: 0, count: 0 };
+                }
+                qAgg[qr.questionId].totalPct += qr.percentage ?? 0;
+                qAgg[qr.questionId].count += 1;
+              }
+            }
+
+            for (const [qId, agg] of Object.entries(qAgg)) {
+              const avgPct = Math.round(agg.totalPct / agg.count);
+              if (avgPct >= 60) continue;
+              weakAreas.push({
+                id: `voice-${content.id}-${qId}`,
+                source: "quiz-voice",
+                sourceTitle: content.title,
+                courseName: group.course?.name ?? "—",
+                questionText: agg.text,
+                failCount: agg.count,
+                totalAttempts: agg.count,
+                failRate: 100 - avgPct,
+              });
+            }
+          }
+        }
+
+        // 3. MCQ quiz questions — compare student answers vs correctAnswer
+        for (const group of assessmentGroups as any[]) {
+          for (const { content } of group.quizzes ?? []) {
+            const questions: any[] = content.quizData?.questions ?? [];
+            if (questions.length === 0) continue;
+            const allAttempts = Object.values(content.studentAttempts ?? {}) as any[];
+            const mcqAttempts = allAttempts.filter((a) => a.answers && a.type !== "voice");
+            if (mcqAttempts.length === 0) continue;
+
+            for (const q of questions) {
+              if (q.correctAnswer === undefined) continue;
+              const answeredAttempts = mcqAttempts.filter(
+                (a) => a.answers?.[q.id] !== undefined
+              );
+              if (answeredAttempts.length === 0) continue;
+              const failCount = answeredAttempts.filter(
+                (a) => a.answers[q.id] !== q.correctAnswer
+              ).length;
+              const failRate = Math.round((failCount / answeredAttempts.length) * 100);
+              if (failRate < 30) continue;
+              weakAreas.push({
+                id: `quiz-${content.id}-${q.id}`,
+                source: "quiz-mcq",
+                sourceTitle: content.title,
+                courseName: group.course?.name ?? "—",
+                questionText: q.question,
+                failCount,
+                totalAttempts: answeredAttempts.length,
+                failRate,
+              });
+            }
+          }
+        }
+
+        // Sort: highest fail rate first
+        weakAreas.sort((a, b) => b.failRate - a.failRate);
+        setClassWeakAreas(weakAreas);
       } finally {
         setLoading(false);
       }
@@ -207,6 +325,89 @@ export default function TeacherPerformancePage() {
           </div>
         ))}
       </div>
+
+      {/* Class Weak Areas */}
+      {(loading || classWeakAreas.length > 0) && (
+        <div className="rounded-2xl border border-red-200 dark:border-red-800/50 bg-red-50/50 dark:bg-red-500/[0.05] overflow-hidden">
+          <div className="px-5 py-4 border-b border-red-200 dark:border-red-800/50 flex items-center gap-2">
+            <span className="text-lg">📉</span>
+            <div>
+              <h3 className="font-semibold text-gray-800 dark:text-white">Class Weak Areas</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                Questions where 30%+ of students struggled — sorted by highest failure rate
+              </p>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="p-5 flex flex-col gap-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="animate-pulse h-16 bg-red-100 dark:bg-red-900/20 rounded-xl" />
+              ))}
+            </div>
+          ) : (
+            <div className="divide-y divide-red-100 dark:divide-red-900/30">
+              {classWeakAreas.map((area) => (
+                <div key={area.id} className="px-5 py-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      {/* Source label */}
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-xs font-medium text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-500/15 px-2 py-0.5 rounded-full">
+                          {area.source === "exam"
+                            ? "Exam"
+                            : area.source === "quiz-voice"
+                            ? "Voice Quiz"
+                            : "Quiz"}
+                        </span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {area.sourceTitle} · {area.courseName}
+                        </span>
+                      </div>
+                      {/* Question */}
+                      <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                        {area.questionText}
+                      </p>
+                    </div>
+
+                    {/* Fail rate badge */}
+                    <div className="shrink-0 text-right">
+                      <div
+                        className={`text-lg font-bold ${
+                          area.failRate >= 70
+                            ? "text-red-600 dark:text-red-400"
+                            : area.failRate >= 50
+                            ? "text-orange-600 dark:text-orange-400"
+                            : "text-amber-600 dark:text-amber-400"
+                        }`}
+                      >
+                        {area.failRate}%
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {area.failCount}/{area.totalAttempts} failed
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="mt-2.5 h-1.5 w-full bg-red-100 dark:bg-red-900/30 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${
+                        area.failRate >= 70
+                          ? "bg-red-500"
+                          : area.failRate >= 50
+                          ? "bg-orange-500"
+                          : "bg-amber-500"
+                      }`}
+                      style={{ width: `${area.failRate}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Exam Performance Table */}
       <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.03] overflow-hidden">
