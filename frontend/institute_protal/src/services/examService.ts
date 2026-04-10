@@ -144,6 +144,62 @@ class ExamService {
     return res.json();
   }
 
+  async reportIntegrityFlag(
+    instituteId: string,
+    examId: string,
+    type: "tab_switch" | "face_absent" | "multiple_faces" | "face_verify_failed" | "camera_disabled" | "fullscreen_exit"
+  ): Promise<void> {
+    try {
+      await fetch(`${this.base(instituteId)}/${examId}/integrity-flag`, {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify({ type }),
+      });
+    } catch {
+      // fire-and-forget — never block the student
+    }
+  }
+
+  async getIntegrityFlags(instituteId: string): Promise<{
+    flagId: string; examId: string; examTitle: string; userId: string;
+    studentName: string; type: string; severity: string; timestamp: string; reviewed: boolean;
+  }[]> {
+    const res = await fetch(`${this.base(instituteId)}/integrity-flags`, { headers: this.headers() });
+    if (!res.ok) return [];
+    return res.json();
+  }
+
+  async markFlagReviewed(
+    instituteId: string,
+    examId: string,
+    flagId: string,
+    userId: string
+  ): Promise<boolean> {
+    const res = await fetch(`${this.base(instituteId)}/${examId}/integrity-flag/${flagId}/reviewed`, {
+      method: "PATCH",
+      headers: this.headers(),
+      body: JSON.stringify({ userId }),
+    });
+    return res.ok;
+  }
+
+  async verifyFace(imageB64: string): Promise<{ verified: boolean; distance: number; threshold: number } | null> {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    const token = authService.getToken();
+    if (!token) return null;
+    try {
+      const res = await fetch(`${apiUrl}/api/institutes/auth/me/face/verify`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ image_b64: imageB64 }),
+      });
+      if (!res.ok) return null;
+      return res.json();
+    } catch {
+      return null;
+    }
+  }
+
 }
 
 export const examService = new ExamService();

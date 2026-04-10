@@ -13,6 +13,22 @@ import { InstituteUser } from './institute-user.entity';
 
 export type ExamStatus = 'draft' | 'scheduled' | 'active' | 'completed';
 
+export type IntegrityViolationType =
+  | 'tab_switch'
+  | 'face_absent'
+  | 'multiple_faces'
+  | 'face_verify_failed'
+  | 'camera_disabled'
+  | 'fullscreen_exit';
+
+export interface IntegrityFlag {
+  id: string;
+  type: IntegrityViolationType;
+  severity: 'high' | 'medium' | 'low';
+  timestamp: string;
+  reviewed: boolean;
+}
+
 export interface ExamQuestion {
   id: string;
   type: 'mcq' | 'essay';
@@ -98,6 +114,10 @@ export class Exam {
   /** Attempts keyed by student userId */
   @Column({ type: 'jsonb', default: '{}' })
   studentAttempts: Record<string, ExamAttempt & { attemptCount?: number }>;
+
+  /** Integrity flags keyed by student userId */
+  @Column({ type: 'jsonb', default: '{}' })
+  integrityFlags: Record<string, IntegrityFlag[]>;
 
   @CreateDateColumn()
   createdAt: Date;

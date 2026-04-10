@@ -21,7 +21,7 @@ function fmtDate(d?: string) {
   return new Date(d).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
 }
 
-// ─── Countdown timer ───────────────────────────────────────────────────────────
+// ─── Countdown timer ──────────────────────────────────────────────────────────
 
 function Countdown({ endsAt }: { endsAt: Date }) {
   const [secs, setSecs] = useState(Math.max(0, Math.floor((endsAt.getTime() - Date.now()) / 1000)));
@@ -40,14 +40,164 @@ function Countdown({ endsAt }: { endsAt: Date }) {
   );
 }
 
-// ─── Take Exam Modal ───────────────────────────────────────────────────────────
+// ─── Face Verify Modal ────────────────────────────────────────────────────────
+
+function FaceVerifyModal({
+  exam,
+  instituteId,
+  onVerified,
+  onClose,
+}: {
+  exam: Exam;
+  instituteId: string;
+  onVerified: () => void;
+  onClose: () => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [status, setStatus] = useState<"loading" | "ready" | "verifying" | "success" | "failed">("loading");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+        if (!active) { stream.getTracks().forEach((t) => t.stop()); return; }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+        setStatus("ready");
+      } catch {
+        setStatus("failed");
+        setErrorMsg("Cannot access camera. Please enable camera permissions and try again.");
+      }
+    })();
+    return () => {
+      active = false;
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  const stopCamera = () => streamRef.current?.getTracks().forEach((t) => t.stop());
+
+  const handleVerify = async () => {
+    if (!videoRef.current) return;
+    setStatus("verifying");
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = videoRef.current.videoWidth || 640;
+      canvas.height = videoRef.current.videoHeight || 480;
+      canvas.getContext("2d")!.drawImage(videoRef.current, 0, 0);
+      const imageB64 = canvas.toDataURL("image/jpeg", 0.92);
+
+      const result = await examService.verifyFace(imageB64);
+      if (result?.verified) {
+        setStatus("success");
+        stopCamera();
+        setTimeout(onVerified, 900);
+      } else {
+        setStatus("failed");
+        setErrorMsg(
+          result
+            ? `Face not recognized (distance ${result.distance.toFixed(3)} > threshold ${result.threshold}). Ensure you are enrolled and well-lit.`
+            : "Verification failed. Make sure your face is enrolled in Account Settings."
+        );
+      }
+    } catch {
+      setStatus("failed");
+      setErrorMsg("An error occurred during verification. Please try again.");
+    }
+  };
+
+  const handleClose = () => { stopCamera(); onClose(); };
+  const retry = () => { setStatus("ready"); setErrorMsg(""); };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+          <div>
+            <h2 className="font-bold text-gray-900 dark:text-white">Face Verification Required</h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{exam.title}</p>
+          </div>
+          <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1">✕</button>
+        </div>
+
+        <div className="p-6 flex flex-col items-center gap-5">
+          {/* Camera feed */}
+          <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black">
+            <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
+            {/* Oval guide overlay */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-36 h-44 rounded-full border-4 border-white/60" style={{ boxShadow: "0 0 0 9999px rgba(0,0,0,0.45)" }} />
+            </div>
+            {status === "success" && (
+              <div className="absolute inset-0 flex items-center justify-center bg-green-500/80">
+                <span className="text-white text-5xl">✓</span>
+              </div>
+            )}
+          </div>
+
+          {/* Status / error */}
+          {status === "loading" && (
+            <p className="text-sm text-gray-500 dark:text-gray-400 text-center">Starting camera…</p>
+          )}
+          {status === "ready" && (
+            <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
+              Position your face within the oval and click <strong>Verify</strong>.
+            </p>
+          )}
+          {status === "verifying" && (
+            <p className="text-sm text-blue-600 dark:text-blue-400 text-center animate-pulse">Verifying identity…</p>
+          )}
+          {status === "success" && (
+            <p className="text-sm font-semibold text-green-600 dark:text-green-400 text-center">Identity verified! Starting exam…</p>
+          )}
+          {status === "failed" && (
+            <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300 text-center w-full">
+              {errorMsg || "Verification failed."}
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex gap-3 w-full">
+            <button onClick={handleClose} className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5">
+              Cancel
+            </button>
+            {status === "failed" ? (
+              <button onClick={retry} className="flex-1 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600">
+                Try Again
+              </button>
+            ) : (
+              <button
+                onClick={handleVerify}
+                disabled={status !== "ready"}
+                className="flex-1 py-2.5 rounded-xl bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 disabled:opacity-40"
+              >
+                {status === "verifying" ? "Verifying…" : "Verify Identity"}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Take Exam Modal (with proctoring) ────────────────────────────────────────
 
 function TakeExamModal({
   exam,
+  instituteId,
   onSubmit,
   onClose,
 }: {
   exam: Exam;
+  instituteId: string;
   onSubmit: (answers: Record<string, number | string>) => Promise<void>;
   onClose: () => void;
 }) {
@@ -55,11 +205,15 @@ function TakeExamModal({
   const [currentQ, setCurrentQ] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [flagWarning, setFlagWarning] = useState("");
   const endsAt = exam.scheduledAt
     ? new Date(new Date(exam.scheduledAt).getTime() + exam.durationMinutes * 60_000)
     : new Date(Date.now() + exam.durationMinutes * 60_000);
 
   const submitRef = useRef(false);
+  const flagCooldown = useRef<Record<string, number>>({});
+
+  // Auto-submit when time expires
   useEffect(() => {
     const check = setInterval(() => {
       if (Date.now() >= endsAt.getTime() && !submitRef.current) {
@@ -70,6 +224,121 @@ function TakeExamModal({
     return () => clearInterval(check);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [answers]);
+
+  // ── Proctoring: tab / window switch ──────────────────────────────────────
+  useEffect(() => {
+    const reportFlag = (type: Parameters<typeof examService.reportIntegrityFlag>[2]) => {
+      const now = Date.now();
+      const last = flagCooldown.current[type] ?? 0;
+      if (now - last < 10_000) return; // de-bounce: once per 10 s per type
+      flagCooldown.current[type] = now;
+      examService.reportIntegrityFlag(instituteId, exam.id, type);
+      setFlagWarning(
+        type === "tab_switch"
+          ? "⚠️ Tab switch detected and recorded."
+          : type === "fullscreen_exit"
+          ? "⚠️ Fullscreen exit recorded."
+          : "⚠️ Integrity event recorded."
+      );
+      setTimeout(() => setFlagWarning(""), 5000);
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") reportFlag("tab_switch");
+    };
+    const onBlur = () => reportFlag("tab_switch");
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) reportFlag("fullscreen_exit");
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("blur", onBlur);
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+
+    // Request fullscreen on start
+    document.documentElement.requestFullscreen?.().catch(() => {});
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("blur", onBlur);
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+      document.exitFullscreen?.().catch(() => {});
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exam.id, instituteId]);
+
+  // ── Proctoring: camera presence check ────────────────────────────────────
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const faceCheckVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    let faceapi: typeof import("@vladmandic/face-api") | null = null;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    let mounted = true;
+
+    (async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        if (!mounted) { stream.getTracks().forEach((t) => t.stop()); return; }
+        cameraStreamRef.current = stream;
+
+        // Silent video element for detection
+        const video = document.createElement("video");
+        video.srcObject = stream;
+        video.muted = true;
+        video.playsInline = true;
+        await video.play();
+        faceCheckVideoRef.current = video;
+
+        // Dynamically load face-api models
+        faceapi = await import("@vladmandic/face-api");
+        await faceapi.nets.tinyFaceDetector.loadFromUri("/models");
+
+        // Check every 30 s
+        intervalId = setInterval(async () => {
+          if (!mounted || !faceCheckVideoRef.current || !faceapi) return;
+          try {
+            const detections = await faceapi.detectAllFaces(
+              faceCheckVideoRef.current,
+              new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.4 })
+            );
+            const count = detections.length;
+            const now = Date.now();
+
+            if (count === 0) {
+              const last = flagCooldown.current["face_absent"] ?? 0;
+              if (now - last >= 30_000) {
+                flagCooldown.current["face_absent"] = now;
+                examService.reportIntegrityFlag(instituteId, exam.id, "face_absent");
+                setFlagWarning("⚠️ Face not detected. Please stay in front of the camera.");
+                setTimeout(() => setFlagWarning(""), 6000);
+              }
+            } else if (count > 1) {
+              const last = flagCooldown.current["multiple_faces"] ?? 0;
+              if (now - last >= 30_000) {
+                flagCooldown.current["multiple_faces"] = now;
+                examService.reportIntegrityFlag(instituteId, exam.id, "multiple_faces");
+                setFlagWarning("⚠️ Multiple faces detected. Only one person allowed during the exam.");
+                setTimeout(() => setFlagWarning(""), 6000);
+              }
+            }
+          } catch {
+            // face detection can fail silently
+          }
+        }, 30_000);
+      } catch {
+        // Camera denied → flag camera_disabled once
+        examService.reportIntegrityFlag(instituteId, exam.id, "camera_disabled");
+      }
+    })();
+
+    return () => {
+      mounted = false;
+      if (intervalId) clearInterval(intervalId);
+      cameraStreamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exam.id, instituteId]);
 
   const handleSubmit = async () => {
     setSubmitting(true);
@@ -89,6 +358,11 @@ function TakeExamModal({
         <div className="flex items-center gap-3 min-w-0">
           <span className="font-bold text-gray-900 dark:text-white truncate">{exam.title}</span>
           <span className="text-xs text-gray-400 hidden sm:block">{exam.courseName}</span>
+          {/* Proctoring indicator */}
+          <span className="hidden sm:flex items-center gap-1 text-xs text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse inline-block" />
+            Monitored
+          </span>
         </div>
         <div className="flex items-center gap-4 shrink-0">
           <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
@@ -105,6 +379,13 @@ function TakeExamModal({
       <div className="h-1 bg-gray-200 dark:bg-gray-800">
         <div className="h-1 bg-brand-500 transition-all" style={{ width: `${progress}%` }} />
       </div>
+
+      {/* Integrity warning toast */}
+      {flagWarning && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-amber-500 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-lg">
+          {flagWarning}
+        </div>
+      )}
 
       <div className="max-w-3xl mx-auto px-4 py-8 flex flex-col gap-6">
         {exam.instructions && (
@@ -169,7 +450,7 @@ function TakeExamModal({
             </div>
           )}
 
-          {/* Essay text area */}
+          {/* Essay */}
           {q.type === "essay" && (
             <div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Write your answer below. Your response will be reviewed by the teacher.</p>
@@ -212,7 +493,6 @@ function TakeExamModal({
           )}
         </div>
 
-        {/* Confirm submit */}
         {confirmed && (
           <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 px-4">
             <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-sm shadow-xl text-center">
@@ -232,7 +512,7 @@ function TakeExamModal({
   );
 }
 
-// ─── Result Modal ──────────────────────────────────────────────────────────────
+// ─── Result Modal ─────────────────────────────────────────────────────────────
 
 function ResultModal({
   result,
@@ -278,7 +558,7 @@ function ResultModal({
   );
 }
 
-// ─── Exam Card ─────────────────────────────────────────────────────────────────
+// ─── Exam Card ────────────────────────────────────────────────────────────────
 
 function ExamCard({ exam, onStart }: { exam: Exam; onStart: (exam: Exam) => void }) {
   const attempt = exam.myAttempt;
@@ -295,7 +575,14 @@ function ExamCard({ exam, onStart }: { exam: Exam; onStart: (exam: Exam) => void
           <p className="font-semibold text-gray-900 dark:text-white truncate">{exam.title}</p>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{exam.courseName}</p>
         </div>
-        {statusBadge(exam.status)}
+        <div className="flex flex-col items-end gap-1">
+          {statusBadge(exam.status)}
+          {exam.requireFaceId && (
+            <span className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded-full">
+              🔒 Face ID
+            </span>
+          )}
+        </div>
       </div>
 
       {exam.description && <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2">{exam.description}</p>}
@@ -342,7 +629,7 @@ function ExamCard({ exam, onStart }: { exam: Exam; onStart: (exam: Exam) => void
           onClick={() => onStart(exam)}
           className="mt-1 w-full py-2.5 rounded-xl bg-green-500 text-white font-semibold text-sm hover:bg-green-600 transition-colors"
         >
-          Start Exam
+          {exam.requireFaceId ? "🔒 Verify & Start Exam" : "Start Exam"}
         </button>
       )}
 
@@ -356,12 +643,13 @@ function ExamCard({ exam, onStart }: { exam: Exam; onStart: (exam: Exam) => void
   );
 }
 
-// ─── Main Page ─────────────────────────────────────────────────────────────────
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function StudentExamsPage() {
   const { instituteId } = useParams<{ instituteId: string }>();
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
+  const [verifyingExam, setVerifyingExam] = useState<Exam | null>(null); // face-verify step
   const [takingExam, setTakingExam] = useState<Exam | null>(null);
   const [result, setResult] = useState<{ score: number; totalMarks: number; percentage: number; passed: boolean; passingScore: number; pendingEssayReview?: boolean } | null>(null);
 
@@ -375,18 +663,25 @@ export default function StudentExamsPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // When student clicks "Start Exam"
+  const handleStart = (exam: Exam) => {
+    if (exam.requireFaceId) {
+      setVerifyingExam(exam);   // show face verify first
+    } else {
+      setTakingExam(exam);       // start directly
+    }
+  };
+
   const handleSubmit = async (answers: Record<string, number | string>) => {
     if (!takingExam) return;
     const res = await examService.submitExam(instituteId, takingExam.id, answers);
     if (res) {
       setResult(res);
       setTakingExam(null);
-      // Refresh exam list to show attempt
       load();
     }
   };
 
-  // Stats
   const upcoming = exams.filter((e) => e.status === "scheduled").length;
   const active = exams.filter((e) => e.status === "active").length;
   const completed = exams.filter((e) => e.myAttempt).length;
@@ -442,7 +737,7 @@ export default function StudentExamsPage() {
             <section>
               <h2 className="text-sm font-semibold text-green-600 dark:text-green-400 uppercase tracking-wide mb-3">🟢 Live Now</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {grouped.active.map((e) => <ExamCard key={e.id} exam={e} onStart={setTakingExam} />)}
+                {grouped.active.map((e) => <ExamCard key={e.id} exam={e} onStart={handleStart} />)}
               </div>
             </section>
           )}
@@ -450,7 +745,7 @@ export default function StudentExamsPage() {
             <section>
               <h2 className="text-sm font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-3">📅 Upcoming</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {grouped.scheduled.map((e) => <ExamCard key={e.id} exam={e} onStart={setTakingExam} />)}
+                {grouped.scheduled.map((e) => <ExamCard key={e.id} exam={e} onStart={handleStart} />)}
               </div>
             </section>
           )}
@@ -458,14 +753,34 @@ export default function StudentExamsPage() {
             <section>
               <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">✅ Completed</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {grouped.completed.map((e) => <ExamCard key={e.id} exam={e} onStart={setTakingExam} />)}
+                {grouped.completed.map((e) => <ExamCard key={e.id} exam={e} onStart={handleStart} />)}
               </div>
             </section>
           )}
         </div>
       )}
 
-      {takingExam && <TakeExamModal exam={takingExam} onSubmit={handleSubmit} onClose={() => setTakingExam(null)} />}
+      {/* Face verify step (for requireFaceId exams) */}
+      {verifyingExam && (
+        <FaceVerifyModal
+          exam={verifyingExam}
+          instituteId={instituteId}
+          onVerified={() => {
+            setTakingExam(verifyingExam);
+            setVerifyingExam(null);
+          }}
+          onClose={() => setVerifyingExam(null)}
+        />
+      )}
+
+      {takingExam && (
+        <TakeExamModal
+          exam={takingExam}
+          instituteId={instituteId}
+          onSubmit={handleSubmit}
+          onClose={() => setTakingExam(null)}
+        />
+      )}
       {result && <ResultModal result={result} onClose={() => setResult(null)} />}
     </div>
   );
