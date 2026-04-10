@@ -872,6 +872,30 @@ class InstituteService {
     }
   }
 
+  async searchCourseKB(
+    instituteId: string,
+    courseId: string,
+    query: string,
+  ): Promise<{ content: string; page: number | null; title: string; score: number }[]> {
+    const token = authService.getToken();
+    if (!token) return [];
+    try {
+      const response = await fetch(
+        `${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/${courseId}/kb-search`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ query }),
+        },
+      );
+      if (!response.ok) return [];
+      const data = await response.json();
+      return data.results ?? [];
+    } catch {
+      return [];
+    }
+  }
+
   async getTeacherExams(instituteId: string): Promise<any[]> {
     const token = authService.getToken();
     if (!token) return [];

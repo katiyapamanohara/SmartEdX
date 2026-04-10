@@ -261,4 +261,17 @@ export class CourseController {
   ) {
     return this.courseService.deleteCourse(instituteId, courseId);
   }
+
+  @Post(':courseId/kb-search')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Student: semantic search of course knowledge base (Qdrant)' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiParam({ name: 'courseId', description: 'Course ID' })
+  async searchCourseKB(
+    @Param('id') instituteId: string,
+    @Param('courseId') courseId: string,
+    @Body() body: { query: string },
+  ) {
+    return this.courseService.searchCourseKB(instituteId, courseId, body.query);
+  }
 }

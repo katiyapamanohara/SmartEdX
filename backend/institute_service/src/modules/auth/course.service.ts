@@ -487,4 +487,9 @@ export class CourseService {
       score,
     };
   }
+
+  async searchCourseKB(instituteId: string, courseId: string, query: string) {
+    const results = await this.voiceAgentClient.searchCourseKB(instituteId, courseId, query, 3);
+    return { results };
+  }
 }
