@@ -257,6 +257,52 @@ export class ExamService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // Essay grading
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  async saveEssayGrade(
+    instituteId: string,
+    examId: string,
+    studentId: string,
+    teacherUserId: string,
+    body: { questionId: string; score: number; feedback: string },
+  ) {
+    const exam = await this.examRepository.findByIdWithRelations(examId, instituteId);
+    if (!exam) throw new NotFoundException('Exam not found');
+    if (exam.createdByUserId !== teacherUserId) throw new ForbiddenException('Not your exam');
+
+    const attempt = exam.studentAttempts?.[studentId];
+    if (!attempt) throw new NotFoundException('No submission found for this student');
+
+    // Add essay score on top of existing MCQ score
+    const essayQuestion = exam.questions.find((q) => q.id === body.questionId);
+    if (!essayQuestion) throw new NotFoundException('Question not found');
+
+    const clampedScore = Math.max(0, Math.min(body.score, essayQuestion.marks));
+    const newScore = (attempt.score ?? 0) + clampedScore;
+    const totalMarks = exam.questions.reduce((s, q) => s + q.marks, 0);
+    const percentage = Math.round((newScore / totalMarks) * 100);
+    const passed = percentage >= exam.passingScore;
+
+    const updatedAttempt = {
+      ...attempt,
+      score: newScore,
+      totalMarks,
+      passed,
+      pendingEssayReview: false,
+      essayGrades: {
+        ...(attempt as any).essayGrades,
+        [body.questionId]: { score: clampedScore, feedback: body.feedback, gradedAt: new Date().toISOString() },
+      },
+    };
+
+    const updatedAttempts = { ...(exam.studentAttempts ?? {}), [studentId]: updatedAttempt };
+    await this.examRepository.update(examId, { studentAttempts: updatedAttempts });
+
+    return { success: true, newScore, totalMarks, percentage, passed };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // Integrity flags
   // ─────────────────────────────────────────────────────────────────────────────
 

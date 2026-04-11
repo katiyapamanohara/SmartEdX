@@ -274,4 +274,14 @@ export class CourseController {
   ) {
     return this.courseService.searchCourseKB(instituteId, courseId, body.query);
   }
+
+  @Get('student-report')
+  @ApiOperation({ summary: 'Teacher: get all students with quiz & exam scores across teacher courses' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  async getStudentReport(
+    @Param('id') instituteId: string,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.courseService.getTeacherStudentReport(instituteId, userId);
+  }
 }

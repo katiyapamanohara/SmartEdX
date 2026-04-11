@@ -129,6 +129,24 @@ export class ExamController {
     return this.examService.markFlagReviewed(instituteId, examId, body.userId, flagId, teacherUserId);
   }
 
+  // ── Essay grading ─────────────────────────────────────────────────────────
+
+  @Patch(':examId/grade-essay/:studentId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Teacher: save AI-generated essay grade for a student' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiParam({ name: 'examId', description: 'Exam ID' })
+  @ApiParam({ name: 'studentId', description: 'Student user ID' })
+  saveEssayGrade(
+    @Param('id') instituteId: string,
+    @Param('examId') examId: string,
+    @Param('studentId') studentId: string,
+    @CurrentUser('userId') teacherUserId: string,
+    @Body() body: { questionId: string; score: number; feedback: string },
+  ) {
+    return this.examService.saveEssayGrade(instituteId, examId, studentId, teacherUserId, body);
+  }
+
   // ── Student ───────────────────────────────────────────────────────────────
 
   @Post(':examId/submit')

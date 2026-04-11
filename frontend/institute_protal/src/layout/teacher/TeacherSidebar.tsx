@@ -88,8 +88,8 @@ const navItems: NavItem[] = [
   },
   {
     icon: <PlugInIcon />,
-    name: "Settings",
-    path: "/teacher/settings",
+    name: "AI Tools",
+    path: "/teacher/ai-tools",
   },
 ];
 
