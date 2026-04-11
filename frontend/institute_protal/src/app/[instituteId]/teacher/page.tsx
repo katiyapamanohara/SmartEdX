@@ -9,7 +9,7 @@ import { instituteService, Course } from "@/services/instituteService";
 import { authService } from "@/services/authService";
 import { GroupIcon, BoxIconLine, ArrowUpIcon, TaskIcon } from "@/icons";
 import { FiMic, FiBookOpen, FiAward } from "react-icons/fi";
-import TeacherFloatingAiChat from "@/components/teacher/TeacherFloatingAiChat";
+
 
 const ReactApexChart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
@@ -332,7 +332,7 @@ export default function TeacherDashboard() {
 
       </div>
 
-      <TeacherFloatingAiChat instituteId={instituteId} />
+    
     </>
   );
 }

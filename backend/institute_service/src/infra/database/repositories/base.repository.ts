@@ -54,9 +54,9 @@ export abstract class BaseRepository<T extends ObjectLiteral>
   }
 
   async delete(id: string | number): Promise<boolean> {
-    const result = await this.repository.delete(
-      { id } as unknown as FindOptionsWhere<T>,
-    );
+    const result = await this.repository.delete({
+      id,
+    } as unknown as FindOptionsWhere<T>);
     return (result.affected ?? 0) > 0;
   }
 

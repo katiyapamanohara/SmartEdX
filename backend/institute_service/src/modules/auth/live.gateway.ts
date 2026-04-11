@@ -44,19 +44,28 @@ export class LiveGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const token =
         (client.handshake.auth?.token as string) ||
-        (client.handshake.headers?.authorization as string)?.replace('Bearer ', '');
+        (client.handshake.headers?.authorization as string)?.replace(
+          'Bearer ',
+          '',
+        );
 
-      if (!token) { client.disconnect(); return; }
+      if (!token) {
+        client.disconnect();
+        return;
+      }
 
       const payload = this.jwtService.verify(token, {
-        secret: this.configService.get<string>('JWT_SECRET') || 'your-secret-key',
+        secret:
+          this.configService.get<string>('JWT_SECRET') || 'your-secret-key',
       });
 
       client.userId = payload.sub;
       client.email = payload.email;
       client.role = payload.role;
       client.instituteId = payload.instituteId;
-      this.logger.log(`Live WS connected: userId=${payload.sub} role=${payload.role}`);
+      this.logger.log(
+        `Live WS connected: userId=${payload.sub} role=${payload.role}`,
+      );
     } catch {
       client.disconnect();
     }
@@ -68,7 +77,9 @@ export class LiveGateway implements OnGatewayConnection, OnGatewayDisconnect {
       await this._handleLeave(client, sessionId);
     }
     this.socketSessionMap.delete(client.id);
-    this.logger.log(`Live WS disconnected: userId=${client.userId ?? 'unknown'}`);
+    this.logger.log(
+      `Live WS disconnected: userId=${client.userId ?? 'unknown'}`,
+    );
   }
 
   // ─── Room Management ────────────────────────────────────────────────────────
@@ -84,10 +95,17 @@ export class LiveGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     // Track DB participation
     try {
-      await this.liveClassService.joinSession(sessionId, client.userId, client.instituteId);
-    } catch { /* session might not exist yet */ }
+      await this.liveClassService.joinSession(
+        sessionId,
+        client.userId,
+        client.instituteId,
+      );
+    } catch {
+      /* session might not exist yet */
+    }
 
-    const participants = await this.liveClassService.getSessionParticipants(sessionId);
+    const participants =
+      await this.liveClassService.getSessionParticipants(sessionId);
 
     // Notify the joining user of current room state
     client.emit('room-state', {
@@ -120,7 +138,9 @@ export class LiveGateway implements OnGatewayConnection, OnGatewayDisconnect {
     client.leave(`session:${sessionId}`);
     try {
       await this.liveClassService.leaveSession(sessionId, client.userId);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     client.to(`session:${sessionId}`).emit('peer-left', {
       peerId: client.userId,
@@ -135,7 +155,12 @@ export class LiveGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('offer')
   handleOffer(
     @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() data: { targetSocketId: string; offer: RTCSessionDescriptionInit; sessionId: string },
+    @MessageBody()
+    data: {
+      targetSocketId: string;
+      offer: RTCSessionDescriptionInit;
+      sessionId: string;
+    },
   ) {
     this.server.to(data.targetSocketId).emit('offer', {
       offer: data.offer,
@@ -148,7 +173,12 @@ export class LiveGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('answer')
   handleAnswer(
     @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() data: { targetSocketId: string; answer: RTCSessionDescriptionInit; sessionId: string },
+    @MessageBody()
+    data: {
+      targetSocketId: string;
+      answer: RTCSessionDescriptionInit;
+      sessionId: string;
+    },
   ) {
     this.server.to(data.targetSocketId).emit('answer', {
       answer: data.answer,
@@ -160,7 +190,12 @@ export class LiveGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('ice-candidate')
   handleIceCandidate(
     @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() data: { targetSocketId: string; candidate: RTCIceCandidateInit; sessionId: string },
+    @MessageBody()
+    data: {
+      targetSocketId: string;
+      candidate: RTCIceCandidateInit;
+      sessionId: string;
+    },
   ) {
     this.server.to(data.targetSocketId).emit('ice-candidate', {
       candidate: data.candidate,
@@ -226,7 +261,11 @@ export class LiveGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   // ─── Helper ───────────────────────────────────────────────────────────────
 
-  emitToSession(sessionId: string, event: string, payload: Record<string, any>) {
+  emitToSession(
+    sessionId: string,
+    event: string,
+    payload: Record<string, any>,
+  ) {
     this.server.to(`session:${sessionId}`).emit(event, payload);
   }
 }

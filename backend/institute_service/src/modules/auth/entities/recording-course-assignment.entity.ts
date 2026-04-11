@@ -18,7 +18,9 @@ export class RecordingCourseAssignment {
   @Column()
   recordingId: string;
 
-  @ManyToOne(() => Recording, (r) => r.courseAssignments, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Recording, (r) => r.courseAssignments, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'recordingId' })
   recording: Recording;
 

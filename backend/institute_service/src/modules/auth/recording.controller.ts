@@ -67,7 +67,11 @@ export class RecordingController {
     @Param('categoryId') categoryId: string,
     @Body() body: { name: string },
   ) {
-    return this.recordingService.renameCategory(instituteId, categoryId, body.name);
+    return this.recordingService.renameCategory(
+      instituteId,
+      categoryId,
+      body.name,
+    );
   }
 
   @Delete('categories/:categoryId')
@@ -84,7 +88,10 @@ export class RecordingController {
   // ── Recordings ─────────────────────────────────────────────────────────────
 
   @Get('student')
-  @ApiOperation({ summary: 'Student: get recordings from enrolled courses with active deadline' })
+  @ApiOperation({
+    summary:
+      'Student: get recordings from enrolled courses with active deadline',
+  })
   @ApiParam({ name: 'id', description: 'Institute ID' })
   getStudentRecordings(
     @Param('id') instituteId: string,
@@ -94,7 +101,9 @@ export class RecordingController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List all recordings (with optional search & category filter)' })
+  @ApiOperation({
+    summary: 'List all recordings (with optional search & category filter)',
+  })
   @ApiParam({ name: 'id', description: 'Institute ID' })
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'categoryId', required: false })
@@ -103,7 +112,10 @@ export class RecordingController {
     @Query('search') search?: string,
     @Query('categoryId') categoryId?: string,
   ) {
-    return this.recordingService.getRecordings(instituteId, { search, categoryId });
+    return this.recordingService.getRecordings(instituteId, {
+      search,
+      categoryId,
+    });
   }
 
   @Get(':recordingId')
@@ -129,7 +141,12 @@ export class RecordingController {
     @Body() dto: CreateRecordingDto,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.recordingService.createRecording(instituteId, userId, dto, file);
+    return this.recordingService.createRecording(
+      instituteId,
+      userId,
+      dto,
+      file,
+    );
   }
 
   @Patch(':recordingId')
@@ -180,7 +197,11 @@ export class RecordingController {
     @Param('recordingId') recordingId: string,
     @Param('assignmentId') assignmentId: string,
   ) {
-    return this.recordingService.removeAssignment(instituteId, recordingId, assignmentId);
+    return this.recordingService.removeAssignment(
+      instituteId,
+      recordingId,
+      assignmentId,
+    );
   }
 
   // ── Video questions ────────────────────────────────────────────────────────
@@ -189,7 +210,11 @@ export class RecordingController {
   @ApiOperation({ summary: 'Get timed questions for a recording' })
   @ApiParam({ name: 'id', description: 'Institute ID' })
   @ApiParam({ name: 'recordingId', description: 'Recording ID' })
-  @ApiQuery({ name: 'teacher', required: false, description: 'Pass true to include correct answers' })
+  @ApiQuery({
+    name: 'teacher',
+    required: false,
+    description: 'Pass true to include correct answers',
+  })
   getVideoQuestions(
     @Param('id') instituteId: string,
     @Param('recordingId') recordingId: string,
@@ -197,12 +222,23 @@ export class RecordingController {
     @CurrentUser('role') role: string,
     @Query('teacher') teacher?: string,
   ) {
-    const isTeacher = teacher === 'true' || role === 'teacher' || role === 'admin' || role === 'institute';
-    return this.recordingService.getVideoQuestions(instituteId, recordingId, isTeacher, isTeacher ? undefined : userId);
+    const isTeacher =
+      teacher === 'true' ||
+      role === 'teacher' ||
+      role === 'admin' ||
+      role === 'institute';
+    return this.recordingService.getVideoQuestions(
+      instituteId,
+      recordingId,
+      isTeacher,
+      isTeacher ? undefined : userId,
+    );
   }
 
   @Put(':recordingId/video-questions')
-  @ApiOperation({ summary: 'Save/replace all timed questions for a recording (teacher)' })
+  @ApiOperation({
+    summary: 'Save/replace all timed questions for a recording (teacher)',
+  })
   @ApiParam({ name: 'id', description: 'Institute ID' })
   @ApiParam({ name: 'recordingId', description: 'Recording ID' })
   saveVideoQuestions(
@@ -210,7 +246,11 @@ export class RecordingController {
     @Param('recordingId') recordingId: string,
     @Body() body: { questions: any[] },
   ) {
-    return this.recordingService.saveVideoQuestions(instituteId, recordingId, body.questions);
+    return this.recordingService.saveVideoQuestions(
+      instituteId,
+      recordingId,
+      body.questions,
+    );
   }
 
   @Post(':recordingId/video-attempt')
@@ -224,11 +264,18 @@ export class RecordingController {
     @CurrentUser('userId') userId: string,
     @Body() body: { answers: Record<string, number> },
   ) {
-    return this.recordingService.submitVideoAttempt(instituteId, recordingId, userId, body.answers);
+    return this.recordingService.submitVideoAttempt(
+      instituteId,
+      recordingId,
+      userId,
+      body.answers,
+    );
   }
 
   @Get(':recordingId/video-stats')
-  @ApiOperation({ summary: 'Teacher: get per-student video quiz performance stats' })
+  @ApiOperation({
+    summary: 'Teacher: get per-student video quiz performance stats',
+  })
   @ApiParam({ name: 'id', description: 'Institute ID' })
   @ApiParam({ name: 'recordingId', description: 'Recording ID' })
   getVideoQuizStats(

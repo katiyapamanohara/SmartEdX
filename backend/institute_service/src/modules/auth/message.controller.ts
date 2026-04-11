@@ -1,5 +1,10 @@
 import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiParam,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { MessageService } from './message.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -13,7 +18,10 @@ export class MessageController {
   constructor(private readonly messageService: MessageService) {}
 
   @Get('contacts')
-  @ApiOperation({ summary: 'Get contactable users (teachers for students, students for teachers)' })
+  @ApiOperation({
+    summary:
+      'Get contactable users (teachers for students, students for teachers)',
+  })
   @ApiParam({ name: 'id', description: 'Institute ID' })
   async getContacts(
     @Param('id') instituteId: string,
@@ -32,7 +40,11 @@ export class MessageController {
     @Param('otherUserId') otherUserId: string,
     @CurrentUser('userId') userId: string,
   ) {
-    return this.messageService.getConversation(instituteId, userId, otherUserId);
+    return this.messageService.getConversation(
+      instituteId,
+      userId,
+      otherUserId,
+    );
   }
 
   @Post()

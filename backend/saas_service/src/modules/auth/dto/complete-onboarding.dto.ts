@@ -7,7 +7,10 @@ export class CompleteOnboardingDto {
   @IsNotEmpty()
   phoneNumber: string;
 
-  @ApiProperty({ example: 'My Institute', description: 'Name of the institute' })
+  @ApiProperty({
+    example: 'My Institute',
+    description: 'Name of the institute',
+  })
   @IsString()
   @IsNotEmpty()
   instituteName: string;
@@ -17,16 +20,19 @@ export class CompleteOnboardingDto {
   @IsNotEmpty()
   numberOfStudents: string;
 
-  @ApiProperty({ example: 'Google Search', description: 'How the user heard about us' })
+  @ApiProperty({
+    example: 'Google Search',
+    description: 'How the user heard about us',
+  })
   @IsString()
   @IsNotEmpty()
   hearAboutUs: string;
 
-  @ApiProperty({ example: '["Student Management"]', description: 'Primary use cases as JSON string' })
+  @ApiProperty({
+    example: '["Student Management"]',
+    description: 'Primary use cases as JSON string',
+  })
   @IsString()
   @IsOptional()
   primaryUseCase: string;
-
-
-
 }

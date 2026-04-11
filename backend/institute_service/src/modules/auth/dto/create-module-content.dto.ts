@@ -1,4 +1,12 @@
-import { IsString, IsNotEmpty, IsOptional, IsUrl, IsEnum, IsNumber, ValidateIf } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsUrl,
+  IsEnum,
+  IsNumber,
+  ValidateIf,
+} from 'class-validator';
 import { ContentType } from '../entities/module-content.entity';
 
 export class CreateModuleContentDto {

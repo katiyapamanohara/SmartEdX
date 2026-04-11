@@ -75,9 +75,13 @@ export class RecordingService {
       fileUrl: r.fileUrl,
       duration: r.duration ?? '0:00',
       uploadDate: r.createdAt,
-      category: r.category ? { id: r.category.id, name: r.category.name } : null,
+      category: r.category
+        ? { id: r.category.id, name: r.category.name }
+        : null,
       categoryId: r.categoryId ?? null,
-      assignments: (r.courseAssignments ?? []).map((a: any) => this.mapAssignment(a)),
+      assignments: (r.courseAssignments ?? []).map((a: any) =>
+        this.mapAssignment(a),
+      ),
     };
   }
 
@@ -119,16 +123,23 @@ export class RecordingService {
   }
 
   async renameCategory(instituteId: string, categoryId: string, name: string) {
-    const cat = await this.categoryRepo.findOne({ where: { id: categoryId, instituteId } as any });
+    const cat = await this.categoryRepo.findOne({
+      where: { id: categoryId, instituteId } as any,
+    });
     if (!cat) throw new NotFoundException('Category not found');
-    const existing = await this.categoryRepo.findOne({ where: { name: name.trim(), instituteId } as any });
-    if (existing && existing.id !== categoryId) throw new BadRequestException(`Category "${name.trim()}" already exists`);
+    const existing = await this.categoryRepo.findOne({
+      where: { name: name.trim(), instituteId } as any,
+    });
+    if (existing && existing.id !== categoryId)
+      throw new BadRequestException(`Category "${name.trim()}" already exists`);
     cat.name = name.trim();
     return this.categoryRepo.save(cat);
   }
 
   async deleteCategory(instituteId: string, categoryId: string) {
-    const cat = await this.categoryRepo.findOne({ where: { id: categoryId, instituteId } as any });
+    const cat = await this.categoryRepo.findOne({
+      where: { id: categoryId, instituteId } as any,
+    });
     if (!cat) throw new NotFoundException('Category not found');
     await this.categoryRepo.delete(categoryId);
     return { message: 'Category deleted' };
@@ -140,12 +151,18 @@ export class RecordingService {
     instituteId: string,
     filters?: { categoryId?: string; search?: string },
   ) {
-    const recordings = await this.recordingRepo.findByInstituteId(instituteId, filters);
+    const recordings = await this.recordingRepo.findByInstituteId(
+      instituteId,
+      filters,
+    );
     return recordings.map((r) => this.mapRecording(r));
   }
 
   async getRecordingById(instituteId: string, recordingId: string) {
-    const recording = await this.recordingRepo.findOneWithRelations(recordingId, instituteId);
+    const recording = await this.recordingRepo.findOneWithRelations(
+      recordingId,
+      instituteId,
+    );
     if (!recording) throw new NotFoundException('Recording not found');
     return this.mapRecording(recording);
   }
@@ -160,7 +177,8 @@ export class RecordingService {
       const cat = await this.categoryRepo.findOne({
         where: { id: dto.categoryId, instituteId } as any,
       });
-      if (!cat) throw new BadRequestException('Category not found in this institute');
+      if (!cat)
+        throw new BadRequestException('Category not found in this institute');
     }
 
     let fileUrl: string | undefined;
@@ -197,7 +215,10 @@ export class RecordingService {
     recordingId: string,
     dto: UpdateRecordingDto,
   ) {
-    const recording = await this.recordingRepo.findOneWithRelations(recordingId, instituteId);
+    const recording = await this.recordingRepo.findOneWithRelations(
+      recordingId,
+      instituteId,
+    );
     if (!recording) throw new NotFoundException('Recording not found');
 
     if (dto.categoryId !== undefined) {
@@ -205,7 +226,8 @@ export class RecordingService {
         const cat = await this.categoryRepo.findOne({
           where: { id: dto.categoryId, instituteId } as any,
         });
-        if (!cat) throw new BadRequestException('Category not found in this institute');
+        if (!cat)
+          throw new BadRequestException('Category not found in this institute');
       }
       recording.categoryId = dto.categoryId ?? null;
     }
@@ -217,7 +239,10 @@ export class RecordingService {
   }
 
   async deleteRecording(instituteId: string, recordingId: string) {
-    const recording = await this.recordingRepo.findOneWithRelations(recordingId, instituteId);
+    const recording = await this.recordingRepo.findOneWithRelations(
+      recordingId,
+      instituteId,
+    );
     if (!recording) throw new NotFoundException('Recording not found');
 
     if (recording.fileName) {
@@ -239,14 +264,19 @@ export class RecordingService {
     recordingId: string,
     dto: AssignRecordingDto,
   ) {
-    const recording = await this.recordingRepo.findOneWithRelations(recordingId, instituteId);
+    const recording = await this.recordingRepo.findOneWithRelations(
+      recordingId,
+      instituteId,
+    );
     if (!recording) throw new NotFoundException('Recording not found');
 
     const alreadyAssigned = recording.courseAssignments?.some(
       (a) => a.courseId === dto.courseId,
     );
     if (alreadyAssigned) {
-      throw new BadRequestException('Recording is already assigned to this course');
+      throw new BadRequestException(
+        'Recording is already assigned to this course',
+      );
     }
 
     await this.assignmentRepo.create({
@@ -263,10 +293,15 @@ export class RecordingService {
     recordingId: string,
     assignmentId: string,
   ) {
-    const recording = await this.recordingRepo.findOneWithRelations(recordingId, instituteId);
+    const recording = await this.recordingRepo.findOneWithRelations(
+      recordingId,
+      instituteId,
+    );
     if (!recording) throw new NotFoundException('Recording not found');
 
-    const assignment = recording.courseAssignments?.find((a) => a.id === assignmentId);
+    const assignment = recording.courseAssignments?.find(
+      (a) => a.id === assignmentId,
+    );
     if (!assignment) throw new NotFoundException('Assignment not found');
 
     await this.assignmentRepo.delete(assignmentId);
@@ -275,15 +310,28 @@ export class RecordingService {
 
   // ── Video questions ────────────────────────────────────────────────────────
 
-  async getVideoQuestions(instituteId: string, recordingId: string, forTeacher = false, userId?: string) {
-    const recording = await this.recordingRepo.findOneWithRelations(recordingId, instituteId);
+  async getVideoQuestions(
+    instituteId: string,
+    recordingId: string,
+    forTeacher = false,
+    userId?: string,
+  ) {
+    const recording = await this.recordingRepo.findOneWithRelations(
+      recordingId,
+      instituteId,
+    );
     if (!recording) throw new NotFoundException('Recording not found');
-    const questions = (recording.videoQuestions ?? []).slice().sort((a, b) => a.atSeconds - b.atSeconds);
+    const questions = (recording.videoQuestions ?? [])
+      .slice()
+      .sort((a, b) => a.atSeconds - b.atSeconds);
     if (forTeacher) return { questions };
     // Student access check
     if (userId) {
       const ok = await this.checkStudentAccess(recording, userId, instituteId);
-      if (!ok) throw new ForbiddenException('This recording is not currently accessible');
+      if (!ok)
+        throw new ForbiddenException(
+          'This recording is not currently accessible',
+        );
     }
     // Strip correct answers for students
     return {
@@ -291,8 +339,15 @@ export class RecordingService {
     };
   }
 
-  async saveVideoQuestions(instituteId: string, recordingId: string, questions: VideoQuestion[]) {
-    const recording = await this.recordingRepo.findOneWithRelations(recordingId, instituteId);
+  async saveVideoQuestions(
+    instituteId: string,
+    recordingId: string,
+    questions: VideoQuestion[],
+  ) {
+    const recording = await this.recordingRepo.findOneWithRelations(
+      recordingId,
+      instituteId,
+    );
     if (!recording) throw new NotFoundException('Recording not found');
     const sorted = [...questions].sort((a, b) => a.atSeconds - b.atSeconds);
     await this.recordingRepo.save({ ...recording, videoQuestions: sorted });
@@ -305,10 +360,16 @@ export class RecordingService {
     userId: string,
     answers: Record<string, number>,
   ) {
-    const recording = await this.recordingRepo.findOneWithRelations(recordingId, instituteId);
+    const recording = await this.recordingRepo.findOneWithRelations(
+      recordingId,
+      instituteId,
+    );
     if (!recording) throw new NotFoundException('Recording not found');
     const ok = await this.checkStudentAccess(recording, userId, instituteId);
-    if (!ok) throw new ForbiddenException('This recording is not currently accessible');
+    if (!ok)
+      throw new ForbiddenException(
+        'This recording is not currently accessible',
+      );
 
     const questions = recording.videoQuestions ?? [];
     let score = 0;
@@ -317,31 +378,53 @@ export class RecordingService {
       if (answers[q.id] === q.correctAnswer) score += q.marks;
     }
 
-    const attempt: VideoQuizAttempt = { answers, completedAt: new Date().toISOString() };
+    const attempt: VideoQuizAttempt = {
+      answers,
+      completedAt: new Date().toISOString(),
+    };
     const updated = { ...(recording.quizAttempts ?? {}), [userId]: attempt };
     await this.recordingRepo.save({ ...recording, quizAttempts: updated });
 
-    const percentage = totalMarks > 0 ? Math.round((score / totalMarks) * 100) : 0;
+    const percentage =
+      totalMarks > 0 ? Math.round((score / totalMarks) * 100) : 0;
     return { score, totalMarks, percentage };
   }
 
   async getVideoQuizStats(instituteId: string, recordingId: string) {
-    const recording = await this.recordingRepo.findOneWithRelations(recordingId, instituteId);
+    const recording = await this.recordingRepo.findOneWithRelations(
+      recordingId,
+      instituteId,
+    );
     if (!recording) throw new NotFoundException('Recording not found');
 
-    const questions = (recording.videoQuestions ?? []).slice().sort((a, b) => a.atSeconds - b.atSeconds);
+    const questions = (recording.videoQuestions ?? [])
+      .slice()
+      .sort((a, b) => a.atSeconds - b.atSeconds);
     const attempts = recording.quizAttempts ?? {};
 
     // Enrich with student names
     const studentAttempts: {
-      userId: string; studentName: string; score: number; totalMarks: number;
-      percentage: number; completedAt: string;
-      questionResults: { questionId: string; question: string; atSeconds: number; correct: boolean; chosen: number | null; correctAnswer: number; marks: number }[];
+      userId: string;
+      studentName: string;
+      score: number;
+      totalMarks: number;
+      percentage: number;
+      completedAt: string;
+      questionResults: {
+        questionId: string;
+        question: string;
+        atSeconds: number;
+        correct: boolean;
+        chosen: number | null;
+        correctAnswer: number;
+        marks: number;
+      }[];
     }[] = [];
     for (const [userId, attempt] of Object.entries(attempts)) {
       const user = await this.instituteUserRepository.findById(userId);
       const name = user
-        ? ([user.firstName, user.lastName].filter(Boolean).join(' ') || user.email)
+        ? [user.firstName, user.lastName].filter(Boolean).join(' ') ||
+          user.email
         : userId;
       let score = 0;
       const totalMarks = questions.reduce((s, q) => s + q.marks, 0);
@@ -357,15 +440,26 @@ export class RecordingService {
       for (const q of questions) {
         if (attempt.answers[q.id] === q.correctAnswer) score += q.marks;
       }
-      const percentage = totalMarks > 0 ? Math.round((score / totalMarks) * 100) : 0;
-      studentAttempts.push({ userId, studentName: name, score, totalMarks, percentage, completedAt: attempt.completedAt, questionResults });
+      const percentage =
+        totalMarks > 0 ? Math.round((score / totalMarks) * 100) : 0;
+      studentAttempts.push({
+        userId,
+        studentName: name,
+        score,
+        totalMarks,
+        percentage,
+        completedAt: attempt.completedAt,
+        questionResults,
+      });
     }
 
     // Per-question aggregate stats
     const questionStats = questions.map((q) => {
       const vals = Object.values(attempts);
       const total = vals.length;
-      const correct = vals.filter((a) => a.answers[q.id] === q.correctAnswer).length;
+      const correct = vals.filter(
+        (a) => a.answers[q.id] === q.correctAnswer,
+      ).length;
       return {
         questionId: q.id,
         question: q.question,

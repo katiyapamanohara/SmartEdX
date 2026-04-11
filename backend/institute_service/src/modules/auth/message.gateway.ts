@@ -13,7 +13,9 @@ import { Logger } from '@nestjs/common';
   namespace: '/messages',
   cors: { origin: '*', credentials: true },
 })
-export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class MessageGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 
@@ -28,12 +30,19 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
     try {
       const token =
         (client.handshake.auth?.token as string) ||
-        (client.handshake.headers?.authorization as string)?.replace('Bearer ', '');
+        (client.handshake.headers?.authorization as string)?.replace(
+          'Bearer ',
+          '',
+        );
 
-      if (!token) { client.disconnect(); return; }
+      if (!token) {
+        client.disconnect();
+        return;
+      }
 
       const payload = this.jwtService.verify(token, {
-        secret: this.configService.get<string>('JWT_SECRET') || 'your-secret-key',
+        secret:
+          this.configService.get<string>('JWT_SECRET') || 'your-secret-key',
       });
 
       (client as any).userId = payload.sub;
@@ -45,7 +54,9 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
   }
 
   handleDisconnect(client: Socket) {
-    this.logger.log(`WS disconnected: userId=${(client as any).userId ?? 'unknown'}`);
+    this.logger.log(
+      `WS disconnected: userId=${(client as any).userId ?? 'unknown'}`,
+    );
   }
 
   /** Push a new message to the recipient's room. */

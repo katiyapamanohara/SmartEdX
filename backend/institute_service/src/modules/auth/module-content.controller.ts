@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ModuleContentService } from './module-content.service';
 import { CreateModuleContentDto } from './dto/create-module-content.dto';
@@ -18,14 +29,19 @@ export class ModuleContentController {
     @UploadedFile() file: Express.Multer.File,
     @Body() body: any,
   ) {
-    return this.moduleContentService.createWithFileUpload(courseId, moduleId, file, body);
+    return this.moduleContentService.createWithFileUpload(
+      courseId,
+      moduleId,
+      file,
+      body,
+    );
   }
 
   @Post()
   create(
     @Param('courseId') courseId: string,
     @Param('moduleId') moduleId: string,
-    @Body() createDto: CreateModuleContentDto
+    @Body() createDto: CreateModuleContentDto,
   ) {
     return this.moduleContentService.create(courseId, moduleId, createDto);
   }
@@ -42,7 +58,7 @@ export class ModuleContentController {
   findOne(
     @Param('courseId') courseId: string,
     @Param('moduleId') moduleId: string,
-    @Param('contentId') contentId: string
+    @Param('contentId') contentId: string,
   ) {
     return this.moduleContentService.findOne(courseId, moduleId, contentId);
   }
@@ -52,16 +68,21 @@ export class ModuleContentController {
     @Param('courseId') courseId: string,
     @Param('moduleId') moduleId: string,
     @Param('contentId') contentId: string,
-    @Body() updateDto: UpdateModuleContentDto
+    @Body() updateDto: UpdateModuleContentDto,
   ) {
-    return this.moduleContentService.update(courseId, moduleId, contentId, updateDto);
+    return this.moduleContentService.update(
+      courseId,
+      moduleId,
+      contentId,
+      updateDto,
+    );
   }
 
   @Delete(':contentId')
   remove(
     @Param('courseId') courseId: string,
     @Param('moduleId') moduleId: string,
-    @Param('contentId') contentId: string
+    @Param('contentId') contentId: string,
   ) {
     return this.moduleContentService.remove(courseId, moduleId, contentId);
   }

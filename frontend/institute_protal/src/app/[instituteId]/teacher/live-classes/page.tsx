@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { VideoIcon } from "@/icons";
+import { useInstituteFeatures } from "@/hooks/useInstituteFeatures";
 
 interface LiveSession {
   id: string;
@@ -164,6 +165,7 @@ function ScheduleModal({
 export default function TeacherLiveClassesPage() {
   const { instituteId } = useParams<{ instituteId: string }>();
   const router = useRouter();
+  useInstituteFeatures({ requiredFeature: "live_sessions", redirectTo: `/${instituteId}/teacher` });
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [loading, setLoading] = useState(true);

@@ -1,5 +1,23 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery, ApiBody } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+  ApiQuery,
+  ApiBody,
+} from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { CreateInstituteUserDto } from './dto/create-institute-user.dto';
 import { UpdateInstituteUserDto } from './dto/update-institute-user.dto';
@@ -13,9 +31,15 @@ export class InstituteUserController {
   constructor(private readonly authService: AuthService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get all users in an institute, optionally filtered by role' })
+  @ApiOperation({
+    summary: 'Get all users in an institute, optionally filtered by role',
+  })
   @ApiParam({ name: 'id', description: 'Institute ID' })
-  @ApiQuery({ name: 'role', required: false, description: 'Filter by role name (e.g. student, teacher, instructor)' })
+  @ApiQuery({
+    name: 'role',
+    required: false,
+    description: 'Filter by role name (e.g. student, teacher, instructor)',
+  })
   async getInstituteUsers(
     @Param('id') instituteId: string,
     @Query('role') role?: string,

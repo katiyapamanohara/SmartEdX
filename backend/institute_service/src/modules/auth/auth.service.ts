@@ -20,7 +20,14 @@ import { CreateInstituteDto } from './dto/create-institute.dto';
 import { UpdateInstituteDto } from './dto/update-institute.dto';
 import { UpdateMyProfileDto } from './dto/update-my-profile.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
-import { InstituteRepository, InstituteUserRepository, InstituteRoleRepository, TeacherRepository, StudentRepository, CourseRepository } from '../../infra/database/repositories';
+import {
+  InstituteRepository,
+  InstituteUserRepository,
+  InstituteRoleRepository,
+  TeacherRepository,
+  StudentRepository,
+  CourseRepository,
+} from '../../infra/database/repositories';
 import { AssignUserDto } from './dto/assign-user.dto';
 import { Course } from './entities/course.entity';
 import { MinioService } from '../../infra/storage/minio.service';
@@ -56,12 +63,12 @@ export class AuthService {
     return { url: fileUrl };
   }
 
-
-
   async login(loginDto: LoginDto) {
     try {
       // 1. Try to find user in Institute Users
-      const user = await this.instituteUserRepository.findByEmail(loginDto.email);
+      const user = await this.instituteUserRepository.findByEmail(
+        loginDto.email,
+      );
       const isInstituteUser = true;
 
       if (!user) {
@@ -142,9 +149,16 @@ export class AuthService {
 
     if (user.role?.name === 'student') {
       try {
-        const student = await this.studentRepository.findOne({ where: { userId } });
+        const student = await this.studentRepository.findOne({
+          where: { userId },
+        });
         if (student) {
-          return { ...result, faceEnrolled: student.faceDescriptor !== null && student.faceDescriptor !== undefined };
+          return {
+            ...result,
+            faceEnrolled:
+              student.faceDescriptor !== null &&
+              student.faceDescriptor !== undefined,
+          };
         }
       } catch (e) {
         // Ignore
@@ -163,7 +177,8 @@ export class AuthService {
 
     if (updateDto.firstName !== undefined) user.firstName = updateDto.firstName;
     if (updateDto.lastName !== undefined) user.lastName = updateDto.lastName;
-    if (updateDto.profilePicture !== undefined) user.profilePicture = updateDto.profilePicture;
+    if (updateDto.profilePicture !== undefined)
+      user.profilePicture = updateDto.profilePicture;
 
     // Save basic user info
     await this.instituteUserRepository.save(user);
@@ -173,7 +188,6 @@ export class AuthService {
     const { password, ...result } = user;
     return result;
   }
-
 
   async saveFaceDescriptor(userId: string, descriptor: number[] | null) {
     const student = await this.studentRepository.findOne({ where: { userId } });
@@ -191,7 +205,13 @@ export class AuthService {
       throw new NotFoundException('Student record not found');
     }
     if (!student.faceDescriptor) {
-      throw new HttpException({ detail: 'No face enrolled. Please enroll your face in account settings first.' }, 422);
+      throw new HttpException(
+        {
+          detail:
+            'No face enrolled. Please enroll your face in account settings first.',
+        },
+        422,
+      );
     }
     return this.faceRecClient.verifyImage(student.faceDescriptor, imageB64);
   }
@@ -205,34 +225,40 @@ export class AuthService {
       const { email } = decodedToken;
 
       if (!email) {
-        throw new UnauthorizedException('Invalid Firebase token: Email not found');
+        throw new UnauthorizedException(
+          'Invalid Firebase token: Email not found',
+        );
       }
-      
+
       let user;
-      
+
       if (firebaseLoginDto.instituteId) {
-        user = await this.instituteUserRepository.findByEmailAndInstituteId(email, firebaseLoginDto.instituteId);
+        user = await this.instituteUserRepository.findByEmailAndInstituteId(
+          email,
+          firebaseLoginDto.instituteId,
+        );
       } else {
         user = await this.instituteUserRepository.findByEmail(email);
       }
-      
+
       if (!user) {
         throw new UnauthorizedException('User not found in this institute');
       }
 
       const { name, picture, given_name, family_name } = decodedToken;
-      
+
       // Update profile info from Firebase if it has changed or is missing
       let hasChanges = false;
-      
+
       const firstNameFromToken = given_name || (name ? name.split(' ')[0] : '');
-      const lastNameFromToken = family_name || (name ? name.split(' ').slice(1).join(' ') : '');
+      const lastNameFromToken =
+        family_name || (name ? name.split(' ').slice(1).join(' ') : '');
 
       if (firstNameFromToken && user.firstName !== firstNameFromToken) {
         user.firstName = firstNameFromToken;
         hasChanges = true;
       }
-      
+
       if (lastNameFromToken && user.lastName !== lastNameFromToken) {
         user.lastName = lastNameFromToken;
         hasChanges = true;
@@ -245,30 +271,36 @@ export class AuthService {
 
       if (hasChanges) {
         await this.instituteUserRepository.save(user);
-        this.logger.log(`Updated profile for user ${email} from Firebase token`);
+        this.logger.log(
+          `Updated profile for user ${email} from Firebase token`,
+        );
       }
 
       if (!user.isActive) {
-      throw new UnauthorizedException('Account is deactivated');
-    }
+        throw new UnauthorizedException('Account is deactivated');
+      }
 
-    // Check if the institute is active
-    const institute = await this.instituteRepository.findById(user.instituteId);
-    if (!institute) {
-      throw new UnauthorizedException('Institute not found');
-    }
-    
-    if (!institute.isActive) {
-      throw new UnauthorizedException('Institute is inactive. Please contact support.');
-    }
+      // Check if the institute is active
+      const institute = await this.instituteRepository.findById(
+        user.instituteId,
+      );
+      if (!institute) {
+        throw new UnauthorizedException('Institute not found');
+      }
 
-    // Generate JWT token
-    const payload: JwtPayload = {
-      sub: user.id,
-      email: user.email,
-      role: user.role?.name || 'student',
-      instituteId: user.instituteId,
-    };
+      if (!institute.isActive) {
+        throw new UnauthorizedException(
+          'Institute is inactive. Please contact support.',
+        );
+      }
+
+      // Generate JWT token
+      const payload: JwtPayload = {
+        sub: user.id,
+        email: user.email,
+        role: user.role?.name || 'student',
+        instituteId: user.instituteId,
+      };
 
       const token = this.generateToken(payload);
 
@@ -291,10 +323,11 @@ export class AuthService {
         throw error;
       }
       this.logger.error('Firebase login failed', error);
-      throw new UnauthorizedException(`Invalid Firebase token: ${error.message}`);
+      throw new UnauthorizedException(
+        `Invalid Firebase token: ${error.message}`,
+      );
     }
   }
-
 
   private generateToken(payload: JwtPayload): string {
     return this.jwtService.sign(payload);
@@ -308,11 +341,7 @@ export class AuthService {
     }
   }
 
-
-
   async getUserInstitutes(userId: string) {
-
-
     // Return institutes where this user is the owner
     return this.instituteRepository.findBy({ ownerId: userId });
   }
@@ -354,18 +383,18 @@ export class AuthService {
   }
 
   async createInstitute(userId: string, data: CreateInstituteDto) {
-
-
     const institute = await this.instituteRepository.create({
       ...data,
       isActive: true,
       ownerId: userId,
     });
-    
-     // Double check persistence
+
+    // Double check persistence
     if (!institute.ownerId) {
-        this.logger.warn(`Institute ${institute.id} created (createInstitute) but ownerId is missing. Forcing update.`);
-        await this.instituteRepository.update(institute.id, { ownerId: userId });
+      this.logger.warn(
+        `Institute ${institute.id} created (createInstitute) but ownerId is missing. Forcing update.`,
+      );
+      await this.instituteRepository.update(institute.id, { ownerId: userId });
     }
 
     return institute;
@@ -389,7 +418,9 @@ export class AuthService {
     }
 
     if (institute.ownerId !== userId) {
-      throw new UnauthorizedException('You are not authorized to delete this institute');
+      throw new UnauthorizedException(
+        'You are not authorized to delete this institute',
+      );
     }
 
     // Optional: Check if we need to delete related resources (users, etc.) manually or if constraints handle it.
@@ -401,12 +432,15 @@ export class AuthService {
     const roles = await this.instituteRoleRepository.findAll();
     // Filter roles to only include 'instructor' and 'teacher'
     const allowedRoles = ['instructor', 'teacher'];
-    return roles.filter(role => allowedRoles.includes(role.name));
+    return roles.filter((role) => allowedRoles.includes(role.name));
   }
 
-  async assignUserToInstitute(instituteId: string, assignUserDto: AssignUserDto) {
+  async assignUserToInstitute(
+    instituteId: string,
+    assignUserDto: AssignUserDto,
+  ) {
     const { email, roleName } = assignUserDto;
-    
+
     // We strictly use InstituteUser here, decoupled from SaaS User.
     // 1. Check if InstituteUser exists with this email AND instituteId
     // Actually, do we allow the same email in different institutes? Yes, implementation implies separate records.
@@ -414,7 +448,7 @@ export class AuthService {
     // For now, let's assume we check if THIS user is already in THIS institute by email?
     // But findByEmail is global in our repo implementation currently (just where: {email}).
     // If we want institute-scoped users, we should check by email for this institute. (Not implemented in repo yet efficiently, but can filter).
-    
+
     // HOWEVER, the login logic I just wrote does `instituteUserRepository.findByEmail(email)`.
     // It picks *any* user with that email.
     // If I create two users with same email in different institutes, login will just pick the first one found.
@@ -422,7 +456,7 @@ export class AuthService {
     // To support unique login, email must be unique across all institute_users or we need "Institute Code" at login.
     // Proceeding with assumption: try to reuse existing InstituteUser if found (globally?) or just for this institute?
     // Let's check if the email exists in `institute_users`.
-    
+
     let instituteUser = await this.instituteUserRepository.findByEmail(email);
 
     const role = await this.instituteRoleRepository.findByName(roleName);
@@ -438,52 +472,54 @@ export class AuthService {
     }
 
     if (instituteUser) {
-        // User exists (somewhere). 
-        // If they are in THIS institute, update role.
-        if (instituteUser.instituteId === instituteId) {
-            instituteUser.role = role;
-            return this.instituteUserRepository.save(instituteUser);
-        } else {
-             // User exists but in DIFFERENT institute.
-             // If we create another record with same email, login fails/ambiguous.
-             // We can either:
-             // A) Block duplicate email.
-             // B) Create new record and accept ambiguity.
-             // C) Link same record to multiple institutes? (Requires ManyToMany or keeping InstituteUser unique and using a junction... which brings us back to User + Junction).
-             
-             // The prompt wanted "separate".
-             // If I create a new one, I support "separate".
-             // I will create a new one. Login will be the first matching one (maybe unpredictable).
-             // Ideally we'd throw Conflict, but for "Decouple", we create new.
-             // Let's create a new one for THIS institute.
-             // NOTE: `instituteUser` variable currently holds the other institute's user. We'll ignore it and create new.
-        }
+      // User exists (somewhere).
+      // If they are in THIS institute, update role.
+      if (instituteUser.instituteId === instituteId) {
+        instituteUser.role = role;
+        return this.instituteUserRepository.save(instituteUser);
+      } else {
+        // User exists but in DIFFERENT institute.
+        // If we create another record with same email, login fails/ambiguous.
+        // We can either:
+        // A) Block duplicate email.
+        // B) Create new record and accept ambiguity.
+        // C) Link same record to multiple institutes? (Requires ManyToMany or keeping InstituteUser unique and using a junction... which brings us back to User + Junction).
+        // The prompt wanted "separate".
+        // If I create a new one, I support "separate".
+        // I will create a new one. Login will be the first matching one (maybe unpredictable).
+        // Ideally we'd throw Conflict, but for "Decouple", we create new.
+        // Let's create a new one for THIS institute.
+        // NOTE: `instituteUser` variable currently holds the other institute's user. We'll ignore it and create new.
+      }
     }
-    
+
     // Proceed to create NEW InstituteUser for this institute
-    const bcrypt = require('bcrypt'); 
+    const bcrypt = require('bcrypt');
     const hashedPassword = await bcrypt.hash('User@123', 10);
-    
+
     instituteUser = await this.instituteUserRepository.create({
-        instituteId,
-        roleId: role.id,
-        email,
-        password: hashedPassword,
-        firstName: 'New',
-        lastName: 'User', 
-        isActive: true,
-        // userId remains null as this is a decoupled user
+      instituteId,
+      roleId: role.id,
+      email,
+      password: hashedPassword,
+      firstName: 'New',
+      lastName: 'User',
+      isActive: true,
+      // userId remains null as this is a decoupled user
     });
-    
-    this.logger.log(`Created decoupled institute user: ${email} for institute ${instituteId}`);
+
+    this.logger.log(
+      `Created decoupled institute user: ${email} for institute ${instituteId}`,
+    );
 
     return instituteUser;
   }
 
   async getInstituteUsers(instituteId: string, role?: string) {
     if (role === 'student') {
-      const students = await this.studentRepository.findByInstituteId(instituteId);
-      return students.map(s => ({
+      const students =
+        await this.studentRepository.findByInstituteId(instituteId);
+      return students.map((s) => ({
         id: s.user.id,
         firstName: s.user.firstName,
         lastName: s.user.lastName,
@@ -496,19 +532,20 @@ export class AuthService {
       }));
     }
 
-    const instituteUsers = await this.instituteUserRepository.findByInstituteId(instituteId);
+    const instituteUsers =
+      await this.instituteUserRepository.findByInstituteId(instituteId);
 
     const allowedRoles = ['instructor', 'teacher', 'student'];
 
     return instituteUsers
-      .filter(iu => {
+      .filter((iu) => {
         const roleName = iu.role?.name;
         if (!roleName || !allowedRoles.includes(roleName)) return false;
         // If a specific role is requested, filter to that role only
         if (role) return roleName === role;
         return true;
       })
-      .map(iu => ({
+      .map((iu) => ({
         id: iu.id,
         firstName: iu.firstName,
         lastName: iu.lastName,
@@ -522,9 +559,10 @@ export class AuthService {
   async deleteInstituteUser(instituteId: string, instituteUserId: string) {
     // Check if the association exists
     // We expect instituteUserId to be the primary key of InstituteUser
-    
+
     // We verify it belongs to the institute for security
-    const instituteUser = await this.instituteUserRepository.findById(instituteUserId);
+    const instituteUser =
+      await this.instituteUserRepository.findById(instituteUserId);
 
     if (!instituteUser || instituteUser.instituteId !== instituteId) {
       throw new NotFoundException('User is not assigned to this institute');
@@ -536,9 +574,13 @@ export class AuthService {
     return { message: 'User removed from institute successfully' };
   }
 
-  async toggleInstituteUserStatus(instituteId: string, instituteUserId: string) {
+  async toggleInstituteUserStatus(
+    instituteId: string,
+    instituteUserId: string,
+  ) {
     // Check if the user is associated with the institute
-    const instituteUser = await this.instituteUserRepository.findById(instituteUserId);
+    const instituteUser =
+      await this.instituteUserRepository.findById(instituteUserId);
 
     if (!instituteUser || instituteUser.instituteId !== instituteId) {
       throw new NotFoundException('User is not assigned to this institute');
@@ -553,14 +595,26 @@ export class AuthService {
     const { email, password, firstName, lastName, role } = createDto;
 
     // Check if user already exists in this institute
-    const existingUser = await this.instituteUserRepository.findByEmailAndInstituteId(email, instituteId);
+    const existingUser =
+      await this.instituteUserRepository.findByEmailAndInstituteId(
+        email,
+        instituteId,
+      );
     if (existingUser) {
       if (role === 'student') {
         // If it's a student, we treat this as an "upsert" (update their courses)
-        this.logger.log(`User ${email} already exists. Updating student enrolments.`);
-        return this.updateInstituteUser(instituteId, existingUser.id, createDto);
+        this.logger.log(
+          `User ${email} already exists. Updating student enrolments.`,
+        );
+        return this.updateInstituteUser(
+          instituteId,
+          existingUser.id,
+          createDto,
+        );
       }
-      throw new ConflictException('User with this email already exists in this institute');
+      throw new ConflictException(
+        'User with this email already exists in this institute',
+      );
     }
 
     const roleEntity = await this.instituteRoleRepository.findByName(role);
@@ -582,52 +636,59 @@ export class AuthService {
     });
 
     if (role === 'teacher') {
-        const teacher = await this.teacherRepository.create({
-            userId: newUser.id,
-            instituteId: instituteId,
-            designation: 'Lecture Staff',
-            joiningDate: new Date(),
-        });
-        await this.teacherRepository.save(teacher);
-        this.logger.log(`Created teacher record for user ${newUser.id}`);
+      const teacher = await this.teacherRepository.create({
+        userId: newUser.id,
+        instituteId: instituteId,
+        designation: 'Lecture Staff',
+        joiningDate: new Date(),
+      });
+      await this.teacherRepository.save(teacher);
+      this.logger.log(`Created teacher record for user ${newUser.id}`);
     } else if (role === 'student') {
-        // Find courses with the same batch number in this institute
-        let assignedCourses: Course[] = [];
-        if (createDto.batchNumber) {
-            assignedCourses = await this.courseRepository.findByBatchNumberAndInstituteId(
-                createDto.batchNumber,
-                instituteId
-            );
-        }
+      // Find courses with the same batch number in this institute
+      let assignedCourses: Course[] = [];
+      if (createDto.batchNumber) {
+        assignedCourses =
+          await this.courseRepository.findByBatchNumberAndInstituteId(
+            createDto.batchNumber,
+            instituteId,
+          );
+      }
 
-        // Add manual courses if provided
-        if (createDto.courseIds && createDto.courseIds.length > 0) {
-            const manualCourses = await this.courseRepository.findAll({
-                where: { id: In(createDto.courseIds), instituteId }
-            });
-            
-            // Merge and avoid duplicates
-            const courseIdSet = new Set(assignedCourses.map(c => c.id));
-            manualCourses.forEach(c => {
-                if (!courseIdSet.has(c.id)) assignedCourses.push(c);
-            });
-        }
-
-        const student = await this.studentRepository.create({
-            userId: newUser.id,
-            instituteId: instituteId,
-            admissionNumber: createDto.admissionNumber,
-            batchNumber: createDto.batchNumber,
-            courses: assignedCourses,
+      // Add manual courses if provided
+      if (createDto.courseIds && createDto.courseIds.length > 0) {
+        const manualCourses = await this.courseRepository.findAll({
+          where: { id: In(createDto.courseIds), instituteId },
         });
-        await this.studentRepository.save(student);
-        this.logger.log(`Created student record for user ${newUser.id} with ${assignedCourses.length} auto-assigned courses`);
+
+        // Merge and avoid duplicates
+        const courseIdSet = new Set(assignedCourses.map((c) => c.id));
+        manualCourses.forEach((c) => {
+          if (!courseIdSet.has(c.id)) assignedCourses.push(c);
+        });
+      }
+
+      const student = await this.studentRepository.create({
+        userId: newUser.id,
+        instituteId: instituteId,
+        admissionNumber: createDto.admissionNumber,
+        batchNumber: createDto.batchNumber,
+        courses: assignedCourses,
+      });
+      await this.studentRepository.save(student);
+      this.logger.log(
+        `Created student record for user ${newUser.id} with ${assignedCourses.length} auto-assigned courses`,
+      );
     }
 
     return newUser;
   }
 
-  async updateInstituteUser(instituteId: string, userId: string, updateDto: any) {
+  async updateInstituteUser(
+    instituteId: string,
+    userId: string,
+    updateDto: any,
+  ) {
     const user = await this.instituteUserRepository.findById(userId);
 
     if (!user || user.instituteId !== instituteId) {
@@ -637,13 +698,15 @@ export class AuthService {
     if (updateDto.firstName) user.firstName = updateDto.firstName;
     if (updateDto.lastName) user.lastName = updateDto.lastName;
     if (updateDto.email) user.email = updateDto.email;
-    
+
     if (updateDto.password) {
       user.password = await bcrypt.hash(updateDto.password, 10);
     }
 
     if (updateDto.role) {
-      const roleEntity = await this.instituteRoleRepository.findByName(updateDto.role);
+      const roleEntity = await this.instituteRoleRepository.findByName(
+        updateDto.role,
+      );
       if (!roleEntity) {
         throw new NotFoundException(`Role ${updateDto.role} not found`);
       }
@@ -655,29 +718,29 @@ export class AuthService {
 
     // If student courses need updating
     if (updateDto.courseIds) {
-        let student = await this.studentRepository.findOne({
-            where: { userId: user.id },
-            relations: ['courses']
-        });
-        
-        const newCourses = await this.courseRepository.findAll({
-            where: { id: In(updateDto.courseIds), instituteId }
-        });
+      let student = await this.studentRepository.findOne({
+        where: { userId: user.id },
+        relations: ['courses'],
+      });
 
-        if (student) {
-            student.courses = newCourses;
-            await this.studentRepository.save(student);
-        } else if (user.role?.name === 'student') {
-            // Create student record if it doesn't exist
-            student = await this.studentRepository.create({
-                userId: user.id,
-                instituteId: instituteId,
-                courses: newCourses,
-                batchNumber: updateDto.batchNumber,
-                admissionNumber: updateDto.admissionNumber,
-            });
-            await this.studentRepository.save(student);
-        }
+      const newCourses = await this.courseRepository.findAll({
+        where: { id: In(updateDto.courseIds), instituteId },
+      });
+
+      if (student) {
+        student.courses = newCourses;
+        await this.studentRepository.save(student);
+      } else if (user.role?.name === 'student') {
+        // Create student record if it doesn't exist
+        student = await this.studentRepository.create({
+          userId: user.id,
+          instituteId: instituteId,
+          courses: newCourses,
+          batchNumber: updateDto.batchNumber,
+          admissionNumber: updateDto.admissionNumber,
+        });
+        await this.studentRepository.save(student);
+      }
     }
 
     return updatedUser;
@@ -689,27 +752,30 @@ export class AuthService {
     });
 
     if (!teacher) {
-        // Fallback: If no teacher record exists but user is valid, return basic user info
-        const user = await this.instituteUserRepository.findOne({ where: { id: userId, instituteId }, relations: ['role'] });
-        if (!user) {
-             throw new NotFoundException('Teacher not found');
-        }
-        return {
-            id: user.id,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            email: user.email,
-            profilePicture: user.profilePicture,
-            role: user.role?.name,
-            isActive: user.isActive,
-            // Teacher specific fields null
-            qualification: null,
-            experience: null,
-            joiningDate: null,
-            designation: null,
-            department: null,
-             employeeId: null
-        };
+      // Fallback: If no teacher record exists but user is valid, return basic user info
+      const user = await this.instituteUserRepository.findOne({
+        where: { id: userId, instituteId },
+        relations: ['role'],
+      });
+      if (!user) {
+        throw new NotFoundException('Teacher not found');
+      }
+      return {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        profilePicture: user.profilePicture,
+        role: user.role?.name,
+        isActive: user.isActive,
+        // Teacher specific fields null
+        qualification: null,
+        experience: null,
+        joiningDate: null,
+        designation: null,
+        department: null,
+        employeeId: null,
+      };
     }
 
     return {
@@ -725,7 +791,6 @@ export class AuthService {
       joiningDate: teacher.joiningDate,
       designation: teacher.designation,
       department: teacher.department,
-   
     };
   }
 
@@ -734,8 +799,14 @@ export class AuthService {
     return { count };
   }
 
-  async getMonthlyStudentEnrollment(instituteId: string, year: number): Promise<{ year: number; data: number[] }> {
-    const data = await this.instituteUserRepository.getMonthlyStudentEnrollment(instituteId, year);
+  async getMonthlyStudentEnrollment(
+    instituteId: string,
+    year: number,
+  ): Promise<{ year: number; data: number[] }> {
+    const data = await this.instituteUserRepository.getMonthlyStudentEnrollment(
+      instituteId,
+      year,
+    );
     return { year, data };
   }
 }

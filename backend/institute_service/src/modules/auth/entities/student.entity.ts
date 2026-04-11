@@ -33,7 +33,7 @@ export class Student {
 
   @Column({ nullable: true })
   parentName: string;
-  
+
   @Column({ nullable: true })
   parentContact: string;
 
@@ -55,10 +55,10 @@ export class Student {
   @JoinTable({
     name: 'student_courses',
     joinColumn: { name: 'studentId', referencedColumnName: 'id' },
-    inverseJoinColumn: { name: 'courseId', referencedColumnName: 'id' }
+    inverseJoinColumn: { name: 'courseId', referencedColumnName: 'id' },
   })
   courses: Course[];
- 
+
   @ManyToOne(() => Institute, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'instituteId' })
   institute: Institute;

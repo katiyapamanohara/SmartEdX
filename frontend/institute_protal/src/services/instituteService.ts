@@ -4,7 +4,8 @@ export interface Institute {
   id: string;
   name: string;
   logo?: string;
-  // Add other fields as needed
+  plan?: string;
+  enabledFeatures?: string[];
 }
 
 export interface Course {

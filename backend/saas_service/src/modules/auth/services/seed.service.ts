@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { User } from '../entities/user.entity';
-import { UserRepository, RoleRepository } from '../../../infra/database/repositories';
+import {
+  UserRepository,
+  RoleRepository,
+} from '../../../infra/database/repositories';
 
 @Injectable()
 export class SeedService {
@@ -18,19 +21,27 @@ export class SeedService {
   async seedAdminUsers(): Promise<void> {
     try {
       // Get or create roles (self-healing in case migrations haven't run)
-      const adminRole = await this.roleRepository.findOrCreate('admin', 'Administrator with full system access');
-      const instructorRole = await this.roleRepository.findOrCreate('instructor', 'Instructor who can create and manage courses');
-      const ownerRole = await this.roleRepository.findOrCreate('owner', 'Institute Owner');
+      const adminRole = await this.roleRepository.findOrCreate(
+        'admin',
+        'Administrator with full system access',
+      );
+      const instructorRole = await this.roleRepository.findOrCreate(
+        'instructor',
+        'Instructor who can create and manage courses',
+      );
+      const ownerRole = await this.roleRepository.findOrCreate(
+        'owner',
+        'Institute Owner',
+      );
 
       const adminUsers = [
         {
           firstName: 'System',
           lastName: 'Administrator',
           email: 'admin@gmail.com',
-          password: 'Admin@123',
+          password: 'admin123',
           roleId: adminRole.id,
         },
-        
       ];
 
       for (const userData of adminUsers) {
@@ -46,10 +57,12 @@ export class SeedService {
             isActive: true,
           });
 
-          const roleName = userData.roleId === adminRole.id ? 'admin' : 'instructor';
+          const roleName =
+            userData.roleId === adminRole.id ? 'admin' : 'instructor';
           this.logger.log(`✅ Created ${roleName} user: ${userData.email}`);
         } else {
-          const roleName = userData.roleId === adminRole.id ? 'admin' : 'instructor';
+          const roleName =
+            userData.roleId === adminRole.id ? 'admin' : 'instructor';
           this.logger.log(
             `ℹ️  ${roleName} user already exists: ${userData.email}`,
           );

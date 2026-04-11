@@ -10,7 +10,6 @@ import {
 } from 'typeorm';
 import { Role } from './role.entity';
 
-
 @Entity('sass_users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
@@ -38,9 +37,6 @@ export class User {
 
   @Column()
   roleId: string;
-
-
-
 
   @Column({ default: true })
   isActive: boolean;

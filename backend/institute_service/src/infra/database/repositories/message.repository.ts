@@ -31,7 +31,11 @@ export class MessageRepository extends BaseRepository<Message> {
       .getMany();
   }
 
-  async markAsRead(senderId: string, recipientId: string, instituteId: string): Promise<void> {
+  async markAsRead(
+    senderId: string,
+    recipientId: string,
+    instituteId: string,
+  ): Promise<void> {
     await this.messageRepository
       .createQueryBuilder()
       .update(Message)
@@ -43,13 +47,21 @@ export class MessageRepository extends BaseRepository<Message> {
       .execute();
   }
 
-  async getUnreadCount(recipientId: string, senderId: string, instituteId: string): Promise<number> {
+  async getUnreadCount(
+    recipientId: string,
+    senderId: string,
+    instituteId: string,
+  ): Promise<number> {
     return this.messageRepository.count({
       where: { recipientId, senderId, isRead: false, instituteId },
     });
   }
 
-  async getLastMessage(userId1: string, userId2: string, instituteId: string): Promise<Message | null> {
+  async getLastMessage(
+    userId1: string,
+    userId2: string,
+    instituteId: string,
+  ): Promise<Message | null> {
     return this.messageRepository
       .createQueryBuilder('message')
       .where('message.instituteId = :instituteId', { instituteId })

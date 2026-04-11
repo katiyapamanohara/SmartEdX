@@ -29,13 +29,16 @@ export class FaceRecClient {
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ descriptor_stored: descriptorStored, image_b64: imageB64 }),
+      body: JSON.stringify({
+        descriptor_stored: descriptorStored,
+        image_b64: imageB64,
+      }),
       signal: AbortSignal.timeout(15_000),
     });
 
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      const detail = (err as any).detail || `Face server returned ${response.status}`;
+      const detail = err.detail || `Face server returned ${response.status}`;
       throw new Error(detail);
     }
 

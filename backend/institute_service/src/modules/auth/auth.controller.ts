@@ -1,4 +1,17 @@
-import { Controller, Post, Body, Get, UseGuards, Patch, Param, NotFoundException, Delete, UseInterceptors, UploadedFile, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  UseGuards,
+  Patch,
+  Param,
+  NotFoundException,
+  Delete,
+  UseInterceptors,
+  UploadedFile,
+  Query,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
@@ -28,9 +41,6 @@ export class AuthController {
     private readonly seedService: SeedService,
   ) {}
 
-
-
-
   // Firebase Authentication Endpoints
   @Public()
   @Post('firebase/login')
@@ -52,15 +62,13 @@ export class AuthController {
       },
     },
   })
-  @ApiResponse({ status: 401, description: 'Invalid credentials or Firebase token' })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid credentials or Firebase token',
+  })
   async firebaseLogin(@Body() firebaseLoginDto: FirebaseLoginDto) {
     return this.authService.firebaseLogin(firebaseLoginDto);
   }
-
-
-
-
-
 
   @UseGuards(JwtAuthGuard)
   @Get('validate')
@@ -117,7 +125,11 @@ export class AuthController {
   @Post('me/face')
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Enroll face descriptor for the current student' })
-  @ApiBody({ schema: { properties: { descriptor: { type: 'array', items: { type: 'number' } } } } })
+  @ApiBody({
+    schema: {
+      properties: { descriptor: { type: 'array', items: { type: 'number' } } },
+    },
+  })
   @ApiResponse({ status: 200, description: 'Face descriptor saved' })
   async enrollFace(
     @CurrentUser() user: any,
@@ -177,13 +189,16 @@ export class AuthController {
   @ApiParam({ name: 'id', description: 'Institute ID' })
   @ApiResponse({
     status: 200,
-    description: 'Returns institute voice instructions and greeting for the voice agent',
+    description:
+      'Returns institute voice instructions and greeting for the voice agent',
     schema: {
       example: {
         id: '123e4567-e89b-12d3-a456-426614174000',
         name: 'Example Institute',
-        voiceInstructions: 'You are a helpful AI assistant for Example Institute...',
-        voiceGreeting: 'Hello! Welcome to Example Institute. How can I help you?',
+        voiceInstructions:
+          'You are a helpful AI assistant for Example Institute...',
+        voiceGreeting:
+          'Hello! Welcome to Example Institute. How can I help you?',
       },
     },
   })
@@ -221,13 +236,21 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get('institutes/:id/enrollment-stats')
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Get monthly student enrollment counts for a given year' })
+  @ApiOperation({
+    summary: 'Get monthly student enrollment counts for a given year',
+  })
   @ApiParam({ name: 'id', description: 'Institute ID' })
-  @ApiQuery({ name: 'year', required: false, description: 'Year (defaults to current year)' })
+  @ApiQuery({
+    name: 'year',
+    required: false,
+    description: 'Year (defaults to current year)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Returns 12-element array of enrollment counts per month',
-    schema: { example: { year: 2025, data: [5, 3, 8, 12, 7, 4, 9, 11, 6, 3, 2, 0] } },
+    schema: {
+      example: { year: 2025, data: [5, 3, 8, 12, 7, 4, 9, 11, 6, 3, 2, 0] },
+    },
   })
   async getEnrollmentStats(
     @Param('id') id: string,
@@ -236,9 +259,6 @@ export class AuthController {
     const y = year ? parseInt(year, 10) : new Date().getFullYear();
     return this.authService.getMonthlyStudentEnrollment(id, y);
   }
-
-
-
 
   @UseGuards(JwtAuthGuard)
   @Delete('institutes/:id')
@@ -276,9 +296,16 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get('institutes/:id/users')
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Get all users assigned to an institute, optionally filtered by role' })
+  @ApiOperation({
+    summary:
+      'Get all users assigned to an institute, optionally filtered by role',
+  })
   @ApiParam({ name: 'id', description: 'Institute ID' })
-  @ApiQuery({ name: 'role', required: false, description: 'Filter by role (student, teacher, instructor)' })
+  @ApiQuery({
+    name: 'role',
+    required: false,
+    description: 'Filter by role (student, teacher, instructor)',
+  })
   @ApiResponse({ status: 200, description: 'Returns list of users' })
   async getInstituteUsers(
     @Param('id') id: string,
@@ -314,8 +341,6 @@ export class AuthController {
   ) {
     return this.authService.toggleInstituteUserStatus(id, userId);
   }
-
-
 
   @UseGuards(JwtAuthGuard)
   @Post('institutes/:id/logo')

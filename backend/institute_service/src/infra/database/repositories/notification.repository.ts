@@ -13,7 +13,11 @@ export class NotificationRepository extends BaseRepository<Notification> {
     super(notifRepo);
   }
 
-  findByUser(userId: string, instituteId: string, limit = 50): Promise<Notification[]> {
+  findByUser(
+    userId: string,
+    instituteId: string,
+    limit = 50,
+  ): Promise<Notification[]> {
     return this.notifRepo.find({
       where: { userId, instituteId },
       order: { createdAt: 'DESC' },
@@ -22,7 +26,9 @@ export class NotificationRepository extends BaseRepository<Notification> {
   }
 
   countUnread(userId: string, instituteId: string): Promise<number> {
-    return this.notifRepo.count({ where: { userId, instituteId, isRead: false } });
+    return this.notifRepo.count({
+      where: { userId, instituteId, isRead: false },
+    });
   }
 
   async markOneRead(id: string, userId: string): Promise<void> {

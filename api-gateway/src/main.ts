@@ -12,7 +12,8 @@ async function bootstrap() {
   });
 
   // ── Voice Agent proxy (HTTP + WebSocket) ──────────────────────────────────
-  const voiceAgentTarget = process.env.VOICE_AGENT_URL || 'http://localhost:8002';
+  const voiceAgentTarget =
+    process.env.VOICE_AGENT_URL || 'http://localhost:8002';
 
   // HTTP proxy: /api/voice-agent/* → http://localhost:8002/*
   const voiceAgentHttpProxy = createProxyMiddleware({
@@ -85,7 +86,10 @@ async function bootstrap() {
       'JWT-auth',
     )
     .addTag('Authentication', 'User authentication and authorization endpoints')
-    .addTag('Courses', 'Course management endpoints (proxied to course-service)')
+    .addTag(
+      'Courses',
+      'Course management endpoints (proxied to course-service)',
+    )
     .addTag('Quizzes', 'Quiz management endpoints (proxied to quiz-service)')
     .addTag('Health', 'Health check and system status endpoints')
     .build();
@@ -108,6 +112,5 @@ async function bootstrap() {
 
   logger.log(`\n🔐 Default Credentials:`);
   logger.log(`   Admin:      admin@example.com / Admin@123`);
-
 }
 bootstrap();
