@@ -17,6 +17,7 @@ import {
   VideoIcon,
   ChatIcon,
   InfoIcon,
+  BoxCubeIcon,
 } from "../../icons/index";
 import { MdVideoLibrary } from "react-icons/md";
 
@@ -49,7 +50,7 @@ const CORE_STUDENT_NAV: NavItem[] = [
 const FEATURE_STUDENT_NAV: { feature: string; item: NavItem }[] = [
   { feature: "recordings",   item: { icon: <MdVideoLibrary className="w-6 h-6" />, name: "Recordings",   path: "/student/recordings" } },
   { feature: "live_sessions",item: { icon: <VideoIcon />,                          name: "Live Classes", path: "/student/live-classes" } },
-  { feature: "virtual_labs", item: { icon: <span className="text-lg">🧪</span>,   name: "Virtual Labs", path: "/student/virtual-labs" } },
+  { feature: "virtual_labs", item: { icon: <BoxCubeIcon />,                        name: "Virtual Labs", path: "/student/virtual-labs" } },
 ];
 
 

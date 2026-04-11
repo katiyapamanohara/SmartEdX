@@ -19,6 +19,7 @@ import {
   ChatIcon,
   DocsIcon,
   PlugInIcon,
+  BoxCubeIcon,
 } from "../../icons/index";
 
 type NavItem = {
@@ -44,7 +45,7 @@ const FEATURE_NAV_ITEMS: { feature: string; item: NavItem }[] = [
   { feature: "live_sessions",  item: { icon: <VideoIcon />,                          name: "Live Classes",        path: "/teacher/live-classes" } },
   { feature: "exam_proctoring",item: { icon: <PieChartIcon />,                       name: "Integrity Monitor",   path: "/teacher/integrity-monitor" } },
   { feature: "ai_tools",       item: { icon: <PlugInIcon />,                         name: "AI Tools",            path: "/teacher/ai-tools" } },
-  { feature: "virtual_labs",   item: { icon: <span className="text-lg">🧪</span>,   name: "Virtual Labs",        path: "/teacher/virtual-labs" } },
+  { feature: "virtual_labs",   item: { icon: <BoxCubeIcon />,                        name: "Virtual Labs",        path: "/teacher/virtual-labs" } },
 ];
 
 
