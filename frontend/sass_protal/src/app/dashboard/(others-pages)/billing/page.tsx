@@ -830,7 +830,6 @@ export default function BillingPage() {
               >
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-sm text-gray-500 dark:text-gray-400">{c.label}</span>
-                  <div className={`bg-gradient-to-br ${c.gradient} rounded-xl p-2 text-white`}>{c.icon}</div>
                 </div>
                 <p className="text-2xl font-bold text-gray-800 dark:text-white">{c.value}</p>
                 <p className="text-xs text-gray-400 mt-1">{c.sub}</p>
