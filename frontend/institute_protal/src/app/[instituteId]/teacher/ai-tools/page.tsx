@@ -130,10 +130,10 @@ const INSIGHT_COLOR: Record<string, string> = {
 };
 
 const INSIGHT_ICON: Record<string, string> = {
-  strength: "✅",
-  concern: "⚠️",
-  trend: "📈",
-  recommendation: "💡",
+  strength: "Check",
+  concern: "Warning",
+  trend: "Trend",
+  recommendation: "Idea",
 };
 
 const ACTIVITY_COLOR: Record<string, string> = {
@@ -149,11 +149,11 @@ const ACTIVITY_COLOR: Record<string, string> = {
 
 type Tab = "lesson" | "essay" | "insights" | "atrisk";
 
-const TABS: { id: Tab; label: string; icon: string; desc: string }[] = [
-  { id: "lesson", label: "Lesson Plan", icon: "📝", desc: "Auto-generate structured lesson plans" },
-  { id: "essay", label: "Essay Grader", icon: "📊", desc: "AI grades student essay submissions" },
-  { id: "insights", label: "Class Insights", icon: "📉", desc: "Performance analytics & recommendations" },
-  { id: "atrisk", label: "At-Risk Alerts", icon: "🎯", desc: "Identify struggling students early" },
+const TABS: { id: Tab; label: string; desc: string }[] = [
+  { id: "lesson", label: "Lesson Plan", desc: "Auto-generate structured lesson plans" },
+  { id: "essay", label: "Essay Grader", desc: "AI grades student essay submissions" },
+  { id: "insights", label: "Class Insights", desc: "Performance analytics & recommendations" },
+  { id: "atrisk", label: "At-Risk Alerts", desc: "Identify struggling students early" },
 ];
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -184,7 +184,7 @@ export default function AIToolsPage() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <span>🤖</span> Teacher AI Tools
+            Teacher AI Tools
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Powered by AI — save hours every week on planning, grading, and analysis.
@@ -328,15 +328,14 @@ function LessonPlanTab({ instituteId }: { instituteId: string }) {
           {error && <p className="text-xs text-red-500">{error}</p>}
           <button onClick={generate} disabled={loading}
             className="w-full py-2.5 rounded-lg bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
-            {loading ? <><Spinner />Generating lesson plan…</> : "✨ Generate Lesson Plan"}
+            {loading ? <><Spinner />Generating lesson plan…</> : "Generate Lesson Plan"}
           </button>
         </div>
 
         {/* Preview placeholder */}
         {!plan && !loading && (
           <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 p-8 text-center">
-            <span className="text-4xl mb-3">📝</span>
-            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Your lesson plan will appear here</p>
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Your lesson plan will appear here</span>
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Fill in the details and click Generate</p>
           </div>
         )}
@@ -362,20 +361,20 @@ function LessonPlanTab({ instituteId }: { instituteId: string }) {
             </div>
             <button onClick={downloadPlan}
               className="shrink-0 px-4 py-2 text-sm font-medium rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
-              ⬇ Download .md
+              Download .md
             </button>
           </div>
 
           <div className="grid md:grid-cols-2 gap-5">
-            <Section title="🎯 Learning Objectives">
+            <Section title="Learning Objectives">
               <ul className="space-y-1">{plan.learningObjectives.map((o, i) => <li key={i} className="text-sm flex gap-2"><span className="text-green-500 mt-0.5">✓</span><span>{o}</span></li>)}</ul>
             </Section>
-            <Section title="🧰 Materials Needed">
+            <Section title="Materials Needed">
               <ul className="space-y-1">{plan.materialsNeeded.map((m, i) => <li key={i} className="text-sm flex gap-2"><span className="text-gray-400">•</span><span>{m}</span></li>)}</ul>
             </Section>
           </div>
 
-          <Section title="🗓 Activities">
+          <Section title="Activities">
             <div className="space-y-3">
               {plan.activities.map((a, i) => (
                 <div key={i} className="flex gap-3 items-start">
@@ -393,10 +392,10 @@ function LessonPlanTab({ instituteId }: { instituteId: string }) {
           </Section>
 
           <div className="grid md:grid-cols-2 gap-5">
-            <Section title="📋 Assessment Strategy"><p className="text-sm text-gray-700 dark:text-gray-300">{plan.assessmentStrategy}</p></Section>
-            {plan.homework && <Section title="📚 Homework"><p className="text-sm text-gray-700 dark:text-gray-300">{plan.homework}</p></Section>}
-            {plan.teacherNotes && <Section title="🗒 Teacher Notes"><p className="text-sm text-gray-700 dark:text-gray-300">{plan.teacherNotes}</p></Section>}
-            {plan.differentiationTips && <Section title="⚡ Differentiation Tips"><p className="text-sm text-gray-700 dark:text-gray-300">{plan.differentiationTips}</p></Section>}
+            <Section title="Assessment Strategy"><p className="text-sm text-gray-700 dark:text-gray-300">{plan.assessmentStrategy}</p></Section>
+            {plan.homework && <Section title="Homework"><p className="text-sm text-gray-700 dark:text-gray-300">{plan.homework}</p></Section>}
+            {plan.teacherNotes && <Section title="Teacher Notes"><p className="text-sm text-gray-700 dark:text-gray-300">{plan.teacherNotes}</p></Section>}
+            {plan.differentiationTips && <Section title="Differentiation Tips"><p className="text-sm text-gray-700 dark:text-gray-300">{plan.differentiationTips}</p></Section>}
           </div>
         </div>
       )}
@@ -540,7 +539,7 @@ function EssayGraderTab({ instituteId }: { instituteId: string }) {
           {!grade && (
             <button onClick={gradeEssay} disabled={grading || !studentAnswer}
               className="w-full py-2.5 rounded-lg bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
-              {grading ? <><Spinner />AI is grading…</> : "🤖 Grade with AI"}
+              {grading ? <><Spinner />AI is grading…</> : "Grade with AI"}
             </button>
           )}
         </div>
@@ -583,16 +582,16 @@ function EssayGraderTab({ instituteId }: { instituteId: string }) {
 
           <div className="grid md:grid-cols-2 gap-4">
             <div className="rounded-xl border border-green-200 dark:border-green-800 p-4 bg-green-50 dark:bg-green-900/10">
-              <p className="text-xs font-semibold text-green-600 mb-2">✅ Strengths</p>
+              <p className="text-xs font-semibold text-green-600 mb-2">Strengths</p>
               <ul className="space-y-1">{grade.strengths.map((s, i) => <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex gap-2"><span className="text-green-500">•</span>{s}</li>)}</ul>
             </div>
             <div className="rounded-xl border border-orange-200 dark:border-orange-800 p-4 bg-orange-50 dark:bg-orange-900/10">
-              <p className="text-xs font-semibold text-orange-600 mb-2">📈 Areas to Improve</p>
+              <p className="text-xs font-semibold text-orange-600 mb-2">Areas to Improve</p>
               <ul className="space-y-1">{grade.areasForImprovement.map((a, i) => <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex gap-2"><span className="text-orange-500">•</span>{a}</li>)}</ul>
             </div>
           </div>
 
-          <Section title="📊 Rubric Breakdown">
+          <Section title="Rubric Breakdown">
             <div className="space-y-2">
               {grade.rubricBreakdown.map((r, i) => (
                 <div key={i} className="flex items-center gap-3">
@@ -615,7 +614,7 @@ function EssayGraderTab({ instituteId }: { instituteId: string }) {
 
       {!selectedExam && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <span className="text-5xl mb-3">📊</span>
+          
           <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Select an exam with essay questions to begin</p>
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">AI will analyze the student's answer and provide detailed feedback</p>
         </div>
@@ -716,7 +715,7 @@ function ClassInsightsTab({ instituteId }: { instituteId: string }) {
     score >= 80 ? "text-green-600" : score >= 60 ? "text-yellow-600" : "text-red-600";
 
   if (loadingData) return <div className="p-12 text-center text-sm text-gray-400"><Spinner /> Loading class data…</div>;
-  if (!courses.length) return <EmptyState icon="📉" title="No course data available" desc="Once students complete quizzes, insights will appear here." />;
+  if (!courses.length) return <EmptyState title="No course data available" desc="Once students complete quizzes, insights will appear here." />;
 
   return (
     <div className="p-6 space-y-5">
@@ -731,14 +730,14 @@ function ClassInsightsTab({ instituteId }: { instituteId: string }) {
         </div>
         <button onClick={generateInsights} disabled={!selectedCourse || generating}
           className="px-5 py-2 rounded-lg bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors flex items-center gap-2 whitespace-nowrap">
-          {generating ? <><Spinner />Analyzing…</> : "🧠 Generate Insights"}
+          {generating ? <><Spinner />Analyzing…</> : "Generate Insights"}
         </button>
       </div>
 
       {error && <p className="text-xs text-red-500">{error}</p>}
 
       {!insights && !generating && (
-        <EmptyState icon="📉" title="Select a course and click Generate Insights" desc="AI will analyze quiz scores, exam results, and engagement to surface patterns." />
+        <EmptyState title="Select a course and click Generate Insights" desc="AI will analyze quiz scores, exam results, and engagement to surface patterns." />
       )}
       {generating && <div className="py-20 text-center"><Spinner size="lg" /><p className="text-sm text-gray-400 mt-3">Analyzing class performance…</p></div>}
 
@@ -775,15 +774,15 @@ function ClassInsightsTab({ instituteId }: { instituteId: string }) {
           </div>
 
           <div className="grid md:grid-cols-2 gap-5">
-            <Section title="📉 Weak Areas">
+            <Section title=" Weak Areas">
               <ul className="space-y-1">{insights.weakAreas.map((w, i) => <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex gap-2"><span className="text-red-400">⚠</span>{w}</li>)}</ul>
             </Section>
-            <Section title="💪 Strong Areas">
+            <Section title="Strong Areas">
               <ul className="space-y-1">{insights.strongAreas.map((s, i) => <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex gap-2"><span className="text-green-400">✓</span>{s}</li>)}</ul>
             </Section>
           </div>
 
-          <Section title="🎯 Recommended Actions">
+          <Section title="Recommended Actions">
             <ol className="space-y-2">{insights.recommendedActions.map((a, i) => (
               <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex gap-3">
                 <span className="shrink-0 w-5 h-5 rounded-full bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 text-xs flex items-center justify-center font-bold">{i + 1}</span>
@@ -792,8 +791,8 @@ function ClassInsightsTab({ instituteId }: { instituteId: string }) {
             ))}</ol>
           </Section>
 
-          <Section title="🏫 Teaching Strategy Suggestions">
-            <ul className="space-y-1">{insights.teachingStrategySuggestions.map((s, i) => <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex gap-2"><span className="text-purple-400">💡</span>{s}</li>)}</ul>
+          <Section title="Teaching Strategy Suggestions">
+            <ul className="space-y-1">{insights.teachingStrategySuggestions.map((s, i) => <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex gap-2"><span className="text-purple-400"></span>{s}</li>)}</ul>
           </Section>
         </div>
       )}
@@ -866,7 +865,7 @@ function AtRiskTab({ instituteId }: { instituteId: string }) {
   }
 
   if (loadingData) return <div className="p-12 text-center text-sm text-gray-400"><Spinner /> Loading student data…</div>;
-  if (!courses.length) return <EmptyState icon="🎯" title="No student data available" desc="Enroll students in courses and have them complete assessments to see at-risk alerts." />;
+  if (!courses.length) return <EmptyState title="No student data available" desc="Enroll students in courses and have them complete assessments to see at-risk alerts." />;
 
   return (
     <div className="p-6 space-y-5">
@@ -881,14 +880,14 @@ function AtRiskTab({ instituteId }: { instituteId: string }) {
         </div>
         <button onClick={runAnalysis} disabled={!selectedCourse || analyzing}
           className="px-5 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center gap-2 whitespace-nowrap">
-          {analyzing ? <><Spinner />Analyzing…</> : "🎯 Identify At-Risk Students"}
+          {analyzing ? <><Spinner />Analyzing…</> : "Identify At-Risk Students"}
         </button>
       </div>
 
       {error && <p className="text-xs text-red-500">{error}</p>}
 
       {!analysis && !analyzing && (
-        <EmptyState icon="🎯" title="Identify students who need your attention" desc="AI analyzes quiz scores, exam results, and missed assignments to find at-risk students before it's too late." />
+        <EmptyState title="Identify students who need your attention" desc="AI analyzes quiz scores, exam results, and missed assignments to find at-risk students before it's too late." />
       )}
       {analyzing && <div className="py-20 text-center"><Spinner size="lg" /><p className="text-sm text-gray-400 mt-3">Scanning student performance data…</p></div>}
 
@@ -915,7 +914,7 @@ function AtRiskTab({ instituteId }: { instituteId: string }) {
 
           {/* At-risk student cards */}
           {analysis.atRiskStudents.length === 0
-            ? <div className="py-10 text-center"><span className="text-4xl">🎉</span><p className="text-sm font-medium text-green-600 dark:text-green-400 mt-2">No at-risk students found!</p><p className="text-xs text-gray-400 mt-1">The class appears to be on track.</p></div>
+            ? <div className="py-10 text-center"><span className="text-4xl"></span><p className="text-sm font-medium text-green-600 dark:text-green-400 mt-2">No at-risk students found!</p><p className="text-xs text-gray-400 mt-1">The class appears to be on track.</p></div>
             : (
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">At-Risk Students ({analysis.atRiskStudents.length})</h3>
@@ -947,7 +946,7 @@ function AtRiskTab({ instituteId }: { instituteId: string }) {
                             <ul className="space-y-0.5">{s.immediateActions.map((a, i) => <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex gap-2"><span className="text-orange-400">{i + 1}.</span>{a}</li>)}</ul>
                           </div>
                           <div>
-                            <p className="text-xs font-semibold text-blue-500 mb-1">🔭 Long-Term Recommendations</p>
+                            <p className="text-xs font-semibold text-blue-500 mb-1">Long-Term Recommendations</p>
                             <ul className="space-y-0.5">{s.longTermRecommendations.map((r, i) => <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex gap-2"><span className="text-blue-400">•</span>{r}</li>)}</ul>
                           </div>
                         </div>
@@ -960,13 +959,13 @@ function AtRiskTab({ instituteId }: { instituteId: string }) {
 
           <div className="grid md:grid-cols-2 gap-5">
             {analysis.classwidePatterns.length > 0 && (
-              <Section title="🔍 Classwide Patterns">
+              <Section title="Classwide Patterns">
                 <ul className="space-y-1">{analysis.classwidePatterns.map((p, i) => <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex gap-2"><span className="text-gray-400">•</span>{p}</li>)}</ul>
               </Section>
             )}
             {analysis.suggestedInterventions.length > 0 && (
-              <Section title="🏥 Suggested Interventions">
-                <ul className="space-y-1">{analysis.suggestedInterventions.map((i, idx) => <li key={idx} className="text-sm text-gray-700 dark:text-gray-300 flex gap-2"><span className="text-purple-400">💡</span>{i}</li>)}</ul>
+              <Section title="Suggested Interventions">
+                <ul className="space-y-1">{analysis.suggestedInterventions.map((i, idx) => <li key={idx} className="text-sm text-gray-700 dark:text-gray-300 flex gap-2"><span className="text-purple-400"></span>{i}</li>)}</ul>
               </Section>
             )}
           </div>
@@ -987,10 +986,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function EmptyState({ icon, title, desc }: { icon: string; title: string; desc: string }) {
+function EmptyState({ title, desc }: { title: string; desc: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
-      <span className="text-5xl mb-3">{icon}</span>
       <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</p>
       <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 max-w-xs">{desc}</p>
     </div>
