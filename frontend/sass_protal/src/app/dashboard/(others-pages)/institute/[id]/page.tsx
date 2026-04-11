@@ -691,7 +691,7 @@ function InstituteCustomizeContent() {
                                   : "bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600"
                               }`}
                             >
-                              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${isEnabled ? "translate-x-7" : "translate-x-1"}`} />
+                              <span className={`absolute top-1 left-0 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${isEnabled ? "translate-x-7" : "translate-x-1"}`} />
                             </button>
                             <span className={`text-[9px] font-bold uppercase tracking-wide ${isEnabled ? "text-blue-500" : "text-gray-400"}`}>
                               {isEnabled ? "On" : "Off"}
