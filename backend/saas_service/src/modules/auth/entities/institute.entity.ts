@@ -51,7 +51,11 @@ export class Institute {
   @Column({ default: true })
   isActive: boolean;
 
+  @Column({ type: 'varchar', length: 32, default: 'starter' })
+  plan: string; // starter | pro | enterprise
 
+  @Column({ type: 'jsonb', default: '[]' })
+  enabledFeatures: string[]; // e.g. ['virtual_labs', 'ai_tools', 'voice_agent']
 
   @Column({ nullable: true })
   ownerId: string;

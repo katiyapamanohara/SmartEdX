@@ -5,7 +5,9 @@ import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 export class HttpService {
   private readonly logger = new Logger(HttpService.name);
 
-  async request<T = any>(config: AxiosRequestConfig): Promise<AxiosResponse<T>> {
+  async request<T = any>(
+    config: AxiosRequestConfig,
+  ): Promise<AxiosResponse<T>> {
     try {
       this.logger.debug(`Making request to: ${config.url}`);
       const response = await axios(config);
@@ -25,7 +27,10 @@ export class HttpService {
     }
   }
 
-  async get<T = any>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
+  async get<T = any>(
+    url: string,
+    config?: AxiosRequestConfig,
+  ): Promise<AxiosResponse<T>> {
     return this.request<T>({ ...config, method: 'GET', url });
   }
 
@@ -53,7 +58,10 @@ export class HttpService {
     return this.request<T>({ ...config, method: 'PATCH', url, data });
   }
 
-  async delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
+  async delete<T = any>(
+    url: string,
+    config?: AxiosRequestConfig,
+  ): Promise<AxiosResponse<T>> {
     return this.request<T>({ ...config, method: 'DELETE', url });
   }
 }

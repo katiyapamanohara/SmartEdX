@@ -19,14 +19,21 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload) {
-    if (!payload.sub || !payload.email || !payload.role || !payload.instituteId) {
+    if (
+      !payload.sub ||
+      !payload.email ||
+      !payload.role ||
+      !payload.instituteId
+    ) {
       throw new UnauthorizedException('Invalid token payload');
     }
 
     // Check the user is still active in the database on every request
     const user = await this.instituteUserRepository.findById(payload.sub);
     if (!user || !user.isActive) {
-      throw new UnauthorizedException('Account is deactivated. Please contact your administrator.');
+      throw new UnauthorizedException(
+        'Account is deactivated. Please contact your administrator.',
+      );
     }
 
     return {

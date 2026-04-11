@@ -20,13 +20,20 @@ export class RecordingCategoryRepository extends BaseRepository<RecordingCategor
     });
   }
 
-  async findByNameAndInstituteId(name: string, instituteId: string): Promise<RecordingCategory | null> {
+  async findByNameAndInstituteId(
+    name: string,
+    instituteId: string,
+  ): Promise<RecordingCategory | null> {
     return this.repo.findOne({ where: { name, instituteId } });
   }
 
-  async createForInstitute(name: string, instituteId: string): Promise<RecordingCategory> {
+  async createForInstitute(
+    name: string,
+    instituteId: string,
+  ): Promise<RecordingCategory> {
     const existing = await this.findByNameAndInstituteId(name, instituteId);
-    if (existing) throw new ConflictException(`Category "${name}" already exists`);
+    if (existing)
+      throw new ConflictException(`Category "${name}" already exists`);
     return this.repo.save(this.repo.create({ name, instituteId }));
   }
 }

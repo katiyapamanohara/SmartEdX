@@ -205,21 +205,22 @@ export const authService = {
   },
 
   getProfile: async () => {
+    // Check session-storage cache first (cleared on tab close / logout)
+    if (typeof window !== 'undefined') {
+      const cachedProfile = sessionStorage.getItem('userProfile');
+      if (cachedProfile) {
+        return JSON.parse(cachedProfile);
+      }
+    }
+
+    const token = authService.getToken();
+
+    // No token — return locally stored user as best-effort fallback
+    if (!token) {
+      return authService.getUser();
+    }
+
     try {
-      // Check session storage first
-      if (typeof window !== 'undefined') {
-        const cachedProfile = sessionStorage.getItem('userProfile');
-        if (cachedProfile) {
-          return JSON.parse(cachedProfile);
-        }
-      }
-
-      const token = authService.getToken();
-
-      if (!token) {
-        throw new Error("No auth token found");
-      }
-
       const response = await fetch(`${API_URL}/api/auth/profile`, {
         method: 'GET',
         headers: {
@@ -228,16 +229,26 @@ export const authService = {
       });
 
       if (!response.ok) {
+        // API error — fall back to the user object stored at login time
+        const localUser = authService.getUser();
+        if (localUser) return localUser;
         throw new Error('Failed to fetch profile');
       }
 
-      // Read raw text first
       const responseData = await response.json();
+
+      // Cache the fresh profile for the lifetime of this browser tab
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('userProfile', JSON.stringify(responseData));
+      }
 
       return responseData;
 
     } catch (error) {
       console.error('Get profile error:', error);
+      // Last-resort fallback — avoids crashing the dropdown
+      const localUser = authService.getUser();
+      if (localUser) return localUser;
       throw error;
     }
   },
@@ -483,6 +494,60 @@ export const authService = {
       console.error('Toggle status error:', error);
       throw error;
     }
+  },
+
+  updateInstituteFeatures: async (id: string, data: { plan: string; enabledFeatures: string[] }) => {
+    try {
+      const token = authService.getToken();
+      if (!token) throw new Error("No auth token found");
+
+      const response = await fetch(`${API_URL}/api/auth/institutes/${id}/features`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update institute features');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Update institute features error:', error);
+      throw error;
+    }
+  },
+
+  payhereCheckout: async (data: {
+    orderId: string;
+    amount: number;
+    currency: string;
+    itemName: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    address: string;
+    city: string;
+    country: string;
+  }) => {
+    const token = authService.getToken();
+    if (!token) throw new Error("No auth token found");
+
+    const response = await fetch(`${API_URL}/api/auth/payhere/checkout`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) throw new Error('Failed to build PayHere checkout');
+    return await response.json();
   },
 
   deleteInstitute: async (id: string) => {

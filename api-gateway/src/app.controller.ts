@@ -32,7 +32,10 @@ export class AppController {
   @Public()
   @Get('api')
   @ApiOperation({ summary: 'API information' })
-  @ApiResponse({ status: 200, description: 'Returns API endpoints information' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns API endpoints information',
+  })
   getApiInfo() {
     return {
       name: 'AI Quiz System API Gateway',

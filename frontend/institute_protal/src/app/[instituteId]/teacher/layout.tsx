@@ -2,6 +2,7 @@
 
 import { useSidebar } from "@/context/SidebarContext";
 import { LiveSessionProvider } from "@/context/LiveSessionContext";
+import { InstituteFeatureProvider } from "@/context/InstituteFeatureContext";
 import LivePipWidget from "@/components/live/LivePipWidget";
 import TeacherHeader from "@/layout/teacher/TeacherHeader";
 import TeacherSidebar from "@/layout/teacher/TeacherSidebar";
@@ -33,16 +34,18 @@ export default function TeacherLayout({
     : "lg:ml-[90px]";
 
   return (
-    <LiveSessionProvider>
-      <div className="min-h-screen xl:flex">
-        <TeacherSidebar />
-        <TeacherBackdrop />
-        <div className={`flex-1 transition-all duration-300 ease-in-out ${mainContentMargin}`}>
-          <TeacherHeader />
-          <div className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">{children}</div>
+    <InstituteFeatureProvider>
+      <LiveSessionProvider>
+        <div className="min-h-screen xl:flex">
+          <TeacherSidebar />
+          <TeacherBackdrop />
+          <div className={`flex-1 transition-all duration-300 ease-in-out ${mainContentMargin}`}>
+            <TeacherHeader />
+            <div className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">{children}</div>
+          </div>
         </div>
-      </div>
-      <LivePipWidget />
-    </LiveSessionProvider>
+        <LivePipWidget />
+      </LiveSessionProvider>
+    </InstituteFeatureProvider>
   );
 }

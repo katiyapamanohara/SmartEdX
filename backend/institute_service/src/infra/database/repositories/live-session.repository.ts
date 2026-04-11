@@ -2,7 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BaseRepository } from './base.repository';
-import { LiveSession, LiveSessionStatus } from '../../../modules/auth/entities/live-session.entity';
+import {
+  LiveSession,
+  LiveSessionStatus,
+} from '../../../modules/auth/entities/live-session.entity';
 
 @Injectable()
 export class LiveSessionRepository extends BaseRepository<LiveSession> {
@@ -21,7 +24,10 @@ export class LiveSessionRepository extends BaseRepository<LiveSession> {
     });
   }
 
-  async findByTeacher(teacherId: string, instituteId: string): Promise<LiveSession[]> {
+  async findByTeacher(
+    teacherId: string,
+    instituteId: string,
+  ): Promise<LiveSession[]> {
     return this.liveSessionRepository.find({
       where: { teacherId, instituteId },
       relations: ['teacher'],

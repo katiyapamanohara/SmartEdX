@@ -21,16 +21,25 @@ export class CourseRepository extends BaseRepository<Course> {
     });
   }
 
-  async findByBatchNumberAndInstituteId(batchNumber: string, instituteId: string): Promise<Course[]> {
+  async findByBatchNumberAndInstituteId(
+    batchNumber: string,
+    instituteId: string,
+  ): Promise<Course[]> {
     return this.courseRepository.find({
       where: { batchNumber, instituteId },
     });
   }
 
-  async findCourseWithModulesForTeacher(courseId: string, userId: string, instituteId: string): Promise<Course | null> {
+  async findCourseWithModulesForTeacher(
+    courseId: string,
+    userId: string,
+    instituteId: string,
+  ): Promise<Course | null> {
     return this.courseRepository
       .createQueryBuilder('course')
-      .innerJoin('course.teachers', 'teacher', 'teacher.userId = :userId', { userId })
+      .innerJoin('course.teachers', 'teacher', 'teacher.userId = :userId', {
+        userId,
+      })
       .leftJoinAndSelect('course.teachers', 'allTeachers')
       .leftJoinAndSelect('allTeachers.user', 'teacherUser')
       .leftJoinAndSelect('course.modules', 'module')
@@ -42,12 +51,19 @@ export class CourseRepository extends BaseRepository<Course> {
       .getOne();
   }
 
-  async findCoursesWithQuizzesByTeacher(userId: string, instituteId: string): Promise<Course[]> {
+  async findCoursesWithQuizzesByTeacher(
+    userId: string,
+    instituteId: string,
+  ): Promise<Course[]> {
     return this.courseRepository
       .createQueryBuilder('course')
-      .innerJoin('course.teachers', 'teacher', 'teacher.userId = :userId', { userId })
+      .innerJoin('course.teachers', 'teacher', 'teacher.userId = :userId', {
+        userId,
+      })
       .leftJoinAndSelect('course.modules', 'module')
-      .leftJoinAndSelect('module.contents', 'content', 'content.type = :type', { type: 'quiz' })
+      .leftJoinAndSelect('module.contents', 'content', 'content.type = :type', {
+        type: 'quiz',
+      })
       .where('course.instituteId = :instituteId', { instituteId })
       .orderBy('course.createdAt', 'DESC')
       .addOrderBy('module.order', 'ASC')
@@ -55,12 +71,19 @@ export class CourseRepository extends BaseRepository<Course> {
       .getMany();
   }
 
-  async findCoursesWithQuizzesByStudent(userId: string, instituteId: string): Promise<Course[]> {
+  async findCoursesWithQuizzesByStudent(
+    userId: string,
+    instituteId: string,
+  ): Promise<Course[]> {
     return this.courseRepository
       .createQueryBuilder('course')
-      .innerJoin('course.students', 'student', 'student.userId = :userId', { userId })
+      .innerJoin('course.students', 'student', 'student.userId = :userId', {
+        userId,
+      })
       .leftJoinAndSelect('course.modules', 'module')
-      .leftJoinAndSelect('module.contents', 'content', 'content.type = :type', { type: 'quiz' })
+      .leftJoinAndSelect('module.contents', 'content', 'content.type = :type', {
+        type: 'quiz',
+      })
       .where('course.instituteId = :instituteId', { instituteId })
       .orderBy('course.createdAt', 'DESC')
       .addOrderBy('module.order', 'ASC')
@@ -68,10 +91,15 @@ export class CourseRepository extends BaseRepository<Course> {
       .getMany();
   }
 
-  async findByStudentUserId(userId: string, instituteId: string): Promise<Course[]> {
+  async findByStudentUserId(
+    userId: string,
+    instituteId: string,
+  ): Promise<Course[]> {
     return this.courseRepository
       .createQueryBuilder('course')
-      .innerJoin('course.students', 'student', 'student.userId = :userId', { userId })
+      .innerJoin('course.students', 'student', 'student.userId = :userId', {
+        userId,
+      })
       .leftJoinAndSelect('course.teachers', 'teacher')
       .leftJoinAndSelect('teacher.user', 'teacherUser')
       .leftJoinAndSelect('course.modules', 'module')
@@ -80,10 +108,15 @@ export class CourseRepository extends BaseRepository<Course> {
       .getMany();
   }
 
-  async findByTeacherUserId(userId: string, instituteId: string): Promise<Course[]> {
+  async findByTeacherUserId(
+    userId: string,
+    instituteId: string,
+  ): Promise<Course[]> {
     return this.courseRepository
       .createQueryBuilder('course')
-      .innerJoin('course.teachers', 'teacher', 'teacher.userId = :userId', { userId })
+      .innerJoin('course.teachers', 'teacher', 'teacher.userId = :userId', {
+        userId,
+      })
       .leftJoinAndSelect('course.teachers', 'allTeachers')
       .leftJoinAndSelect('allTeachers.user', 'teacherUser')
       .where('course.instituteId = :instituteId', { instituteId })
@@ -91,10 +124,15 @@ export class CourseRepository extends BaseRepository<Course> {
       .getMany();
   }
 
-  async findByTeacherUserIdWithStudents(userId: string, instituteId: string): Promise<Course[]> {
+  async findByTeacherUserIdWithStudents(
+    userId: string,
+    instituteId: string,
+  ): Promise<Course[]> {
     return this.courseRepository
       .createQueryBuilder('course')
-      .innerJoin('course.teachers', 'teacher', 'teacher.userId = :userId', { userId })
+      .innerJoin('course.teachers', 'teacher', 'teacher.userId = :userId', {
+        userId,
+      })
       .leftJoinAndSelect('course.students', 'student')
       .leftJoinAndSelect('student.user', 'studentUser')
       .where('course.instituteId = :instituteId', { instituteId })
@@ -102,10 +140,15 @@ export class CourseRepository extends BaseRepository<Course> {
       .getMany();
   }
 
-  async findCoursesWithQuizzesAndStudentsByTeacher(userId: string, instituteId: string): Promise<Course[]> {
+  async findCoursesWithQuizzesAndStudentsByTeacher(
+    userId: string,
+    instituteId: string,
+  ): Promise<Course[]> {
     return this.courseRepository
       .createQueryBuilder('course')
-      .innerJoin('course.teachers', 'teacher', 'teacher.userId = :userId', { userId })
+      .innerJoin('course.teachers', 'teacher', 'teacher.userId = :userId', {
+        userId,
+      })
       .leftJoinAndSelect('course.students', 'student')
       .leftJoinAndSelect('student.user', 'studentUser')
       .leftJoinAndSelect('course.modules', 'module')

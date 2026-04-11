@@ -1,19 +1,15 @@
 import { useSidebar } from "@/context/SidebarContext";
 import {
-  BoltIcon,
   BoxCubeIcon,
   ChevronDownIcon,
   GridIcon,
   HorizontaLDots,
   PieChartIcon,
-  TaskIcon,
   UserCircleIcon,
 } from "@/icons/index";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-
 
 type NavItem = {
   name: string;
@@ -26,27 +22,26 @@ const navItems: NavItem[] = [
   {
     icon: <GridIcon />,
     name: "Dashboard",
-    subItems: [{ name: "Ecommerce", path: "/admin", pro: false }],
+    subItems: [{ name: "Overview", path: "/admin", pro: false }],
   },
-
-];
-
-const othersItems: NavItem[] = [
-
+  {
+    icon: <UserCircleIcon />,
+    name: "Users",
+    subItems: [{ name: "All Users", path: "/admin/users", pro: false }],
+  },
   {
     icon: <BoxCubeIcon />,
-    name: "UI Elements",
-    subItems: [
-      { name: "Alerts", path: "/admin/alerts", pro: false },
-      { name: "Avatar", path: "/admin/avatars", pro: false },
-      { name: "Badge", path: "/admin/badge", pro: false },
-      { name: "Buttons", path: "/admin/buttons", pro: false },
-      { name: "Images", path: "/admin/images", pro: false },
-      { name: "Videos", path: "/admin/videos", pro: false },
-    ],
+    name: "Institutes",
+    subItems: [{ name: "All Institutes", path: "/admin/institutes", pro: false }],
   },
-
+  {
+    icon: <PieChartIcon />,
+    name: "Subscriptions",
+    subItems: [{ name: "Payments & Plans", path: "/admin/subscriptions", pro: false }],
+  },
 ];
+
+const othersItems: NavItem[] = [];
 
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
@@ -262,31 +257,15 @@ const AppSidebar: React.FC = () => {
           !isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
         }`}
       >
-        <Link href="/">
+        <Link href="/admin" className="flex items-center gap-2 group">
           {isExpanded || isHovered || isMobileOpen ? (
-            <>
-              <Image
-                className="dark:hidden"
-                src="/images/logo/logo.svg"
-                alt="Logo"
-                width={150}
-                height={40}
-              />
-              <Image
-                className="hidden dark:block"
-                src="/images/logo/logo-dark.svg"
-                alt="Logo"
-                width={150}
-                height={40}
-              />
-            </>
+            <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400 group-hover:from-indigo-600 group-hover:to-violet-600 transition-all">
+              SmartEdX
+            </span>
           ) : (
-            <Image
-              src="/images/logo/logo-icon.svg"
-              alt="Logo"
-              width={32}
-              height={32}
-            />
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white text-sm font-bold shadow-sm">
+              S
+            </span>
           )}
         </Link>
       </div>

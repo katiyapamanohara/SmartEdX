@@ -1,7 +1,17 @@
 import { Type } from 'class-transformer';
 import {
-  IsString, IsNotEmpty, IsOptional, IsInt, IsDateString,
-  IsArray, ValidateNested, IsNumber, Min, Max, ArrayMinSize, IsBoolean,
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsInt,
+  IsDateString,
+  IsArray,
+  ValidateNested,
+  IsNumber,
+  Min,
+  Max,
+  ArrayMinSize,
+  IsBoolean,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -9,7 +19,9 @@ export class ExamQuestionDto {
   @ApiProperty() @IsString() @IsNotEmpty() id: string;
   @ApiProperty() @IsString() @IsNotEmpty() question: string;
   @ApiProperty({ type: [String], minItems: 4, maxItems: 4 })
-  @IsArray() @ArrayMinSize(4) options: [string, string, string, string];
+  @IsArray()
+  @ArrayMinSize(4)
+  options: [string, string, string, string];
   @ApiProperty() @IsInt() @Min(0) @Max(3) correctAnswer: number;
   @ApiProperty() @IsNumber() @Min(1) marks: number;
   @ApiPropertyOptional() @IsOptional() @IsString() explanation?: string;
@@ -23,9 +35,16 @@ export class CreateExamDto {
   @ApiPropertyOptional() @IsOptional() @IsDateString() scheduledAt?: string;
   @ApiProperty({ default: 60 }) @IsInt() @Min(5) durationMinutes: number;
   @ApiProperty({ default: 50 }) @IsInt() @Min(0) @Max(100) passingScore: number;
-  @ApiPropertyOptional({ default: 1 }) @IsOptional() @IsInt() @Min(1) @Max(10) maxAttempts?: number;
+  @ApiPropertyOptional({ default: 1 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  maxAttempts?: number;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() requireFaceId?: boolean;
   @ApiProperty({ type: [ExamQuestionDto] })
-  @IsArray() @ValidateNested({ each: true }) @Type(() => ExamQuestionDto)
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ExamQuestionDto)
   questions: ExamQuestionDto[];
 }

@@ -11,7 +11,10 @@ import { ModuleContent, ContentType } from './entities/module-content.entity';
 /** Content types that carry indexable text for the course knowledge base. */
 const INDEXABLE_TYPES: ContentType[] = [ContentType.PDF, ContentType.DOCUMENT];
 
-function isIndexable(type: ContentType, url: string | undefined | null): boolean {
+function isIndexable(
+  type: ContentType,
+  url: string | undefined | null,
+): boolean {
   return INDEXABLE_TYPES.includes(type) && !!url;
 }
 
@@ -29,19 +32,30 @@ export class ModuleContentService {
 
   // ── Create ─────────────────────────────────────────────────────────────────
 
-  async create(courseId: string, moduleId: string, createDto: CreateModuleContentDto): Promise<ModuleContent> {
+  async create(
+    courseId: string,
+    moduleId: string,
+    createDto: CreateModuleContentDto,
+  ): Promise<ModuleContent> {
     const module = await this.courseModuleRepository.findById(moduleId);
     if (!module || module.courseId !== courseId) {
-      throw new NotFoundException(`Valid course module with ID ${moduleId} not found`);
+      throw new NotFoundException(
+        `Valid course module with ID ${moduleId} not found`,
+      );
     }
 
     let { order } = createDto;
     if (order === undefined) {
-      const existingContents = await this.moduleContentRepository.findByModuleId(moduleId);
+      const existingContents =
+        await this.moduleContentRepository.findByModuleId(moduleId);
       order = existingContents.length;
     }
 
-    const content = await this.moduleContentRepository.create({ ...createDto, moduleId, order });
+    const content = await this.moduleContentRepository.create({
+      ...createDto,
+      moduleId,
+      order,
+    });
 
     // Index PDF / Word documents added directly via URL (not via file upload)
     if (isIndexable(content.type, content.url)) {
@@ -55,22 +69,35 @@ export class ModuleContentService {
 
   // ── Read ───────────────────────────────────────────────────────────────────
 
-  async findAllByModuleId(courseId: string, moduleId: string): Promise<ModuleContent[]> {
+  async findAllByModuleId(
+    courseId: string,
+    moduleId: string,
+  ): Promise<ModuleContent[]> {
     const module = await this.courseModuleRepository.findById(moduleId);
     if (!module || module.courseId !== courseId) {
-      throw new NotFoundException(`Valid course module with ID ${moduleId} not found`);
+      throw new NotFoundException(
+        `Valid course module with ID ${moduleId} not found`,
+      );
     }
     return this.moduleContentRepository.findByModuleId(moduleId);
   }
 
-  async findOne(courseId: string, moduleId: string, id: string): Promise<ModuleContent> {
+  async findOne(
+    courseId: string,
+    moduleId: string,
+    id: string,
+  ): Promise<ModuleContent> {
     const module = await this.courseModuleRepository.findById(moduleId);
     if (!module || module.courseId !== courseId) {
-      throw new NotFoundException(`Valid course module with ID ${moduleId} not found`);
+      throw new NotFoundException(
+        `Valid course module with ID ${moduleId} not found`,
+      );
     }
     const content = await this.moduleContentRepository.findById(id);
     if (!content || content.moduleId !== moduleId) {
-      throw new NotFoundException(`Module content with ID ${id} not found in module ${moduleId}`);
+      throw new NotFoundException(
+        `Module content with ID ${id} not found in module ${moduleId}`,
+      );
     }
     return content;
   }
@@ -85,27 +112,33 @@ export class ModuleContentService {
   ): Promise<ModuleContent> {
     const existing = await this.findOne(courseId, moduleId, id);
 
-    const updated = await this.moduleContentRepository.update(
+    const updated = (await this.moduleContentRepository.update(
       existing.id,
       updateDto as Partial<ModuleContent>,
-    ) as ModuleContent;
+    )) as ModuleContent;
 
     const wasIndexable = isIndexable(existing.type, existing.url);
-    const newType      = updated.type ?? existing.type;
-    const newUrl       = updated.url  ?? existing.url;
+    const newType = updated.type ?? existing.type;
+    const newUrl = updated.url ?? existing.url;
     const nowIndexable = isIndexable(newType, newUrl);
 
-    const urlChanged  = updateDto.url  !== undefined && updateDto.url  !== existing.url;
-    const typeChanged = updateDto.type !== undefined && updateDto.type !== existing.type;
+    const urlChanged =
+      updateDto.url !== undefined && updateDto.url !== existing.url;
+    const typeChanged =
+      updateDto.type !== undefined && updateDto.type !== existing.type;
 
     if (nowIndexable && (urlChanged || typeChanged)) {
       this.queueKbIndex(courseId, updated).catch((err) =>
-        this.logger.error(`KB re-index failed for content ${updated.id}: ${err}`),
+        this.logger.error(
+          `KB re-index failed for content ${updated.id}: ${err}`,
+        ),
       );
     } else if (wasIndexable && !nowIndexable) {
       // No longer a PDF/DOCUMENT — remove from index
       this._deleteFromKb(courseId, existing.id).catch((err) =>
-        this.logger.error(`KB delete failed for content ${existing.id}: ${err}`),
+        this.logger.error(
+          `KB delete failed for content ${existing.id}: ${err}`,
+        ),
       );
     }
 
@@ -135,15 +168,17 @@ export class ModuleContentService {
   ): Promise<ModuleContent> {
     const type = body.type as ContentType;
     const bucket =
-      type === ContentType.PDF    ? 'pdfs'      :
-      type === ContentType.VIDEO  ? 'videos'    :
-      'documents';
+      type === ContentType.PDF
+        ? 'pdfs'
+        : type === ContentType.VIDEO
+          ? 'videos'
+          : 'documents';
 
     const url = await this.minioService.uploadFile(file, bucket);
 
     // `create()` will automatically trigger KB indexing for PDF/DOCUMENT types
     return this.create(courseId, moduleId, {
-      title:       body.title,
+      title: body.title,
       description: body.description,
       type,
       url,
@@ -161,18 +196,20 @@ export class ModuleContentService {
   async queueKbIndex(courseId: string, content: ModuleContent): Promise<void> {
     const course = await this.courseRepository.findById(courseId);
     if (!course) {
-      this.logger.warn(`queueKbIndex: course ${courseId} not found, skipping KB index`);
+      this.logger.warn(
+        `queueKbIndex: course ${courseId} not found, skipping KB index`,
+      );
       return;
     }
 
     await this.voiceAgentClient.indexContent({
       institute_id: course.instituteId,
-      course_id:    courseId,
-      course_name:  course.name,
-      content_id:   content.id,
-      file_url:     content.url,
-      file_type:    content.type,
-      title:        content.title,
+      course_id: courseId,
+      course_name: course.name,
+      content_id: content.id,
+      file_url: content.url,
+      file_type: content.type,
+      title: content.title,
     });
   }
 
@@ -180,12 +217,21 @@ export class ModuleContentService {
    * Look up the course to get its instituteId, then delete the content from
    * the course's dedicated Qdrant collection.
    */
-  private async _deleteFromKb(courseId: string, contentId: string): Promise<void> {
+  private async _deleteFromKb(
+    courseId: string,
+    contentId: string,
+  ): Promise<void> {
     const course = await this.courseRepository.findById(courseId);
     if (!course) {
-      this.logger.warn(`_deleteFromKb: course ${courseId} not found, skipping KB delete`);
+      this.logger.warn(
+        `_deleteFromKb: course ${courseId} not found, skipping KB delete`,
+      );
       return;
     }
-    await this.voiceAgentClient.deleteContent(course.instituteId, courseId, contentId);
+    await this.voiceAgentClient.deleteContent(
+      course.instituteId,
+      courseId,
+      contentId,
+    );
   }
 }

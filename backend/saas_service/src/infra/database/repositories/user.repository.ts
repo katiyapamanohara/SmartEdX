@@ -93,7 +93,10 @@ export class UserRepository extends BaseRepository<User> {
    * @param hashedPassword - New hashed password
    * @returns Updated user or null
    */
-  async updatePassword(id: string, hashedPassword: string): Promise<User | null> {
+  async updatePassword(
+    id: string,
+    hashedPassword: string,
+  ): Promise<User | null> {
     return this.update(id, { password: hashedPassword });
   }
 

@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
+import { useInstituteFeatures } from "@/hooks/useInstituteFeatures";
 import { VideoIcon, PlusIcon, TrashBinIcon, EyeIcon } from "@/icons";
 import { authService } from "@/services/authService";
 import { instituteService, Course } from "@/services/instituteService";
@@ -829,6 +830,7 @@ function authHeaders(): Record<string, string> {
 export default function TeacherRecordingsPage() {
   const params = useParams();
   const instituteId = params?.instituteId as string;
+  useInstituteFeatures({ requiredFeature: "recordings", redirectTo: `/${instituteId}/teacher` });
 
   // ── Data state ───────────────────────────────────────────────────────────────
   const [recordings, setRecordings] = useState<Recording[]>([]);

@@ -13,7 +13,9 @@ export class RecordingCourseAssignmentRepository extends BaseRepository<Recordin
     super(repo);
   }
 
-  async findByRecordingId(recordingId: string): Promise<RecordingCourseAssignment[]> {
+  async findByRecordingId(
+    recordingId: string,
+  ): Promise<RecordingCourseAssignment[]> {
     return this.repo.find({
       where: { recordingId },
       relations: ['course'],

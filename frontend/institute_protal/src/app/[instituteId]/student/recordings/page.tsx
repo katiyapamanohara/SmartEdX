@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useParams } from "next/navigation";
 import { VideoIcon } from "@/icons";
 import { authService } from "@/services/authService";
+import { useInstituteFeatures } from "@/hooks/useInstituteFeatures";
 
 type RecordingAssignment = {
   id: string;
@@ -45,6 +46,7 @@ function isAssignmentActive(a: RecordingAssignment): boolean {
 export default function StudentRecordingsPage() {
   const params = useParams();
   const instituteId = params?.instituteId as string;
+  useInstituteFeatures({ requiredFeature: "recordings", redirectTo: `/${instituteId}/student` });
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

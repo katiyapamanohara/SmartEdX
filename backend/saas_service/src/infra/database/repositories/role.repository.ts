@@ -55,7 +55,7 @@ export class RoleRepository extends BaseRepository<Role> {
    */
   async findOrCreate(name: string, description?: string): Promise<Role> {
     let role = await this.findByName(name);
-    
+
     if (!role) {
       role = await this.create({
         name: name.toLowerCase(),

@@ -19,11 +19,16 @@ export class StudentProxyController {
     // If path is undefined (root match), treat as empty string
     const targetPath = path || '0';
     const method = req.method;
-    
+
     // If targetPath is '0' (wildcard not matched/empty), treat as empty string
     const finalPath = targetPath === '0' ? '' : targetPath;
 
-    return this.studentProxyService.forwardRequest(finalPath, method, body, headers);
+    return this.studentProxyService.forwardRequest(
+      finalPath,
+      method,
+      body,
+      headers,
+    );
   }
 
   @All()

@@ -1,5 +1,18 @@
-import { Controller, Get, Post, Delete, Body, Param, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiParam,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { LiveClassService } from './live-class.service';
 import { CreateLiveSessionDto } from './dto/create-live-session.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -58,7 +71,11 @@ export class LiveClassController {
     @Param('sessionId') sessionId: string,
     @CurrentUser('userId') teacherId: string,
   ) {
-    return this.liveClassService.startSession(sessionId, teacherId, instituteId);
+    return this.liveClassService.startSession(
+      sessionId,
+      teacherId,
+      instituteId,
+    );
   }
 
   @Post(':sessionId/end')
@@ -97,6 +114,10 @@ export class LiveClassController {
     @Param('sessionId') sessionId: string,
     @CurrentUser('userId') teacherId: string,
   ) {
-    return this.liveClassService.deleteSession(sessionId, teacherId, instituteId);
+    return this.liveClassService.deleteSession(
+      sessionId,
+      teacherId,
+      instituteId,
+    );
   }
 }

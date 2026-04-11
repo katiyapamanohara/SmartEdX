@@ -29,17 +29,18 @@ export class RedisCacheInterceptor implements NestInterceptor {
     const userId = request.user?.userId || 'public';
 
     // Invalidate cache for state-changing requests
-    if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
       return next.handle().pipe(
         tap(async () => {
           try {
             let pattern;
             // If deleting an institute, clear all cache for that institute
             // Match DELETE/PUT/PATCH/POST to /institutes/:id or /institutes/:id/recordings (and subpaths)
-            const recordingsRegex = /\/api\/institutes\/institutes\/([\w-]+)\/recordings(\/.*)?$/;
+            const recordingsRegex =
+              /\/api\/institutes\/institutes\/([\w-]+)\/recordings(\/.*)?$/;
             const instituteRegex = /\/api\/institutes\/institutes\/([\w-]+)$/;
             let instituteId = null;
-            if (["DELETE", "PUT", "PATCH", "POST"].includes(method)) {
+            if (['DELETE', 'PUT', 'PATCH', 'POST'].includes(method)) {
               let match = request.url.match(recordingsRegex);
               if (match) {
                 instituteId = match[1];

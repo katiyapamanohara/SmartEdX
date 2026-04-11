@@ -10,8 +10,6 @@ import {
 } from 'typeorm';
 import { Course } from './course.entity';
 
-
-
 @Entity('institutes')
 export class Institute {
   @PrimaryGeneratedColumn('uuid')
@@ -58,6 +56,12 @@ export class Institute {
 
   @Column({ default: true })
   isActive: boolean;
+
+  @Column({ type: 'varchar', length: 32, default: 'starter' })
+  plan: string;
+
+  @Column({ type: 'jsonb', default: '[]' })
+  enabledFeatures: string[];
 
   @Column({ type: 'uuid', nullable: true })
   ownerId: string | null;

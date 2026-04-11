@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import { examService, Exam, ExamQuestion, ExamStatus } from "@/services/examService";
+import { useFeatures } from "@/context/InstituteFeatureContext";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -647,6 +648,8 @@ function ExamCard({ exam, onStart }: { exam: Exam; onStart: (exam: Exam) => void
 
 export default function StudentExamsPage() {
   const { instituteId } = useParams<{ instituteId: string }>();
+  const { hasFeature } = useFeatures();
+  const proctoringEnabled = hasFeature("exam_proctoring");
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
   const [verifyingExam, setVerifyingExam] = useState<Exam | null>(null); // face-verify step
@@ -665,10 +668,10 @@ export default function StudentExamsPage() {
 
   // When student clicks "Start Exam"
   const handleStart = (exam: Exam) => {
-    if (exam.requireFaceId) {
+    if (exam.requireFaceId && proctoringEnabled) {
       setVerifyingExam(exam);   // show face verify first
     } else {
-      setTakingExam(exam);       // start directly
+      setTakingExam(exam);       // start directly (proctoring disabled or not required)
     }
   };
 

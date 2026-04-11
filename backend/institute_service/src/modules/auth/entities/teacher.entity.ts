@@ -30,7 +30,7 @@ export class Teacher {
 
   @Column({ nullable: true })
   designation: string;
-  
+
   @Column({ nullable: true })
   department: string;
 

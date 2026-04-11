@@ -15,10 +15,10 @@ import { RecordingCourseAssignment } from './recording-course-assignment.entity'
 
 export interface VideoQuestion {
   id: string;
-  atSeconds: number;       // timestamp in the video when the question appears
+  atSeconds: number; // timestamp in the video when the question appears
   question: string;
   options: [string, string, string, string];
-  correctAnswer: number;   // 0-3
+  correctAnswer: number; // 0-3
   marks: number;
 }
 
@@ -61,11 +61,16 @@ export class Recording {
   @Column({ nullable: true })
   categoryId: string | null;
 
-  @ManyToOne(() => RecordingCategory, (c) => c.recordings, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => RecordingCategory, (c) => c.recordings, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
   @JoinColumn({ name: 'categoryId' })
   category: RecordingCategory;
 
-  @OneToMany(() => RecordingCourseAssignment, (a) => a.recording, { cascade: true })
+  @OneToMany(() => RecordingCourseAssignment, (a) => a.recording, {
+    cascade: true,
+  })
   courseAssignments: RecordingCourseAssignment[];
 
   /** Timed questions attached to this recording (sorted by atSeconds) */

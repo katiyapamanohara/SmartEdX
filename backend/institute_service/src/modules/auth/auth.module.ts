@@ -49,13 +49,26 @@ import { VoiceSessionController } from './voice-session.controller';
       useFactory: async (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET') || 'your-secret-key',
         signOptions: {
-          expiresIn: (configService.get<string>('JWT_EXPIRATION') || '1d') as any,
+          expiresIn: (configService.get<string>('JWT_EXPIRATION') ||
+            '1d') as any,
         },
       }),
       inject: [ConfigService],
     }),
   ],
-  controllers: [AuthController, InstituteUserController, CourseController, CourseModuleController, ModuleContentController, RecordingController, MessageController, NotificationController, ExamController, LiveClassController, VoiceSessionController],
+  controllers: [
+    AuthController,
+    InstituteUserController,
+    CourseController,
+    CourseModuleController,
+    ModuleContentController,
+    RecordingController,
+    MessageController,
+    NotificationController,
+    ExamController,
+    LiveClassController,
+    VoiceSessionController,
+  ],
   providers: [
     AuthService,
     CourseService,
@@ -78,12 +91,7 @@ import { VoiceSessionController } from './voice-session.controller';
     VoiceAgentClient,
     FaceRecClient,
   ],
-  exports: [
-    AuthService,
-    JwtAuthGuard,
-    FirebaseAuthGuard,
-    RolesGuard,
-  ],
+  exports: [AuthService, JwtAuthGuard, FirebaseAuthGuard, RolesGuard],
 })
 export class AuthModule implements OnModuleInit {
   constructor(private readonly seedService: SeedService) {}

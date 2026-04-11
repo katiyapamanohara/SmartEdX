@@ -11,17 +11,24 @@ import { InstituteUserRepository } from '../../infra/database/repositories/insti
 import { CreateExamDto } from './dto/create-exam.dto';
 import { UpdateExamDto } from './dto/update-exam.dto';
 import { SubmitExamDto } from './dto/submit-exam.dto';
-import { Exam, ExamAttempt, ExamStatus, IntegrityFlag, IntegrityViolationType } from './entities/exam.entity'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import {
+  Exam,
+  ExamAttempt,
+  ExamStatus,
+  IntegrityFlag,
+  IntegrityViolationType,
+} from './entities/exam.entity';
 import { randomUUID } from 'crypto';
 
-const SEVERITY_MAP: Record<IntegrityViolationType, IntegrityFlag['severity']> = {
-  face_absent: 'high',
-  face_verify_failed: 'high',
-  multiple_faces: 'high',
-  tab_switch: 'medium',
-  camera_disabled: 'medium',
-  fullscreen_exit: 'low',
-};
+const SEVERITY_MAP: Record<IntegrityViolationType, IntegrityFlag['severity']> =
+  {
+    face_absent: 'high',
+    face_verify_failed: 'high',
+    multiple_faces: 'high',
+    tab_switch: 'medium',
+    camera_disabled: 'medium',
+    fullscreen_exit: 'low',
+  };
 
 @Injectable()
 export class ExamService {
@@ -50,11 +57,16 @@ export class ExamService {
   private formatExam(exam: Exam, userId?: string) {
     const status = this.computeStatus(exam);
     const totalMarks = exam.questions.reduce((s, q) => s + q.marks, 0);
-    const attempt = userId ? (exam.studentAttempts?.[userId] ?? null) : undefined;
+    const attempt = userId
+      ? (exam.studentAttempts?.[userId] ?? null)
+      : undefined;
     // Strip correct answers + sample answers for active exams (student safety)
     const questions =
       status === 'active' && userId
-        ? exam.questions.map(({ correctAnswer: _c, explanation: _e, sampleAnswer: _s, ...q }) => q)
+        ? exam.questions.map(
+            ({ correctAnswer: _c, explanation: _e, sampleAnswer: _s, ...q }) =>
+              q,
+          )
         : exam.questions;
 
     return {
@@ -78,7 +90,9 @@ export class ExamService {
       updatedAt: exam.updatedAt,
       ...(attempt !== undefined ? { myAttempt: attempt } : {}),
       // Include all student attempts for teacher/admin views (no specific userId)
-      ...(userId === undefined ? { studentAttempts: exam.studentAttempts ?? {} } : {}),
+      ...(userId === undefined
+        ? { studentAttempts: exam.studentAttempts ?? {} }
+        : {}),
     };
   }
 
@@ -86,10 +100,18 @@ export class ExamService {
   // Teacher / Institute
   // ─────────────────────────────────────────────────────────────────────────────
 
-  async create(instituteId: string, userId: string, role: string, dto: CreateExamDto) {
+  async create(
+    instituteId: string,
+    userId: string,
+    role: string,
+    dto: CreateExamDto,
+  ) {
     // Verify teacher owns the course (skip check for institute admins)
     if (role === 'teacher' || role === 'instructor') {
-      const courses = await this.courseRepository.findByTeacherUserId(userId, instituteId);
+      const courses = await this.courseRepository.findByTeacherUserId(
+        userId,
+        instituteId,
+      );
       if (!courses.some((c) => c.id === dto.courseId)) {
         throw new ForbiddenException('You are not assigned to this course');
       }
@@ -123,8 +145,17 @@ export class ExamService {
     return this.formatExam(exam);
   }
 
-  async update(instituteId: string, examId: string, userId: string, role: string, dto: UpdateExamDto) {
-    const exam = await this.examRepository.findByIdWithRelations(examId, instituteId);
+  async update(
+    instituteId: string,
+    examId: string,
+    userId: string,
+    role: string,
+    dto: UpdateExamDto,
+  ) {
+    const exam = await this.examRepository.findByIdWithRelations(
+      examId,
+      instituteId,
+    );
     if (!exam) throw new NotFoundException('Exam not found');
 
     if (role !== 'admin' && exam.createdByUserId !== userId) {
@@ -135,8 +166,10 @@ export class ExamService {
     if (dto.title !== undefined) patch.title = dto.title;
     if (dto.description !== undefined) patch.description = dto.description;
     if (dto.instructions !== undefined) patch.instructions = dto.instructions;
-    if (dto.scheduledAt !== undefined) patch.scheduledAt = new Date(dto.scheduledAt);
-    if (dto.durationMinutes !== undefined) patch.durationMinutes = dto.durationMinutes;
+    if (dto.scheduledAt !== undefined)
+      patch.scheduledAt = new Date(dto.scheduledAt);
+    if (dto.durationMinutes !== undefined)
+      patch.durationMinutes = dto.durationMinutes;
     if (dto.passingScore !== undefined) patch.passingScore = dto.passingScore;
     if (dto.questions !== undefined) patch.questions = dto.questions as any;
     if (dto.status !== undefined) patch.status = dto.status as ExamStatus;
@@ -151,8 +184,16 @@ export class ExamService {
     return this.formatExam(updated!);
   }
 
-  async remove(instituteId: string, examId: string, userId: string, role: string) {
-    const exam = await this.examRepository.findByIdWithRelations(examId, instituteId);
+  async remove(
+    instituteId: string,
+    examId: string,
+    userId: string,
+    role: string,
+  ) {
+    const exam = await this.examRepository.findByIdWithRelations(
+      examId,
+      instituteId,
+    );
     if (!exam) throw new NotFoundException('Exam not found');
 
     if (role !== 'admin' && exam.createdByUserId !== userId) {
@@ -174,7 +215,10 @@ export class ExamService {
   }
 
   async getOne(instituteId: string, examId: string) {
-    const exam = await this.examRepository.findByIdWithRelations(examId, instituteId);
+    const exam = await this.examRepository.findByIdWithRelations(
+      examId,
+      instituteId,
+    );
     if (!exam) throw new NotFoundException('Exam not found');
     return this.formatExam(exam);
   }
@@ -192,12 +236,23 @@ export class ExamService {
     if (!student) return [];
 
     const courseIds = (student.courses ?? []).map((c) => c.id);
-    const exams = await this.examRepository.findByCourseIds(courseIds, instituteId);
+    const exams = await this.examRepository.findByCourseIds(
+      courseIds,
+      instituteId,
+    );
     return exams.map((e) => this.formatExam(e, userId));
   }
 
-  async submitExam(instituteId: string, examId: string, userId: string, dto: SubmitExamDto) {
-    const exam = await this.examRepository.findByIdWithRelations(examId, instituteId);
+  async submitExam(
+    instituteId: string,
+    examId: string,
+    userId: string,
+    dto: SubmitExamDto,
+  ) {
+    const exam = await this.examRepository.findByIdWithRelations(
+      examId,
+      instituteId,
+    );
     if (!exam) throw new NotFoundException('Exam not found');
 
     const status = this.computeStatus(exam);
@@ -207,9 +262,12 @@ export class ExamService {
 
     const maxAttempts = exam.maxAttempts ?? 1;
     const prevAttempt = exam.studentAttempts?.[userId];
-    const usedAttempts: number = prevAttempt?.attemptCount ?? (prevAttempt ? 1 : 0);
+    const usedAttempts: number =
+      prevAttempt?.attemptCount ?? (prevAttempt ? 1 : 0);
     if (usedAttempts >= maxAttempts) {
-      throw new BadRequestException(`Maximum attempts (${maxAttempts}) reached for this exam`);
+      throw new BadRequestException(
+        `Maximum attempts (${maxAttempts}) reached for this exam`,
+      );
     }
 
     // Score calculation (MCQ auto-graded, essay pending review)
@@ -231,7 +289,8 @@ export class ExamService {
     const mcqTotal = exam.questions
       .filter((q) => q.type === 'mcq' || (q.type !== 'essay' && q.options))
       .reduce((s, q) => s + q.marks, 0);
-    const percentage = mcqTotal > 0 ? Math.round((score / totalMarks) * 100) : 0;
+    const percentage =
+      mcqTotal > 0 ? Math.round((score / totalMarks) * 100) : 0;
     const passed = !hasPendingEssay && percentage >= exam.passingScore;
 
     const attempt: ExamAttempt & { attemptCount: number } = {
@@ -244,8 +303,13 @@ export class ExamService {
       attemptCount: usedAttempts + 1,
     };
 
-    const updatedAttempts = { ...(exam.studentAttempts ?? {}), [userId]: attempt };
-    await this.examRepository.update(examId, { studentAttempts: updatedAttempts });
+    const updatedAttempts = {
+      ...(exam.studentAttempts ?? {}),
+      [userId]: attempt,
+    };
+    await this.examRepository.update(examId, {
+      studentAttempts: updatedAttempts,
+    });
 
     return {
       score,
@@ -267,12 +331,17 @@ export class ExamService {
     teacherUserId: string,
     body: { questionId: string; score: number; feedback: string },
   ) {
-    const exam = await this.examRepository.findByIdWithRelations(examId, instituteId);
+    const exam = await this.examRepository.findByIdWithRelations(
+      examId,
+      instituteId,
+    );
     if (!exam) throw new NotFoundException('Exam not found');
-    if (exam.createdByUserId !== teacherUserId) throw new ForbiddenException('Not your exam');
+    if (exam.createdByUserId !== teacherUserId)
+      throw new ForbiddenException('Not your exam');
 
     const attempt = exam.studentAttempts?.[studentId];
-    if (!attempt) throw new NotFoundException('No submission found for this student');
+    if (!attempt)
+      throw new NotFoundException('No submission found for this student');
 
     // Add essay score on top of existing MCQ score
     const essayQuestion = exam.questions.find((q) => q.id === body.questionId);
@@ -292,12 +361,21 @@ export class ExamService {
       pendingEssayReview: false,
       essayGrades: {
         ...(attempt as any).essayGrades,
-        [body.questionId]: { score: clampedScore, feedback: body.feedback, gradedAt: new Date().toISOString() },
+        [body.questionId]: {
+          score: clampedScore,
+          feedback: body.feedback,
+          gradedAt: new Date().toISOString(),
+        },
       },
     };
 
-    const updatedAttempts = { ...(exam.studentAttempts ?? {}), [studentId]: updatedAttempt };
-    await this.examRepository.update(examId, { studentAttempts: updatedAttempts });
+    const updatedAttempts = {
+      ...(exam.studentAttempts ?? {}),
+      [studentId]: updatedAttempt,
+    };
+    await this.examRepository.update(examId, {
+      studentAttempts: updatedAttempts,
+    });
 
     return { success: true, newScore, totalMarks, percentage, passed };
   }
@@ -312,7 +390,10 @@ export class ExamService {
     userId: string,
     type: IntegrityViolationType,
   ) {
-    const exam = await this.examRepository.findByIdWithRelations(examId, instituteId);
+    const exam = await this.examRepository.findByIdWithRelations(
+      examId,
+      instituteId,
+    );
     if (!exam) throw new NotFoundException('Exam not found');
 
     const flag: IntegrityFlag = {
@@ -326,23 +407,34 @@ export class ExamService {
     const existing = exam.integrityFlags ?? {};
     const userFlags = existing[userId] ?? [];
     const updated = { ...existing, [userId]: [...userFlags, flag] };
-    await this.examRepository.update(examId, { integrityFlags: updated } as any);
+    await this.examRepository.update(examId, {
+      integrityFlags: updated,
+    } as any);
     return { success: true, flag };
   }
 
-  async getIntegrityFlagsForTeacher(instituteId: string, teacherUserId: string) {
-    const exams = await this.examRepository.findByCreator(teacherUserId, instituteId);
+  async getIntegrityFlagsForTeacher(
+    instituteId: string,
+    teacherUserId: string,
+  ) {
+    const exams = await this.examRepository.findByCreator(
+      teacherUserId,
+      instituteId,
+    );
 
     const userIdSet = new Set<string>();
     for (const exam of exams) {
-      for (const uid of Object.keys(exam.integrityFlags ?? {})) userIdSet.add(uid);
+      for (const uid of Object.keys(exam.integrityFlags ?? {}))
+        userIdSet.add(uid);
     }
 
     const nameMap = new Map<string, string>();
     for (const uid of userIdSet) {
       const user = await this.instituteUserRepository.findById(uid);
       if (user) {
-        const name = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email;
+        const name =
+          [user.firstName, user.lastName].filter(Boolean).join(' ') ||
+          user.email;
         nameMap.set(uid, name);
       }
     }
@@ -377,7 +469,10 @@ export class ExamService {
       }
     }
 
-    rows.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    rows.sort(
+      (a, b) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+    );
     return rows;
   }
 
@@ -388,12 +483,18 @@ export class ExamService {
     flagId: string,
     teacherUserId: string,
   ) {
-    const exam = await this.examRepository.findByIdWithRelations(examId, instituteId);
+    const exam = await this.examRepository.findByIdWithRelations(
+      examId,
+      instituteId,
+    );
     if (!exam) throw new NotFoundException('Exam not found');
-    if (exam.createdByUserId !== teacherUserId) throw new ForbiddenException('Not your exam');
+    if (exam.createdByUserId !== teacherUserId)
+      throw new ForbiddenException('Not your exam');
 
     const flags = exam.integrityFlags?.[userId] ?? [];
-    const updatedFlags = flags.map((f) => (f.id === flagId ? { ...f, reviewed: true } : f));
+    const updatedFlags = flags.map((f) =>
+      f.id === flagId ? { ...f, reviewed: true } : f,
+    );
     await this.examRepository.update(examId, {
       integrityFlags: { ...exam.integrityFlags, [userId]: updatedFlags },
     } as any);
