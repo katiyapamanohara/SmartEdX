@@ -28,6 +28,27 @@ function InstituteCustomizeContent() {
   const [isActive, setIsActive] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
+  // Feature Gating State
+  const [plan, setPlan] = useState("starter");
+  const [enabledFeatures, setEnabledFeatures] = useState<string[]>([]);
+  const [isSavingFeatures, setIsSavingFeatures] = useState(false);
+
+  const PLAN_DEFAULTS: Record<string, string[]> = {
+    starter: ["live_sessions", "recordings"],
+    pro: ["live_sessions", "recordings", "ai_tools", "exam_proctoring", "advanced_reports"],
+    enterprise: ["live_sessions", "recordings", "ai_tools", "exam_proctoring", "advanced_reports", "virtual_labs", "voice_agent"],
+  };
+
+  const FEATURE_META: Record<string, { label: string; description: string; icon: string; plans: string[] }> = {
+    virtual_labs: { label: "Virtual Labs", description: "Physics, chemistry, and engineering simulations embedded via PhET & GeoGebra.", icon: "🧪", plans: ["enterprise"] },
+    ai_tools: { label: "AI Tools", description: "Lesson plan generator, AI essay grader, class insights, and at-risk alerts.", icon: "🤖", plans: ["pro", "enterprise"] },
+    voice_agent: { label: "Voice Agent", description: "AI voice assistant for student Q&A and real-time tutoring.", icon: "🎙️", plans: ["enterprise"] },
+    exam_proctoring: { label: "Exam Proctoring", description: "Face verification and integrity monitoring for online exams.", icon: "👁️", plans: ["pro", "enterprise"] },
+    live_sessions: { label: "Live Classes", description: "Real-time video classes with screen sharing and chat.", icon: "📹", plans: ["starter", "pro", "enterprise"] },
+    recordings: { label: "Recordings", description: "Record and replay live sessions for students.", icon: "🎬", plans: ["starter", "pro", "enterprise"] },
+    advanced_reports: { label: "Advanced Reports", description: "Detailed performance analytics, CSV exports, and student insights.", icon: "📊", plans: ["pro", "enterprise"] },
+  };
+
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -62,6 +83,8 @@ function InstituteCustomizeContent() {
         setCountry(data.country || "");
         setPhoneNumber(data.phoneNumber || "");
         setIsActive(data.isActive ?? true);
+        setPlan(data.plan || "starter");
+        setEnabledFeatures(Array.isArray(data.enabledFeatures) ? data.enabledFeatures : []);
         try {
           const useCases = data.primaryUseCases ? JSON.parse(data.primaryUseCases) : [];
           setPrimaryUseCases(Array.isArray(useCases) ? useCases : []);
@@ -260,6 +283,19 @@ function InstituteCustomizeContent() {
       alert("Failed to update status");
     } finally {
       setTogglingIds(prev => prev.filter(id => id !== userId));
+    }
+  };
+
+  const handleSaveFeatures = async () => {
+    try {
+      setIsSavingFeatures(true);
+      await authService.updateInstituteFeatures(instituteId, { plan, enabledFeatures });
+      alert("Features updated successfully!");
+    } catch (error) {
+      console.error("Failed to update features:", error);
+      alert("Failed to update features. Please try again.");
+    } finally {
+      setIsSavingFeatures(false);
     }
   };
 
@@ -558,6 +594,121 @@ function InstituteCustomizeContent() {
             </div>
           </FormSection>
         );
+      case "features":
+        return (
+          <FormSection title="Platform Features" description="Choose a plan and fine-tune which features this institute can access.">
+            <div className="space-y-8">
+              {/* Plan Selector */}
+              <div>
+                <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-4">Subscription Plan</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {[
+                    { key: "starter", label: "Starter", desc: "Basic LMS features for small institutes", color: "blue" },
+                    { key: "pro", label: "Pro", desc: "AI tools, proctoring, and advanced reports", color: "purple" },
+                    { key: "enterprise", label: "Enterprise", desc: "Virtual labs, voice agent, and all features", color: "orange" },
+                  ].map(({ key, label, desc, color }) => (
+                    <div
+                      key={key}
+                      onClick={() => {
+                        setPlan(key);
+                        setEnabledFeatures(PLAN_DEFAULTS[key]);
+                      }}
+                      className={`p-5 border-2 rounded-2xl cursor-pointer transition-all ${
+                        plan === key
+                          ? `border-${color}-500 bg-${color}-50/50 dark:bg-${color}-500/10`
+                          : "border-gray-100 dark:border-gray-800 hover:border-gray-200"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`text-sm font-bold ${plan === key ? `text-${color}-600` : "text-gray-800 dark:text-white"}`}>{label}</span>
+                        {plan === key && (
+                          <div className={`w-5 h-5 rounded-full bg-${color}-500 flex items-center justify-center`}>
+                            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500">{desc}</p>
+                      <div className="mt-3 flex flex-wrap gap-1">
+                        {PLAN_DEFAULTS[key].map(f => (
+                          <span key={f} className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-gray-100 dark:bg-gray-800 text-gray-500 uppercase tracking-wide">
+                            {FEATURE_META[f]?.label || f}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Individual Feature Toggles */}
+              <div>
+                <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Fine-grained Feature Control</h4>
+                <p className="text-xs text-gray-400 mb-4">Override which individual features are enabled for this institute.</p>
+                <div className="space-y-3">
+                  {Object.entries(FEATURE_META).map(([key, meta]) => {
+                    const isEnabled = enabledFeatures.includes(key);
+                    return (
+                      <div
+                        key={key}
+                        className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
+                          isEnabled
+                            ? "border-blue-200 bg-blue-50/50 dark:bg-blue-500/10 dark:border-blue-800"
+                            : "border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">{meta.icon}</span>
+                          <div>
+                            <p className="text-sm font-bold text-gray-800 dark:text-white">{meta.label}</p>
+                            <p className="text-xs text-gray-500">{meta.description}</p>
+                            <div className="flex gap-1 mt-1">
+                              {meta.plans.map(p => (
+                                <span key={p} className={`px-1.5 py-0.5 text-[9px] font-bold rounded uppercase tracking-wide ${
+                                  p === "starter" ? "bg-blue-100 text-blue-600" :
+                                  p === "pro" ? "bg-purple-100 text-purple-600" :
+                                  "bg-orange-100 text-orange-600"
+                                }`}>{p}</span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setEnabledFeatures(prev =>
+                              prev.includes(key) ? prev.filter(f => f !== key) : [...prev, key]
+                            );
+                          }}
+                          className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${isEnabled ? "bg-blue-600" : "bg-gray-200 dark:bg-gray-700"}`}
+                        >
+                          <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${isEnabled ? "translate-x-7" : "translate-x-1"}`} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
+                <div>
+                  <p className="text-sm font-bold text-gray-800 dark:text-white">Active Features: {enabledFeatures.length}</p>
+                  <p className="text-xs text-gray-400">{enabledFeatures.map(f => FEATURE_META[f]?.label || f).join(", ") || "None selected"}</p>
+                </div>
+                <button
+                  onClick={handleSaveFeatures}
+                  disabled={isSavingFeatures}
+                  className={`px-6 py-2.5 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/25 flex items-center gap-2 ${isSavingFeatures ? "opacity-70 cursor-not-allowed" : ""}`}
+                >
+                  {isSavingFeatures ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Saving...
+                    </>
+                  ) : "Save Features"}
+                </button>
+              </div>
+            </div>
+          </FormSection>
+        );
       default:
         return null;
     }
@@ -602,6 +753,7 @@ function InstituteCustomizeContent() {
               <SideNavItem active={activeTab === "settings"} onClick={() => handleTabChange("settings")}>General Settings</SideNavItem>
               <SideNavItem active={activeTab === "ai-config"} onClick={() => handleTabChange("ai-config")}>AI Config</SideNavItem>
               <SideNavItem active={activeTab === "assign-users"} onClick={() => handleTabChange("assign-users")}>Assign Users</SideNavItem>
+              <SideNavItem active={activeTab === "features"} onClick={() => handleTabChange("features")}>Features & Plan</SideNavItem>
               <SideNavItem disabled>Billing</SideNavItem>
             </nav>
           </div>
@@ -613,7 +765,7 @@ function InstituteCustomizeContent() {
             {renderTabContent()}
           </div>
           
-          {activeTab !== "assign-users" && (
+          {activeTab !== "assign-users" && activeTab !== "features" && (
             <div className="flex items-center justify-end gap-3 p-6 border border-gray-200 rounded-2xl bg-white dark:bg-gray-900 dark:border-gray-800 shadow-sm">
               <button className="px-6 py-2.5 text-sm font-medium text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors">Discard</button>
               <button 

@@ -448,6 +448,14 @@ export class AuthService {
     return await this.instituteRepository.save(institute);
   }
 
+  async updateInstituteFeatures(id: string, data: { plan?: string; enabledFeatures?: string[] }) {
+    const institute = await this.instituteRepository.findById(id);
+    if (!institute) throw new NotFoundException('Institute not found');
+    if (data.plan !== undefined) (institute as any).plan = data.plan;
+    if (data.enabledFeatures !== undefined) (institute as any).enabledFeatures = data.enabledFeatures;
+    return this.instituteRepository.save(institute);
+  }
+
   async deleteInstitute(id: string, userId: string) {
     const institute = await this.instituteRepository.findById(id);
     if (!institute) {

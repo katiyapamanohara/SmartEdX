@@ -485,6 +485,31 @@ export const authService = {
     }
   },
 
+  updateInstituteFeatures: async (id: string, data: { plan: string; enabledFeatures: string[] }) => {
+    try {
+      const token = authService.getToken();
+      if (!token) throw new Error("No auth token found");
+
+      const response = await fetch(`${API_URL}/api/auth/institutes/${id}/features`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update institute features');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Update institute features error:', error);
+      throw error;
+    }
+  },
+
   deleteInstitute: async (id: string) => {
     try {
       const token = authService.getToken();

@@ -18,7 +18,6 @@ import {
   ChatIcon,
   DocsIcon,
   PlugInIcon,
-  UserIcon,
 } from "../../icons/index";
 
 type NavItem = {
@@ -28,68 +27,32 @@ type NavItem = {
   subItems?: { name: string; path: string; pro?: boolean; new?: boolean }[];
 };
 
-const navItems: NavItem[] = [
-  {
-    icon: <GridIcon />,
-    name: "Dashboard",
-    path: "/teacher",
-  },
-  {
-    icon: <BoxIconLine />,
-    name: "Courses",
-    path: "/teacher/courses",
-  },
-  {
-    icon: <TaskIcon />,
-    name: "Assessments",
-    path: "/teacher/assessments",
-  },
-  {
-    icon: <DocsIcon />,
-    name: "Exams",
-    path: "/teacher/exams",
-  },
-  {
-    icon: <MdVideoLibrary className="w-6 h-6" />,
-    name: "Recordings",
-    path: "/teacher/recordings",
-  },
-    {
-    icon: <ChatIcon />,
-    name: "Messages",
-    path: "/teacher/messages",
-  },
-  {
-    icon: <GroupIcon />,
-    name: "Students",
-    path: "/teacher/students",
-  },
-  {
-    icon: <VideoIcon />,
-    name: "Live Classes",
-    path: "/teacher/live-classes",
-  },
+const CORE_NAV_ITEMS: NavItem[] = [
+  { icon: <GridIcon />, name: "Dashboard", path: "/teacher" },
+  { icon: <BoxIconLine />, name: "Courses", path: "/teacher/courses" },
+  { icon: <TaskIcon />, name: "Assessments", path: "/teacher/assessments" },
+  { icon: <DocsIcon />, name: "Exams", path: "/teacher/exams" },
+  { icon: <MdVideoLibrary className="w-6 h-6" />, name: "Recordings", path: "/teacher/recordings" },
+  { icon: <ChatIcon />, name: "Messages", path: "/teacher/messages" },
+  { icon: <GroupIcon />, name: "Students", path: "/teacher/students" },
+  { icon: <VideoIcon />, name: "Live Classes", path: "/teacher/live-classes" },
+  { icon: <PieChartIcon />, name: "Integrity Monitor", path: "/teacher/integrity-monitor" },
+  { icon: <PieChartIcon />, name: "Performance", path: "/teacher/performance" },
+  { icon: <DocsIcon />, name: "Reports", path: "/teacher/reports" },
+];
 
+const FEATURE_NAV_ITEMS: { feature: string; item: NavItem }[] = [
   {
-    icon: <PieChartIcon />,
-    name: "Integrity Monitor",
-    path: "/teacher/integrity-monitor",
-  },
-
-  {
-    icon: <PieChartIcon />,
-    name: "Performance",
-    path: "/teacher/performance",
+    feature: "ai_tools",
+    item: { icon: <PlugInIcon />, name: "AI Tools", path: "/teacher/ai-tools" },
   },
   {
-    icon: <DocsIcon />,
-    name: "Reports",
-    path: "/teacher/reports",
-  },
-  {
-    icon: <PlugInIcon />,
-    name: "AI Tools",
-    path: "/teacher/ai-tools",
+    feature: "virtual_labs",
+    item: {
+      icon: <span className="text-lg">🧪</span>,
+      name: "Virtual Labs",
+      path: "/teacher/virtual-labs",
+    },
   },
 ];
 
@@ -115,6 +78,14 @@ const TeacherSidebar: React.FC = () => {
     };
     fetchInstitute();
   }, [instituteId]);
+
+  const enabledFeatures: string[] = institute?.enabledFeatures ?? [];
+  const navItems: NavItem[] = [
+    ...CORE_NAV_ITEMS,
+    ...FEATURE_NAV_ITEMS
+      .filter(({ feature }) => enabledFeatures.includes(feature))
+      .map(({ item }) => item),
+  ];
 
   const renderMenuItems = (
     navItems: NavItem[],

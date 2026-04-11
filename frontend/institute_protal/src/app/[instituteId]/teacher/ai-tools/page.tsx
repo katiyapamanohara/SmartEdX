@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { authService } from "@/services/authService";
 import { examService, Exam } from "@/services/examService";
+import { useInstituteFeatures } from "@/hooks/useInstituteFeatures";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -163,6 +164,19 @@ export default function AIToolsPage() {
   const params = useParams();
   const instituteId = params?.instituteId as string;
   const [activeTab, setActiveTab] = useState<Tab>("lesson");
+
+  const { isLoading: featuresLoading } = useInstituteFeatures({
+    requiredFeature: "ai_tools",
+    redirectTo: `/${instituteId}/teacher`,
+  });
+
+  if (featuresLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[500px]">
+        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">

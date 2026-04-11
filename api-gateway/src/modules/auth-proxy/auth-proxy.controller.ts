@@ -116,6 +116,27 @@ export class AuthProxyController {
     return this.authProxyService.forwardRequest('auth/institutes', 'POST', body, headers);
   }
 
+  @Patch('institutes/:id/features')
+  @ApiOperation({ summary: 'Update institute plan and features (proxied to SaaS service)' })
+  async updateInstituteFeatures(@Param('id') id: string, @Body() body: any, @Headers() headers: any) {
+    return this.authProxyService.forwardRequest(`auth/institutes/${id}/features`, 'PATCH', body, headers);
+  }
+
+  @Patch('institutes/:id/users/:userId/toggle-status')
+  @ApiOperation({ summary: 'Toggle institute user status (proxied to SaaS service)' })
+  async toggleInstituteUserStatus(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @Headers() headers: any,
+  ) {
+    return this.authProxyService.forwardRequest(
+      `auth/institutes/${id}/users/${userId}/toggle-status`,
+      'PATCH',
+      null,
+      headers,
+    );
+  }
+
   @Patch('institutes/:id')
   @ApiOperation({ summary: 'Update institute details (proxied to SaaS service)' })
   async updateInstitute(@Param('id') id: string, @Body() body: any, @Headers() headers: any) {

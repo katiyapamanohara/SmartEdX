@@ -15,6 +15,7 @@ export enum ContentType {
   DOCUMENT = 'document',
   QUIZ = 'quiz',
   LINK = 'link',
+  SIMULATION = 'simulation',
 }
 
 @Entity('module_contents')

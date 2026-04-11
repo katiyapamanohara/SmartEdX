@@ -403,6 +403,18 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Patch('institutes/:id/features')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Update institute plan and enabled features' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  async updateInstituteFeatures(
+    @Param('id') id: string,
+    @Body() body: { plan?: string; enabledFeatures?: string[] },
+  ) {
+    return this.authService.updateInstituteFeatures(id, body);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Delete('institutes/:id')
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Delete an institute' })
