@@ -6,6 +6,7 @@ import { FiBookOpen } from "react-icons/fi";
 import { authService } from "@/services/authService";
 import { instituteService, Course } from "@/services/instituteService";
 import VoiceModal from "./VoiceModal";
+import { useFeatures } from "@/context/InstituteFeatureContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,8 @@ export default function AiChatPage() {
   const [loading, setLoading]             = useState(false);
   const [pendingFile, setPendingFile]     = useState<File | null>(null);
 
+  const { hasFeature } = useFeatures();
+  const voiceEnabled = hasFeature("voice_agent");
   const [voiceMode, setVoiceMode] = useState(false);
 
   const [isDark, setIsDark] = useState(false);
@@ -360,16 +363,17 @@ export default function AiChatPage() {
 
           {/* Send / mic button */}
           <button
-            onClick={() => input.trim() || pendingFile ? sendMessage(input, pendingFile) : openVoiceMode()}
-            disabled={loading}
-            className="shrink-0 w-9 h-9 rounded-full bg-gray-700 dark:bg-gray-600 hover:bg-gray-800 dark:hover:bg-gray-500 text-white flex items-center justify-center transition-all hover:scale-105 shadow-sm disabled:opacity-50"
+            onClick={() => input.trim() || pendingFile ? sendMessage(input, pendingFile) : (voiceEnabled ? openVoiceMode() : undefined)}
+            disabled={loading || (!input.trim() && !pendingFile && !voiceEnabled)}
+            title={!input.trim() && !pendingFile && !voiceEnabled ? "Voice Agent not enabled for this institute" : undefined}
+            className="shrink-0 w-9 h-9 rounded-full bg-gray-700 dark:bg-gray-600 hover:bg-gray-800 dark:hover:bg-gray-500 text-white flex items-center justify-center transition-all hover:scale-105 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {input.trim() || pendingFile ? (
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
               </svg>
             ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" style={{ opacity: voiceEnabled ? 1 : 0.4 }}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
               </svg>
             )}
@@ -381,7 +385,7 @@ export default function AiChatPage() {
       </div>
 
       {/* ── Full-screen voice overlay ─────────────────────────────────────── */}
-      {voiceMode && (
+      {voiceMode && voiceEnabled && (
         <VoiceModal
           isDark={isDark}
           instituteLogo={instituteLogo}

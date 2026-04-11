@@ -9,6 +9,7 @@ import {
   instituteService,
 } from "@/services/instituteService";
 import { authService } from "@/services/authService";
+import { useFeatures } from "@/context/InstituteFeatureContext";
 import {
   FiX, FiPlus, FiTrash2, FiCheckCircle, FiZap, FiChevronDown, FiChevronUp,
   FiLayers, FiMic, FiFileText, FiUpload, FiLoader, FiAlertCircle,
@@ -239,6 +240,10 @@ export default function CreateAssessmentModal({
   isOpen, onClose, onCreated, instituteId, courses,
 }: CreateAssessmentModalProps) {
 
+  const { hasFeature } = useFeatures();
+  const voiceEnabled = hasFeature("voice_agent");
+  const faceIdEnabled = hasFeature("exam_proctoring");
+
   // ── Type selector ────────────────────────────────────────────────────────
   const [assessmentType, setAssessmentType] = useState<AssessmentType>("mcq");
 
@@ -422,21 +427,25 @@ export default function CreateAssessmentModal({
 
             <button
               type="button"
-              onClick={() => setAssessmentType("voice")}
+              disabled={!voiceEnabled}
+              onClick={() => voiceEnabled && setAssessmentType("voice")}
+              title={!voiceEnabled ? "Voice Agent feature is not enabled for this institute" : undefined}
               className={`flex items-center gap-3 px-4 py-3.5 rounded-xl border-2 transition-all text-left ${
-                assessmentType === "voice"
+                !voiceEnabled
+                  ? "border-gray-100 dark:border-gray-800 opacity-40 cursor-not-allowed"
+                  : assessmentType === "voice"
                   ? "border-purple-500 bg-purple-50 dark:bg-purple-500/10"
                   : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
               }`}
             >
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${assessmentType === "voice" ? "bg-gradient-to-br from-purple-500 to-indigo-600 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-500"}`}>
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${assessmentType === "voice" && voiceEnabled ? "bg-gradient-to-br from-purple-500 to-indigo-600 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-500"}`}>
                 <FiMic className="w-4 h-4" />
               </div>
               <div>
-                <p className={`text-sm font-semibold ${assessmentType === "voice" ? "text-purple-700 dark:text-purple-300" : "text-gray-700 dark:text-gray-300"}`}>Voice Assessment</p>
-                <p className="text-[11px] text-gray-500 dark:text-gray-400">AI interview — spoken answers</p>
+                <p className={`text-sm font-semibold ${assessmentType === "voice" && voiceEnabled ? "text-purple-700 dark:text-purple-300" : "text-gray-700 dark:text-gray-300"}`}>Voice Assessment</p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">{voiceEnabled ? "AI interview — spoken answers" : "Not enabled for this institute"}</p>
               </div>
-              {assessmentType === "voice" && <FiCheckCircle className="w-4 h-4 text-purple-500 ml-auto shrink-0" />}
+              {assessmentType === "voice" && voiceEnabled && <FiCheckCircle className="w-4 h-4 text-purple-500 ml-auto shrink-0" />}
             </button>
           </div>
         </div>
@@ -691,28 +700,32 @@ export default function CreateAssessmentModal({
           {/* ── Face ID toggle (shared for all types) ── */}
           <button
             type="button"
-            onClick={() => setRequireFaceId((p) => !p)}
+            disabled={!faceIdEnabled}
+            onClick={() => faceIdEnabled && setRequireFaceId((p) => !p)}
+            title={!faceIdEnabled ? "Exam Proctoring feature is not enabled for this institute" : undefined}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left ${
-              requireFaceId
+              !faceIdEnabled
+                ? "border-gray-100 dark:border-gray-800 opacity-40 cursor-not-allowed"
+                : requireFaceId
                 ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10"
                 : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
             }`}
           >
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${requireFaceId ? "bg-blue-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-400"}`}>
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${requireFaceId && faceIdEnabled ? "bg-blue-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-400"}`}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
               </svg>
             </div>
             <div className="flex-1">
-              <p className={`text-sm font-semibold ${requireFaceId ? "text-blue-700 dark:text-blue-300" : "text-gray-700 dark:text-gray-300"}`}>
+              <p className={`text-sm font-semibold ${requireFaceId && faceIdEnabled ? "text-blue-700 dark:text-blue-300" : "text-gray-700 dark:text-gray-300"}`}>
                 Require Face Identification
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Students must verify their identity before starting this assessment
+                {faceIdEnabled ? "Students must verify their identity before starting this assessment" : "Not enabled — enable Exam Proctoring in Features & Plan"}
               </p>
             </div>
-            <div className={`w-10 h-6 rounded-full relative transition-colors shrink-0 ${requireFaceId ? "bg-blue-500" : "bg-gray-200 dark:bg-gray-700"}`}>
-              <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${requireFaceId ? "translate-x-5" : "translate-x-1"}`} />
+            <div className={`w-10 h-6 rounded-full relative transition-colors shrink-0 ${requireFaceId && faceIdEnabled ? "bg-blue-500" : "bg-gray-200 dark:bg-gray-700"}`}>
+              <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${requireFaceId && faceIdEnabled ? "translate-x-5" : "translate-x-1"}`} />
             </div>
           </button>
 

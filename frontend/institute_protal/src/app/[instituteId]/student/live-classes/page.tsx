@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { VideoIcon } from "@/icons";
+import { useInstituteFeatures } from "@/hooks/useInstituteFeatures";
 
 interface LiveSession {
   id: string;
@@ -52,6 +53,7 @@ function StatusBadge({ status }: { status: LiveSession["status"] }) {
 export default function StudentLiveClassesPage() {
   const { instituteId } = useParams<{ instituteId: string }>();
   const router = useRouter();
+  useInstituteFeatures({ requiredFeature: "live_sessions", redirectTo: `/${instituteId}/student` });
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");

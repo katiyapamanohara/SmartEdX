@@ -5,6 +5,7 @@ import Image from "next/image";
 import { usePathname, useParams } from "next/navigation";
 import { useSidebar } from "../../context/SidebarContext";
 import { instituteService, Institute } from "@/services/instituteService";
+import { useFeatures } from "@/context/InstituteFeatureContext";
 import {
   ChevronDownIcon,
   GridIcon,
@@ -16,7 +17,6 @@ import {
   VideoIcon,
   ChatIcon,
   InfoIcon,
-  UserCircleIcon,
 } from "../../icons/index";
 import { MdVideoLibrary } from "react-icons/md";
 
@@ -42,17 +42,14 @@ const CORE_STUDENT_NAV: NavItem[] = [
     path: "/student/ai-chat",
   },
   { icon: <ChatIcon />, name: "Messages", path: "/student/messages" },
-  { icon: <MdVideoLibrary className="w-6 h-6" />, name: "Recordings", path: "/student/recordings" },
-  { icon: <VideoIcon />, name: "Live Classes", path: "/student/live-classes" },
   { icon: <PieChartIcon />, name: "Performance", path: "/student/performance" },
   { icon: <InfoIcon />, name: "Support", path: "/student/support" },
 ];
 
 const FEATURE_STUDENT_NAV: { feature: string; item: NavItem }[] = [
-  {
-    feature: "virtual_labs",
-    item: { icon: <span className="text-lg">🧪</span>, name: "Virtual Labs", path: "/student/virtual-labs" },
-  },
+  { feature: "recordings",   item: { icon: <MdVideoLibrary className="w-6 h-6" />, name: "Recordings",   path: "/student/recordings" } },
+  { feature: "live_sessions",item: { icon: <VideoIcon />,                          name: "Live Classes", path: "/student/live-classes" } },
+  { feature: "virtual_labs", item: { icon: <span className="text-lg">🧪</span>,   name: "Virtual Labs", path: "/student/virtual-labs" } },
 ];
 
 
@@ -78,7 +75,7 @@ const StudentSidebar: React.FC = () => {
     fetchInstitute();
   }, [instituteId]);
 
-  const enabledFeatures: string[] = institute?.enabledFeatures ?? [];
+  const { enabledFeatures } = useFeatures();
   const navItems: NavItem[] = [
     ...CORE_STUDENT_NAV,
     ...FEATURE_STUDENT_NAV

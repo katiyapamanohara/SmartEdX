@@ -5,6 +5,7 @@ import Image from "next/image";
 import { usePathname, useParams } from "next/navigation";
 import { useSidebar } from "../../context/SidebarContext";
 import { instituteService, Institute } from "@/services/instituteService";
+import { useFeatures } from "@/context/InstituteFeatureContext";
 import { MdVideoLibrary } from "react-icons/md";
 import {
   ChevronDownIcon,
@@ -32,28 +33,18 @@ const CORE_NAV_ITEMS: NavItem[] = [
   { icon: <BoxIconLine />, name: "Courses", path: "/teacher/courses" },
   { icon: <TaskIcon />, name: "Assessments", path: "/teacher/assessments" },
   { icon: <DocsIcon />, name: "Exams", path: "/teacher/exams" },
-  { icon: <MdVideoLibrary className="w-6 h-6" />, name: "Recordings", path: "/teacher/recordings" },
   { icon: <ChatIcon />, name: "Messages", path: "/teacher/messages" },
   { icon: <GroupIcon />, name: "Students", path: "/teacher/students" },
-  { icon: <VideoIcon />, name: "Live Classes", path: "/teacher/live-classes" },
-  { icon: <PieChartIcon />, name: "Integrity Monitor", path: "/teacher/integrity-monitor" },
   { icon: <PieChartIcon />, name: "Performance", path: "/teacher/performance" },
   { icon: <DocsIcon />, name: "Reports", path: "/teacher/reports" },
 ];
 
 const FEATURE_NAV_ITEMS: { feature: string; item: NavItem }[] = [
-  {
-    feature: "ai_tools",
-    item: { icon: <PlugInIcon />, name: "AI Tools", path: "/teacher/ai-tools" },
-  },
-  {
-    feature: "virtual_labs",
-    item: {
-      icon: <span className="text-lg">🧪</span>,
-      name: "Virtual Labs",
-      path: "/teacher/virtual-labs",
-    },
-  },
+  { feature: "recordings",     item: { icon: <MdVideoLibrary className="w-6 h-6" />, name: "Recordings",         path: "/teacher/recordings" } },
+  { feature: "live_sessions",  item: { icon: <VideoIcon />,                          name: "Live Classes",        path: "/teacher/live-classes" } },
+  { feature: "exam_proctoring",item: { icon: <PieChartIcon />,                       name: "Integrity Monitor",   path: "/teacher/integrity-monitor" } },
+  { feature: "ai_tools",       item: { icon: <PlugInIcon />,                         name: "AI Tools",            path: "/teacher/ai-tools" } },
+  { feature: "virtual_labs",   item: { icon: <span className="text-lg">🧪</span>,   name: "Virtual Labs",        path: "/teacher/virtual-labs" } },
 ];
 
 
@@ -79,7 +70,7 @@ const TeacherSidebar: React.FC = () => {
     fetchInstitute();
   }, [instituteId]);
 
-  const enabledFeatures: string[] = institute?.enabledFeatures ?? [];
+  const { enabledFeatures } = useFeatures();
   const navItems: NavItem[] = [
     ...CORE_NAV_ITEMS,
     ...FEATURE_NAV_ITEMS

@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { examService } from "@/services/examService";
+import { useInstituteFeatures } from "@/hooks/useInstituteFeatures";
 
 type FlagRow = {
   flagId: string;
@@ -44,6 +45,7 @@ function formatTimestamp(ts: string): string {
 export default function TeacherIntegrityMonitorPage() {
   const params = useParams();
   const instituteId = params?.instituteId as string;
+  useInstituteFeatures({ requiredFeature: "exam_proctoring", redirectTo: `/${instituteId}/teacher` });
 
   const [flags, setFlags] = useState<FlagRow[]>([]);
   const [loading, setLoading] = useState(true);
