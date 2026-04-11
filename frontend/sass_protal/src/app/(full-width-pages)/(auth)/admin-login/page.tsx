@@ -2,8 +2,8 @@ import AdminSignInForm from "@/components/auth/AdminSignInForm";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Next.js Admin SignIn Page | TailAdmin - Next.js Dashboard Template",
-  description: "This is Next.js Admin Signin Page",
+  title: "Admin Sign In | SmartEdX",
+  description: "Sign in to the SmartEdX Admin Dashboard",
 };
 
 export default function AdminSignIn() {
