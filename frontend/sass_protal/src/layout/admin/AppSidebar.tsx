@@ -1,19 +1,16 @@
 import { useSidebar } from "@/context/SidebarContext";
 import {
-  BoltIcon,
   BoxCubeIcon,
   ChevronDownIcon,
   GridIcon,
   HorizontaLDots,
   PieChartIcon,
-  TaskIcon,
   UserCircleIcon,
 } from "@/icons/index";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-
 
 type NavItem = {
   name: string;
@@ -26,27 +23,26 @@ const navItems: NavItem[] = [
   {
     icon: <GridIcon />,
     name: "Dashboard",
-    subItems: [{ name: "Ecommerce", path: "/admin", pro: false }],
+    subItems: [{ name: "Overview", path: "/admin", pro: false }],
   },
-
-];
-
-const othersItems: NavItem[] = [
-
+  {
+    icon: <UserCircleIcon />,
+    name: "Users",
+    subItems: [{ name: "All Users", path: "/admin/users", pro: false }],
+  },
   {
     icon: <BoxCubeIcon />,
-    name: "UI Elements",
-    subItems: [
-      { name: "Alerts", path: "/admin/alerts", pro: false },
-      { name: "Avatar", path: "/admin/avatars", pro: false },
-      { name: "Badge", path: "/admin/badge", pro: false },
-      { name: "Buttons", path: "/admin/buttons", pro: false },
-      { name: "Images", path: "/admin/images", pro: false },
-      { name: "Videos", path: "/admin/videos", pro: false },
-    ],
+    name: "Institutes",
+    subItems: [{ name: "All Institutes", path: "/admin/institutes", pro: false }],
   },
-
+  {
+    icon: <PieChartIcon />,
+    name: "Subscriptions",
+    subItems: [{ name: "Payments & Plans", path: "/admin/subscriptions", pro: false }],
+  },
 ];
+
+const othersItems: NavItem[] = [];
 
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();

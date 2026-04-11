@@ -485,6 +485,64 @@ export class AuthController {
     return this.authService.toggleInstituteUserStatus(id, userId);
   }
 
+  // ─── Admin Analytics ─────────────────────────────────────────────────────────
+
+  @Roles('admin')
+  @Get('admin/analytics')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get SaaS platform analytics (Admin only)' })
+  @ApiResponse({ status: 200, description: 'Returns platform analytics' })
+  async getAdminAnalytics() {
+    return this.authService.getAdminAnalytics();
+  }
+
+  // ─── Subscription Management ─────────────────────────────────────────────────
+
+  @Roles('admin')
+  @Get('admin/subscriptions')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get all subscriptions (Admin only)' })
+  @ApiResponse({ status: 200, description: 'Returns all subscriptions' })
+  async getAllSubscriptions() {
+    const subs = await this.authService.getAllSubscriptions();
+    return { count: subs.length, subscriptions: subs };
+  }
+
+  @Roles('admin')
+  @Post('admin/subscriptions')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Create or update subscription for an institute (Admin only)' })
+  async createSubscription(@Body() body: any) {
+    return this.authService.createSubscription(body);
+  }
+
+  @Roles('admin')
+  @Patch('admin/subscriptions/:id')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Update a subscription (Admin only)' })
+  @ApiParam({ name: 'id', description: 'Subscription ID' })
+  async updateSubscription(@Param('id') id: string, @Body() body: any) {
+    return this.authService.updateSubscription(id, body);
+  }
+
+  @Roles('admin')
+  @Patch('admin/subscriptions/:id/cancel')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Cancel a subscription (Admin only)' })
+  @ApiParam({ name: 'id', description: 'Subscription ID' })
+  async cancelSubscription(@Param('id') id: string) {
+    return this.authService.cancelSubscription(id);
+  }
+
+  @Roles('admin')
+  @Get('admin/institutes')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get all institutes (Admin only)' })
+  async getAllInstitutes() {
+    const institutes = await this.authService.getAllInstitutesAdmin();
+    return { count: institutes.length, institutes };
+  }
+
   @UseGuards(JwtAuthGuard)
   @Post('institutes/:id/logo')
   @ApiBearerAuth('JWT-auth')

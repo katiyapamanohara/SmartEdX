@@ -9,6 +9,7 @@ import { MinioModule } from './infra/storage/minio.module';
 import { RedisModule } from './infra/redis/redis.module';
 import { RedisCacheInterceptor } from './infra/redis/redis-cache.interceptor';
 import { AuthModule } from './modules/auth/auth.module';
+import { PayhereModule } from './modules/payhere/payhere.module';
 import { GatewayAuthGuard } from './core/guards/gateway-auth.guard';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
@@ -24,6 +25,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     MinioModule,
     RedisModule,
     AuthModule,
+    PayhereModule,
   ],
   controllers: [AppController],
   providers: [

@@ -182,6 +182,28 @@ export class AuthProxyController {
     );
   }
 
+  // ── PayHere ──────────────────────────────────────────────────────────────
+
+  @Post('payhere/hash')
+  @ApiOperation({ summary: 'Generate PayHere hash (proxied to SaaS service)' })
+  async payhereHash(@Body() body: any, @Headers() headers: any) {
+    return this.authProxyService.forwardRequest('payhere/hash', 'POST', body, headers);
+  }
+
+  @Post('payhere/checkout')
+  @ApiOperation({ summary: 'Build PayHere checkout params (proxied to SaaS service)' })
+  async payhereCheckout(@Body() body: any, @Headers() headers: any) {
+    return this.authProxyService.forwardRequest('payhere/checkout', 'POST', body, headers);
+  }
+
+  @Post('payhere/notify')
+  @ApiOperation({ summary: 'PayHere notify webhook (proxied to SaaS service)' })
+  async payhereNotify(@Body() body: any, @Headers() headers: any) {
+    return this.authProxyService.forwardRequest('payhere/notify', 'POST', body, headers);
+  }
+
+  // ── Institute logo ───────────────────────────────────────────────────────
+
   @Post('institutes/:id/logo')
   @ApiOperation({ summary: 'Upload institute logo (proxied to SaaS service)' })
   @ApiConsumes('multipart/form-data')

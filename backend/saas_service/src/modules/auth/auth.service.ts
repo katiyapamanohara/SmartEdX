@@ -18,7 +18,8 @@ import { CreateInstituteDto } from './dto/create-institute.dto';
 import { UpdateInstituteDto } from './dto/update-institute.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { User } from './entities/user.entity';
-import { UserRepository, RoleRepository, InstituteRepository, InstituteUserRepository, InstituteRoleRepository } from '../../infra/database/repositories';
+import { UserRepository, RoleRepository, InstituteRepository, InstituteUserRepository, InstituteRoleRepository, SubscriptionRepository } from '../../infra/database/repositories';
+import { Subscription } from './entities/subscription.entity';
 import { AssignUserDto } from './dto/assign-user.dto';
 import { MinioService } from '../../infra/storage/minio.service';
 
@@ -28,10 +29,11 @@ export class AuthService {
 
   constructor(
     private readonly userRepository: UserRepository,
-    private readonly roleRepository: RoleRepository, // Still needed for global Register? Yes, register uses 'owner'.
+    private readonly roleRepository: RoleRepository,
     private readonly instituteRoleRepository: InstituteRoleRepository,
     private readonly instituteRepository: InstituteRepository,
     private readonly instituteUserRepository: InstituteUserRepository,
+    private readonly subscriptionRepository: SubscriptionRepository,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly minioService: MinioService,
@@ -572,15 +574,109 @@ export class AuthService {
   }
 
   async toggleInstituteUserStatus(instituteId: string, instituteUserId: string) {
-    // Check if the user is associated with the institute
     const instituteUser = await this.instituteUserRepository.findById(instituteUserId);
 
     if (!instituteUser || instituteUser.instituteId !== instituteId) {
       throw new NotFoundException('User is not assigned to this institute');
     }
 
-    // Toggle status locally on InstituteUser
     instituteUser.isActive = !instituteUser.isActive;
     return this.instituteUserRepository.save(instituteUser);
+  }
+
+  async getAllInstitutesAdmin() {
+    return this.instituteRepository.findAll({ order: { createdAt: 'DESC' as const } });
+  }
+
+  // ─── Admin Analytics ─────────────────────────────────────────────────────────
+
+  async getAdminAnalytics() {
+    const allUsers = await this.userRepository.findAll();
+    const activeUsers = allUsers.filter(u => u.isActive);
+
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const newUsersThisMonth = allUsers.filter(u => new Date(u.createdAt) >= startOfMonth);
+
+    const allInstitutes = await this.instituteRepository.findAll();
+    const activeInstitutes = allInstitutes.filter(i => i.isActive);
+
+    const planCounts = allInstitutes.reduce<Record<string, number>>((acc, inst) => {
+      const plan = (inst as any).plan || 'starter';
+      acc[plan] = (acc[plan] || 0) + 1;
+      return acc;
+    }, {});
+
+    const allSubscriptions = await this.subscriptionRepository.findAll();
+    const activeSubscriptions = allSubscriptions.filter(s => s.status === 'active');
+    const monthlyRevenue = activeSubscriptions.reduce((sum, s) => sum + parseFloat(s.price as any || '0'), 0);
+
+    const planPricing: Record<string, number> = { starter: 29, pro: 79, enterprise: 199 };
+    const estimatedRevenue = Object.entries(planCounts).reduce((sum, [plan, count]) => {
+      return sum + (planPricing[plan] || 0) * count;
+    }, 0);
+
+    const recentInstitutes = [...allInstitutes]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5);
+
+    const recentUsers = [...allUsers]
+      .filter(u => u.email !== 'admin@gmail.com')
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5);
+
+    return {
+      users: {
+        total: allUsers.length,
+        active: activeUsers.length,
+        inactive: allUsers.length - activeUsers.length,
+        newThisMonth: newUsersThisMonth.length,
+      },
+      institutes: {
+        total: allInstitutes.length,
+        active: activeInstitutes.length,
+        inactive: allInstitutes.length - activeInstitutes.length,
+      },
+      subscriptions: {
+        total: allSubscriptions.length,
+        active: activeSubscriptions.length,
+        byPlan: planCounts,
+        monthlyRevenue: monthlyRevenue || estimatedRevenue,
+      },
+      recentInstitutes,
+      recentUsers: recentUsers.map(u => {
+        const { password, ...rest } = u as any;
+        return rest;
+      }),
+    };
+  }
+
+  // ─── Subscription Management ─────────────────────────────────────────────────
+
+  async getAllSubscriptions(): Promise<Subscription[]> {
+    return this.subscriptionRepository.findAllWithInstitutes();
+  }
+
+  async createSubscription(data: Partial<Subscription>): Promise<Subscription> {
+    const existing = await this.subscriptionRepository.findByInstituteId(data.instituteId!);
+    if (existing) {
+      Object.assign(existing, data);
+      return this.subscriptionRepository.save(existing);
+    }
+    return this.subscriptionRepository.create(data);
+  }
+
+  async updateSubscription(id: string, data: Partial<Subscription>): Promise<Subscription> {
+    const sub = await this.subscriptionRepository.findById(id);
+    if (!sub) throw new NotFoundException('Subscription not found');
+    Object.assign(sub, data);
+    return this.subscriptionRepository.save(sub);
+  }
+
+  async cancelSubscription(id: string): Promise<Subscription> {
+    const sub = await this.subscriptionRepository.findById(id);
+    if (!sub) throw new NotFoundException('Subscription not found');
+    sub.status = 'cancelled';
+    return this.subscriptionRepository.save(sub);
   }
 }

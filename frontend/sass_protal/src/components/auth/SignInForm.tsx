@@ -35,8 +35,12 @@ export default function SignInForm() {
     setIsLoading(true);
 
     try {
-      await authService.login(formData);
-      router.push("/dashboard");
+      const data = await authService.login(formData);
+      if (data?.user?.role === 'admin') {
+        router.push("/admin");
+      } else {
+        router.push("/dashboard");
+      }
     } catch (err: any) {
       setError(err.message || "An error occurred during sign in");
     } finally {
@@ -73,8 +77,12 @@ export default function SignInForm() {
                   setIsLoading(true);
                   setError(null);
                   try {
-                    await authService.loginWithGoogle();
-                    router.push("/dashboard");
+                    const data = await authService.loginWithGoogle();
+                    if (data?.user?.role === 'admin') {
+                      router.push("/admin");
+                    } else {
+                      router.push("/dashboard");
+                    }
                   } catch (err: any) {
                     setError(err.message || "Google sign in failed");
                   } finally {

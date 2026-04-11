@@ -1,16 +1,10 @@
 import { useSidebar } from "@/context/SidebarContext";
 import {
-  BoxCubeIcon,
   CalenderIcon,
   ChevronDownIcon,
+  DollarLineIcon,
   GridIcon,
   HorizontaLDots,
-  ListIcon,
-  PageIcon,
-  PieChartIcon,
-  PlugInIcon,
-  TableIcon,
-  UserCircleIcon,
 } from "@/icons/index";
 import Image from "next/image";
 import Link from "next/link";
@@ -29,19 +23,18 @@ const navItems: NavItem[] = [
   {
     icon: <GridIcon />,
     name: "Dashboard",
-     path: "/dashboard",
+    path: "/dashboard",
   },
   {
     icon: <CalenderIcon />,
     name: "Institute",
     path: "/dashboard/institute",
   },
-  
-
-  
-  
-  
-
+  {
+    icon: <DollarLineIcon />,
+    name: "Billing",
+    path: "/dashboard/billing",
+  },
 ];
 
 const othersItems: NavItem[] = [

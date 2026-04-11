@@ -27,7 +27,7 @@ export class SeedService {
           firstName: 'System',
           lastName: 'Administrator',
           email: 'admin@gmail.com',
-          password: 'Admin@123',
+          password: 'admin123',
           roleId: adminRole.id,
         },
         
