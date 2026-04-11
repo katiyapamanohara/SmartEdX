@@ -1,4 +1,16 @@
-import { Controller, Post, Body, Get, UseGuards, Patch, Param, NotFoundException, Delete, UseInterceptors, UploadedFile } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  UseGuards,
+  Patch,
+  Param,
+  NotFoundException,
+  Delete,
+  UseInterceptors,
+  UploadedFile,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
@@ -130,7 +142,10 @@ export class AuthController {
       },
     },
   })
-  @ApiResponse({ status: 401, description: 'Invalid credentials or Firebase token' })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid credentials or Firebase token',
+  })
   async firebaseLogin(@Body() firebaseLoginDto: FirebaseLoginDto) {
     return this.authService.firebaseLogin(firebaseLoginDto);
   }
@@ -290,11 +305,12 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get('users')
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Get all users excluding system admin (Admin only)' })
+  @ApiOperation({
+    summary: 'Get all users excluding system admin (Admin only)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Returns list of all users excluding admin@gmail.com',
-   
   })
   @ApiResponse({ status: 403, description: 'Forbidden - Admin role required' })
   async getAllUsers() {
@@ -333,7 +349,10 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Password reset successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden - Admin role required' })
   @ApiResponse({ status: 404, description: 'User not found' })
-  @ApiResponse({ status: 400, description: 'Cannot reset password for student accounts' })
+  @ApiResponse({
+    status: 400,
+    description: 'Cannot reset password for student accounts',
+  })
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     await this.seedService.resetPassword(
       resetPasswordDto.userId,
@@ -387,7 +406,10 @@ export class AuthController {
   @ApiOperation({ summary: 'Create a new institute' })
   @ApiBody({ type: CreateInstituteDto })
   @ApiResponse({ status: 201, description: 'Institute created successfully' })
-  async createInstitute(@CurrentUser() user: any, @Body() createInstituteDto: CreateInstituteDto) {
+  async createInstitute(
+    @CurrentUser() user: any,
+    @Body() createInstituteDto: CreateInstituteDto,
+  ) {
     return this.authService.createInstitute(user.userId, createInstituteDto);
   }
 
@@ -398,7 +420,10 @@ export class AuthController {
   @ApiParam({ name: 'id', description: 'Institute ID' })
   @ApiBody({ type: UpdateInstituteDto })
   @ApiResponse({ status: 200, description: 'Institute updated successfully' })
-  async updateInstitute(@Param('id') id: string, @Body() updateInstituteDto: UpdateInstituteDto) {
+  async updateInstitute(
+    @Param('id') id: string,
+    @Body() updateInstituteDto: UpdateInstituteDto,
+  ) {
     return this.authService.updateInstitute(id, updateInstituteDto);
   }
 
@@ -511,7 +536,9 @@ export class AuthController {
   @Roles('admin')
   @Post('admin/subscriptions')
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Create or update subscription for an institute (Admin only)' })
+  @ApiOperation({
+    summary: 'Create or update subscription for an institute (Admin only)',
+  })
   async createSubscription(@Body() body: any) {
     return this.authService.createSubscription(body);
   }

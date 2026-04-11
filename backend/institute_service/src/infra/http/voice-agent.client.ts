@@ -85,7 +85,12 @@ export class VoiceAgentClient {
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ institute_id: instituteId, course_id: courseId, query, limit }),
+        body: JSON.stringify({
+          institute_id: instituteId,
+          course_id: courseId,
+          query,
+          limit,
+        }),
         signal: AbortSignal.timeout(15_000),
       });
       if (!response.ok) {
@@ -103,7 +108,11 @@ export class VoiceAgentClient {
   /**
    * Remove all Qdrant points for a content_id from the course's collection.
    */
-  async deleteContent(instituteId: string, courseId: string, contentId: string): Promise<void> {
+  async deleteContent(
+    instituteId: string,
+    courseId: string,
+    contentId: string,
+  ): Promise<void> {
     const url = `${this.baseUrl}/api/course-kb/${encodeURIComponent(instituteId)}/${encodeURIComponent(courseId)}/content/${encodeURIComponent(contentId)}`;
     try {
       const response = await fetch(url, {
@@ -115,7 +124,9 @@ export class VoiceAgentClient {
           `[voice-agent] delete request returned ${response.status} for content ${contentId}`,
         );
       } else {
-        this.logger.log(`[voice-agent] Deleted KB content ${contentId} from kb_${instituteId}_${courseId}`);
+        this.logger.log(
+          `[voice-agent] Deleted KB content ${contentId} from kb_${instituteId}_${courseId}`,
+        );
       }
     } catch (err) {
       this.logger.error(

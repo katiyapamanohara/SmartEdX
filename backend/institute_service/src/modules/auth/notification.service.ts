@@ -80,7 +80,10 @@ export class NotificationService {
   }
 
   async getNotifications(userId: string, instituteId: string) {
-    const notifications = await this.notificationRepository.findByUser(userId, instituteId);
+    const notifications = await this.notificationRepository.findByUser(
+      userId,
+      instituteId,
+    );
     return notifications.map((n) => ({
       id: n.id,
       type: n.type,
@@ -93,7 +96,10 @@ export class NotificationService {
   }
 
   async getUnreadCount(userId: string, instituteId: string) {
-    const count = await this.notificationRepository.countUnread(userId, instituteId);
+    const count = await this.notificationRepository.countUnread(
+      userId,
+      instituteId,
+    );
     return { count };
   }
 

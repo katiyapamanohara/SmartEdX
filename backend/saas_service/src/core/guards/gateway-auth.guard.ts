@@ -28,9 +28,7 @@ export class GatewayAuthGuard implements CanActivate {
         );
         return true;
       }
-      throw new UnauthorizedException(
-        'Missing gateway authentication header',
-      );
+      throw new UnauthorizedException('Missing gateway authentication header');
     }
 
     if (gatewaySecret !== expectedSecret) {

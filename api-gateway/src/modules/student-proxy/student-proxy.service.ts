@@ -34,7 +34,8 @@ export class StudentProxyService {
           data: body,
           headers: {
             ...this.filterHeaders(headers),
-            'x-gateway-secret': this.configService.get<string>('GATEWAY_SECRET'),
+            'x-gateway-secret':
+              this.configService.get<string>('GATEWAY_SECRET'),
           },
           validateStatus: (status) => status < 400,
         }),
@@ -49,9 +50,7 @@ export class StudentProxyService {
         );
         throw new HttpException(error.response.data, error.response.status);
       }
-      this.logger.error(
-        `Error forwarding request to ${url}: ${error.message}`,
-      );
+      this.logger.error(`Error forwarding request to ${url}: ${error.message}`);
       throw error;
     }
   }
@@ -64,7 +63,7 @@ export class StudentProxyService {
       'accept',
       'user-agent',
     ];
-    
+
     return Object.keys(headers).reduce((acc, key) => {
       if (allowedHeaders.includes(key.toLowerCase())) {
         acc[key] = headers[key];

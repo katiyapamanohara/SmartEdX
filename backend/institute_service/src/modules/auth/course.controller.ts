@@ -1,6 +1,26 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, HttpCode, HttpStatus, UseInterceptors, UploadedFile } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+  UseInterceptors,
+  UploadedFile,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+  ApiBody,
+} from '@nestjs/swagger';
 import { CourseService } from './course.service';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
@@ -43,7 +63,10 @@ export class CourseController {
   }
 
   @Get('my-assessments')
-  @ApiOperation({ summary: 'Get all quiz assessments from courses assigned to the logged-in teacher' })
+  @ApiOperation({
+    summary:
+      'Get all quiz assessments from courses assigned to the logged-in teacher',
+  })
   @ApiParam({ name: 'id', description: 'Institute ID' })
   async getMyAssessments(
     @Param('id') instituteId: string,
@@ -53,7 +76,10 @@ export class CourseController {
   }
 
   @Get('student-assessments')
-  @ApiOperation({ summary: 'Get all quiz assessments from courses enrolled by the logged-in student' })
+  @ApiOperation({
+    summary:
+      'Get all quiz assessments from courses enrolled by the logged-in student',
+  })
   @ApiParam({ name: 'id', description: 'Institute ID' })
   async getMyStudentAssessments(
     @Param('id') instituteId: string,
@@ -71,29 +97,37 @@ export class CourseController {
     @Param('id') instituteId: string,
     @Param('contentId') contentId: string,
     @CurrentUser('userId') userId: string,
-    @Body() body: {
-    score: number;
-    answers?: Record<string, number>;
-    voiceResult?: {
-      totalScore: number;
-      totalMarks: number;
-      grade: string;
-      passed: boolean;
-      overallFeedback: string;
-      questionResults: Array<{
-        questionId: string;
-        question: string;
-        studentAnswer: string;
-        expectedAnswer: string;
-        score: number;
-        marksAvailable: number;
-        percentage: number;
-        feedback: string;
-      }>;
-    };
-  },
+    @Body()
+    body: {
+      score: number;
+      answers?: Record<string, number>;
+      voiceResult?: {
+        totalScore: number;
+        totalMarks: number;
+        grade: string;
+        passed: boolean;
+        overallFeedback: string;
+        questionResults: Array<{
+          questionId: string;
+          question: string;
+          studentAnswer: string;
+          expectedAnswer: string;
+          score: number;
+          marksAvailable: number;
+          percentage: number;
+          feedback: string;
+        }>;
+      };
+    },
   ) {
-    return this.courseService.recordStudentQuizAttempt(instituteId, contentId, userId, body.score, body.answers, body.voiceResult);
+    return this.courseService.recordStudentQuizAttempt(
+      instituteId,
+      contentId,
+      userId,
+      body.score,
+      body.answers,
+      body.voiceResult,
+    );
   }
 
   @Get('my-enrolled-courses')
@@ -109,18 +143,27 @@ export class CourseController {
   // ─── Teacher module CRUD ─────────────────────────────────────────
   @Post(':courseId/teacher-modules')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Teacher creates a module in their assigned course' })
+  @ApiOperation({
+    summary: 'Teacher creates a module in their assigned course',
+  })
   async createTeacherModule(
     @Param('id') instituteId: string,
     @Param('courseId') courseId: string,
     @CurrentUser('userId') userId: string,
     @Body() body: { title: string; description?: string; order?: number },
   ) {
-    return this.courseService.createModuleForTeacher(instituteId, courseId, userId, body);
+    return this.courseService.createModuleForTeacher(
+      instituteId,
+      courseId,
+      userId,
+      body,
+    );
   }
 
   @Patch(':courseId/teacher-modules/:moduleId')
-  @ApiOperation({ summary: 'Teacher updates a module in their assigned course' })
+  @ApiOperation({
+    summary: 'Teacher updates a module in their assigned course',
+  })
   async updateTeacherModule(
     @Param('id') instituteId: string,
     @Param('courseId') courseId: string,
@@ -128,25 +171,41 @@ export class CourseController {
     @CurrentUser('userId') userId: string,
     @Body() body: { title?: string; description?: string; order?: number },
   ) {
-    return this.courseService.updateModuleForTeacher(instituteId, courseId, moduleId, userId, body);
+    return this.courseService.updateModuleForTeacher(
+      instituteId,
+      courseId,
+      moduleId,
+      userId,
+      body,
+    );
   }
 
   @Delete(':courseId/teacher-modules/:moduleId')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Teacher deletes a module in their assigned course' })
+  @ApiOperation({
+    summary: 'Teacher deletes a module in their assigned course',
+  })
   async deleteTeacherModule(
     @Param('id') instituteId: string,
     @Param('courseId') courseId: string,
     @Param('moduleId') moduleId: string,
     @CurrentUser('userId') userId: string,
   ) {
-    return this.courseService.deleteModuleForTeacher(instituteId, courseId, moduleId, userId);
+    return this.courseService.deleteModuleForTeacher(
+      instituteId,
+      courseId,
+      moduleId,
+      userId,
+    );
   }
 
   // ─── Teacher content CRUD ─────────────────────────────────────────
   @Post(':courseId/teacher-modules/:moduleId/contents/upload-file')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Teacher uploads a file (PDF/DOCX/video) as content — auto-indexes into Qdrant KB' })
+  @ApiOperation({
+    summary:
+      'Teacher uploads a file (PDF/DOCX/video) as content — auto-indexes into Qdrant KB',
+  })
   @UseInterceptors(FileInterceptor('file'))
   async uploadTeacherContentFile(
     @Param('id') instituteId: string,
@@ -156,12 +215,21 @@ export class CourseController {
     @UploadedFile() file: Express.Multer.File,
     @Body() body: any,
   ) {
-    return this.courseService.createContentWithFileUploadForTeacher(instituteId, courseId, moduleId, userId, file, body);
+    return this.courseService.createContentWithFileUploadForTeacher(
+      instituteId,
+      courseId,
+      moduleId,
+      userId,
+      file,
+      body,
+    );
   }
 
   @Post(':courseId/teacher-modules/:moduleId/contents')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Teacher creates content in their assigned course module' })
+  @ApiOperation({
+    summary: 'Teacher creates content in their assigned course module',
+  })
   async createTeacherContent(
     @Param('id') instituteId: string,
     @Param('courseId') courseId: string,
@@ -169,11 +237,19 @@ export class CourseController {
     @CurrentUser('userId') userId: string,
     @Body() body: any,
   ) {
-    return this.courseService.createContentForTeacher(instituteId, courseId, moduleId, userId, body);
+    return this.courseService.createContentForTeacher(
+      instituteId,
+      courseId,
+      moduleId,
+      userId,
+      body,
+    );
   }
 
   @Patch(':courseId/teacher-modules/:moduleId/contents/:contentId')
-  @ApiOperation({ summary: 'Teacher updates content in their assigned course module' })
+  @ApiOperation({
+    summary: 'Teacher updates content in their assigned course module',
+  })
   async updateTeacherContent(
     @Param('id') instituteId: string,
     @Param('courseId') courseId: string,
@@ -182,12 +258,21 @@ export class CourseController {
     @CurrentUser('userId') userId: string,
     @Body() body: any,
   ) {
-    return this.courseService.updateContentForTeacher(instituteId, courseId, moduleId, contentId, userId, body);
+    return this.courseService.updateContentForTeacher(
+      instituteId,
+      courseId,
+      moduleId,
+      contentId,
+      userId,
+      body,
+    );
   }
 
   @Delete(':courseId/teacher-modules/:moduleId/contents/:contentId')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Teacher deletes content in their assigned course module' })
+  @ApiOperation({
+    summary: 'Teacher deletes content in their assigned course module',
+  })
   async deleteTeacherContent(
     @Param('id') instituteId: string,
     @Param('courseId') courseId: string,
@@ -195,12 +280,21 @@ export class CourseController {
     @Param('contentId') contentId: string,
     @CurrentUser('userId') userId: string,
   ) {
-    return this.courseService.deleteContentForTeacher(instituteId, courseId, moduleId, contentId, userId);
+    return this.courseService.deleteContentForTeacher(
+      instituteId,
+      courseId,
+      moduleId,
+      contentId,
+      userId,
+    );
   }
 
   @Post(':courseId/modules/:moduleId/teacher-quiz')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Teacher creates a quiz assessment in their assigned course module' })
+  @ApiOperation({
+    summary:
+      'Teacher creates a quiz assessment in their assigned course module',
+  })
   @ApiParam({ name: 'id', description: 'Institute ID' })
   @ApiParam({ name: 'courseId', description: 'Course ID' })
   @ApiParam({ name: 'moduleId', description: 'Module ID' })
@@ -211,23 +305,47 @@ export class CourseController {
     @CurrentUser('userId') userId: string,
     @Body() body: { title: string; description?: string; quizData: any },
   ) {
-    return this.courseService.createAssessmentForTeacher(instituteId, courseId, moduleId, userId, body);
+    return this.courseService.createAssessmentForTeacher(
+      instituteId,
+      courseId,
+      moduleId,
+      userId,
+      body,
+    );
   }
 
   @Post(':courseId/teacher-assessment')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Teacher creates a quiz assessment, optionally creating the module inline' })
+  @ApiOperation({
+    summary:
+      'Teacher creates a quiz assessment, optionally creating the module inline',
+  })
   async createTeacherAssessmentSmart(
     @Param('id') instituteId: string,
     @Param('courseId') courseId: string,
     @CurrentUser('userId') userId: string,
-    @Body() body: { moduleId?: string; moduleName?: string; title: string; description?: string; quizData: any },
+    @Body()
+    body: {
+      moduleId?: string;
+      moduleName?: string;
+      title: string;
+      description?: string;
+      quizData: any;
+    },
   ) {
-    return this.courseService.createAssessmentWithModuleForTeacher(instituteId, courseId, userId, body);
+    return this.courseService.createAssessmentWithModuleForTeacher(
+      instituteId,
+      courseId,
+      userId,
+      body,
+    );
   }
 
   @Get(':courseId/for-teacher')
-  @ApiOperation({ summary: 'Get a course with all modules and contents for the assigned teacher' })
+  @ApiOperation({
+    summary:
+      'Get a course with all modules and contents for the assigned teacher',
+  })
   @ApiParam({ name: 'id', description: 'Institute ID' })
   @ApiParam({ name: 'courseId', description: 'Course ID' })
   async getCourseForTeacher(
@@ -235,7 +353,11 @@ export class CourseController {
     @Param('courseId') courseId: string,
     @CurrentUser('userId') userId: string,
   ) {
-    return this.courseService.getCourseWithModulesForTeacher(instituteId, courseId, userId);
+    return this.courseService.getCourseWithModulesForTeacher(
+      instituteId,
+      courseId,
+      userId,
+    );
   }
 
   @Patch(':courseId')
@@ -264,7 +386,9 @@ export class CourseController {
 
   @Post(':courseId/kb-search')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Student: semantic search of course knowledge base (Qdrant)' })
+  @ApiOperation({
+    summary: 'Student: semantic search of course knowledge base (Qdrant)',
+  })
   @ApiParam({ name: 'id', description: 'Institute ID' })
   @ApiParam({ name: 'courseId', description: 'Course ID' })
   async searchCourseKB(
@@ -276,7 +400,10 @@ export class CourseController {
   }
 
   @Get('student-report')
-  @ApiOperation({ summary: 'Teacher: get all students with quiz & exam scores across teacher courses' })
+  @ApiOperation({
+    summary:
+      'Teacher: get all students with quiz & exam scores across teacher courses',
+  })
   @ApiParam({ name: 'id', description: 'Institute ID' })
   async getStudentReport(
     @Param('id') instituteId: string,

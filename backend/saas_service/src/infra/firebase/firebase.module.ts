@@ -17,7 +17,9 @@ import * as admin from 'firebase-admin';
           console.warn(
             '⚠️  Firebase credentials not configured. Firebase authentication will not be available.',
           );
-          console.warn(`Debug: ProjectID: ${!!projectId}, Email: ${!!clientEmail}, Key: ${!!privateKey}`);
+          console.warn(
+            `Debug: ProjectID: ${!!projectId}, Email: ${!!clientEmail}, Key: ${!!privateKey}`,
+          );
           return null;
         }
 
@@ -30,7 +32,9 @@ import * as admin from 'firebase-admin';
         // Only initialize if not already initialized
         if (!admin.apps.length) {
           return admin.initializeApp({
-            credential: admin.credential.cert(firebaseConfig as admin.ServiceAccount),
+            credential: admin.credential.cert(
+              firebaseConfig as admin.ServiceAccount,
+            ),
           });
         }
         return admin.app();

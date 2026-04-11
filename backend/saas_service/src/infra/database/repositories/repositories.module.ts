@@ -18,8 +18,31 @@ import { SubscriptionRepository } from './subscription.repository';
  * Centralizes all repository providers for dependency injection
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([User, Role, Institute, InstituteUser, InstituteRole, Subscription])],
-  providers: [UserRepository, RoleRepository, InstituteRepository, InstituteUserRepository, InstituteRoleRepository, SubscriptionRepository],
-  exports: [UserRepository, RoleRepository, InstituteRepository, InstituteUserRepository, InstituteRoleRepository, SubscriptionRepository],
+  imports: [
+    TypeOrmModule.forFeature([
+      User,
+      Role,
+      Institute,
+      InstituteUser,
+      InstituteRole,
+      Subscription,
+    ]),
+  ],
+  providers: [
+    UserRepository,
+    RoleRepository,
+    InstituteRepository,
+    InstituteUserRepository,
+    InstituteRoleRepository,
+    SubscriptionRepository,
+  ],
+  exports: [
+    UserRepository,
+    RoleRepository,
+    InstituteRepository,
+    InstituteUserRepository,
+    InstituteRoleRepository,
+    SubscriptionRepository,
+  ],
 })
 export class RepositoriesModule {}

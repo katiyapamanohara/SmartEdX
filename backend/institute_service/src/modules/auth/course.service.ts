@@ -1,5 +1,14 @@
-import { Injectable, Logger, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
-import { CourseRepository, TeacherRepository } from '../../infra/database/repositories';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  ForbiddenException,
+  ConflictException,
+} from '@nestjs/common';
+import {
+  CourseRepository,
+  TeacherRepository,
+} from '../../infra/database/repositories';
 import { ModuleContentRepository } from '../../infra/database/repositories/module-content.repository';
 import { CourseModuleRepository } from '../../infra/database/repositories/course-module.repository';
 import { VoiceAgentClient } from '../../infra/http/voice-agent.client';
@@ -14,7 +23,10 @@ import { ContentType } from './entities/module-content.entity';
 /** Content types that hold indexable text for the course knowledge base. */
 const INDEXABLE_TYPES: ContentType[] = [ContentType.PDF, ContentType.DOCUMENT];
 
-function isIndexable(type: ContentType, url: string | undefined | null): boolean {
+function isIndexable(
+  type: ContentType,
+  url: string | undefined | null,
+): boolean {
   return INDEXABLE_TYPES.includes(type) && !!url;
 }
 
@@ -33,13 +45,16 @@ export class CourseService {
 
   private mapCourseToResponse(course: Course) {
     const { teachers, ...rest } = course;
-    const assignedTeacher = teachers && teachers.length > 0 && teachers[0].user ? {
-      id: teachers[0].userId,
-      firstName: teachers[0].user.firstName,
-      lastName: teachers[0].user.lastName,
-      email: teachers[0].user.email,
-      profilePicture: teachers[0].user.profilePicture ?? null,
-    } : null;
+    const assignedTeacher =
+      teachers && teachers.length > 0 && teachers[0].user
+        ? {
+            id: teachers[0].userId,
+            firstName: teachers[0].user.firstName,
+            lastName: teachers[0].user.lastName,
+            email: teachers[0].user.email,
+            profilePicture: teachers[0].user.profilePicture ?? null,
+          }
+        : null;
 
     return {
       ...rest,
@@ -49,12 +64,12 @@ export class CourseService {
 
   async createCourse(instituteId: string, createDto: CreateCourseDto) {
     const { assignedTeacherId, ...courseData } = createDto;
-    
+
     let teachers: Teacher[] = [];
     if (assignedTeacherId) {
       const teacher = await this.teacherRepository.findOne({
         where: { userId: assignedTeacherId } as any,
-        relations: ['user']
+        relations: ['user'],
       });
       if (teacher) {
         teachers = [teacher];
@@ -72,11 +87,15 @@ export class CourseService {
 
   async getCourses(instituteId: string) {
     const courses = await this.courseRepository.findByInstituteId(instituteId);
-    return courses.map(course => this.mapCourseToResponse(course));
+    return courses.map((course) => this.mapCourseToResponse(course));
   }
 
   // ─── Shared teacher ownership check ───────────────────────────
-  private async _assertTeacherOwns(courseId: string, instituteId: string, userId: string) {
+  private async _assertTeacherOwns(
+    courseId: string,
+    instituteId: string,
+    userId: string,
+  ) {
     const course = await this.courseRepository.findOne({
       where: { id: courseId, instituteId } as any,
       relations: ['teachers'],
@@ -89,7 +108,12 @@ export class CourseService {
   }
 
   // ─── Teacher module CRUD ────────────────────────────────────────
-  async createModuleForTeacher(instituteId: string, courseId: string, userId: string, dto: { title: string; description?: string; order?: number }) {
+  async createModuleForTeacher(
+    instituteId: string,
+    courseId: string,
+    userId: string,
+    dto: { title: string; description?: string; order?: number },
+  ) {
     await this._assertTeacherOwns(courseId, instituteId, userId);
     const existing = await this.courseModuleRepository.findByCourseId(courseId);
     return this.courseModuleRepository.create({
@@ -99,17 +123,32 @@ export class CourseService {
     });
   }
 
-  async updateModuleForTeacher(instituteId: string, courseId: string, moduleId: string, userId: string, dto: { title?: string; description?: string; order?: number }) {
+  async updateModuleForTeacher(
+    instituteId: string,
+    courseId: string,
+    moduleId: string,
+    userId: string,
+    dto: { title?: string; description?: string; order?: number },
+  ) {
     await this._assertTeacherOwns(courseId, instituteId, userId);
-    const module = await this.courseModuleRepository.findOne({ where: { id: moduleId, courseId } as any });
+    const module = await this.courseModuleRepository.findOne({
+      where: { id: moduleId, courseId } as any,
+    });
     if (!module) throw new NotFoundException('Module not found');
     Object.assign(module, dto);
     return this.courseModuleRepository.save(module);
   }
 
-  async deleteModuleForTeacher(instituteId: string, courseId: string, moduleId: string, userId: string) {
+  async deleteModuleForTeacher(
+    instituteId: string,
+    courseId: string,
+    moduleId: string,
+    userId: string,
+  ) {
     await this._assertTeacherOwns(courseId, instituteId, userId);
-    const module = await this.courseModuleRepository.findOne({ where: { id: moduleId, courseId } as any });
+    const module = await this.courseModuleRepository.findOne({
+      where: { id: moduleId, courseId } as any,
+    });
     if (!module) throw new NotFoundException('Module not found');
     await this.courseModuleRepository.delete(module.id);
     return { message: 'Module deleted successfully' };
@@ -121,25 +160,45 @@ export class CourseService {
     courseId: string,
     moduleId: string,
     userId: string,
-    dto: { title: string; description?: string; type: ContentType; url?: string; quizData?: any; order?: number },
+    dto: {
+      title: string;
+      description?: string;
+      type: ContentType;
+      url?: string;
+      quizData?: any;
+      order?: number;
+    },
   ) {
     const course = await this._assertTeacherOwns(courseId, instituteId, userId);
-    const module = await this.courseModuleRepository.findOne({ where: { id: moduleId, courseId } as any });
+    const module = await this.courseModuleRepository.findOne({
+      where: { id: moduleId, courseId } as any,
+    });
     if (!module) throw new NotFoundException('Module not found');
-    const existing = await this.moduleContentRepository.findByModuleId(moduleId);
-    const content = await this.moduleContentRepository.create({ ...dto, moduleId, order: dto.order ?? existing.length });
+    const existing =
+      await this.moduleContentRepository.findByModuleId(moduleId);
+    const content = await this.moduleContentRepository.create({
+      ...dto,
+      moduleId,
+      order: dto.order ?? existing.length,
+    });
 
     // Index PDF / Word documents into the course's dedicated Qdrant collection
     if (isIndexable(content.type, content.url)) {
-      this.voiceAgentClient.indexContent({
-        institute_id: instituteId,
-        course_id:    courseId,
-        course_name:  course.name,
-        content_id:   content.id,
-        file_url:     content.url!,
-        file_type:    content.type,
-        title:        content.title,
-      }).catch((err) => this.logger.error(`KB index failed for content ${content.id}: ${err}`));
+      this.voiceAgentClient
+        .indexContent({
+          institute_id: instituteId,
+          course_id: courseId,
+          course_name: course.name,
+          content_id: content.id,
+          file_url: content.url,
+          file_type: content.type,
+          title: content.title,
+        })
+        .catch((err) =>
+          this.logger.error(
+            `KB index failed for content ${content.id}: ${err}`,
+          ),
+        );
     }
 
     return content;
@@ -155,16 +214,24 @@ export class CourseService {
   ) {
     const type = body.type as ContentType;
     const bucket =
-      type === ContentType.PDF   ? 'pdfs'   :
-      type === ContentType.VIDEO ? 'videos' :
-      'documents';
+      type === ContentType.PDF
+        ? 'pdfs'
+        : type === ContentType.VIDEO
+          ? 'videos'
+          : 'documents';
 
     const url = await this.minioService.uploadFile(file, bucket);
-    return this.createContentForTeacher(instituteId, courseId, moduleId, userId, {
-      ...body,
-      url,
-      order: body.order !== undefined ? parseInt(body.order) : undefined,
-    });
+    return this.createContentForTeacher(
+      instituteId,
+      courseId,
+      moduleId,
+      userId,
+      {
+        ...body,
+        url,
+        order: body.order !== undefined ? parseInt(body.order) : undefined,
+      },
+    );
   }
 
   async updateContentForTeacher(
@@ -173,37 +240,59 @@ export class CourseService {
     moduleId: string,
     contentId: string,
     userId: string,
-    dto: Partial<{ title: string; description: string; type: ContentType; url: string; quizData: any; order: number }>,
+    dto: Partial<{
+      title: string;
+      description: string;
+      type: ContentType;
+      url: string;
+      quizData: any;
+      order: number;
+    }>,
   ) {
     const course = await this._assertTeacherOwns(courseId, instituteId, userId);
     const content = await this.moduleContentRepository.findById(contentId);
-    if (!content || content.moduleId !== moduleId) throw new NotFoundException('Content not found');
+    if (!content || content.moduleId !== moduleId)
+      throw new NotFoundException('Content not found');
 
-    const updated = await this.moduleContentRepository.update(contentId, dto as any);
+    const updated = await this.moduleContentRepository.update(
+      contentId,
+      dto as any,
+    );
 
     const wasIndexable = isIndexable(content.type, content.url);
-    const newType      = (dto.type  ?? content.type) as ContentType;
-    const newUrl       = dto.url    ?? content.url;
+    const newType = dto.type ?? content.type;
+    const newUrl = dto.url ?? content.url;
     const nowIndexable = isIndexable(newType, newUrl);
 
-    const urlChanged  = dto.url  !== undefined && dto.url  !== content.url;
+    const urlChanged = dto.url !== undefined && dto.url !== content.url;
     const typeChanged = dto.type !== undefined && dto.type !== content.type;
 
     if (nowIndexable && (urlChanged || typeChanged)) {
       // Re-index with the latest URL/type
-      this.voiceAgentClient.indexContent({
-        institute_id: instituteId,
-        course_id:    courseId,
-        course_name:  course.name,
-        content_id:   contentId,
-        file_url:     newUrl!,
-        file_type:    newType,
-        title:        dto.title ?? content.title,
-      }).catch((err) => this.logger.error(`KB re-index failed for content ${contentId}: ${err}`));
+      this.voiceAgentClient
+        .indexContent({
+          institute_id: instituteId,
+          course_id: courseId,
+          course_name: course.name,
+          content_id: contentId,
+          file_url: newUrl,
+          file_type: newType,
+          title: dto.title ?? content.title,
+        })
+        .catch((err) =>
+          this.logger.error(
+            `KB re-index failed for content ${contentId}: ${err}`,
+          ),
+        );
     } else if (wasIndexable && !nowIndexable) {
       // No longer a PDF/DOCUMENT — remove from index
-      this.voiceAgentClient.deleteContent(instituteId, courseId, contentId)
-        .catch((err) => this.logger.error(`KB delete failed for content ${contentId}: ${err}`));
+      this.voiceAgentClient
+        .deleteContent(instituteId, courseId, contentId)
+        .catch((err) =>
+          this.logger.error(
+            `KB delete failed for content ${contentId}: ${err}`,
+          ),
+        );
     }
 
     return updated;
@@ -218,13 +307,19 @@ export class CourseService {
   ) {
     await this._assertTeacherOwns(courseId, instituteId, userId);
     const content = await this.moduleContentRepository.findById(contentId);
-    if (!content || content.moduleId !== moduleId) throw new NotFoundException('Content not found');
+    if (!content || content.moduleId !== moduleId)
+      throw new NotFoundException('Content not found');
     await this.moduleContentRepository.delete(contentId);
 
     // Remove from Qdrant if it was an indexed document
     if (isIndexable(content.type, content.url)) {
-      this.voiceAgentClient.deleteContent(instituteId, courseId, contentId)
-        .catch((err) => this.logger.error(`KB delete failed for content ${contentId}: ${err}`));
+      this.voiceAgentClient
+        .deleteContent(instituteId, courseId, contentId)
+        .catch((err) =>
+          this.logger.error(
+            `KB delete failed for content ${contentId}: ${err}`,
+          ),
+        );
     }
 
     return { message: 'Content deleted successfully' };
@@ -245,7 +340,8 @@ export class CourseService {
     if (!course) throw new NotFoundException('Course not found');
 
     const isAssigned = course.teachers?.some((t) => t.userId === userId);
-    if (!isAssigned) throw new ForbiddenException('You are not assigned to this course');
+    if (!isAssigned)
+      throw new ForbiddenException('You are not assigned to this course');
 
     // Verify module belongs to course
     const module = await this.courseModuleRepository.findById(moduleId);
@@ -253,7 +349,8 @@ export class CourseService {
       throw new NotFoundException('Module not found in this course');
     }
 
-    const existingContents = await this.moduleContentRepository.findByModuleId(moduleId);
+    const existingContents =
+      await this.moduleContentRepository.findByModuleId(moduleId);
 
     return this.moduleContentRepository.create({
       title: dto.title,
@@ -269,7 +366,13 @@ export class CourseService {
     instituteId: string,
     courseId: string,
     userId: string,
-    dto: { moduleId?: string; moduleName?: string; title: string; description?: string; quizData: any },
+    dto: {
+      moduleId?: string;
+      moduleName?: string;
+      title: string;
+      description?: string;
+      quizData: any;
+    },
   ) {
     const course = await this.courseRepository.findOne({
       where: { id: courseId, instituteId } as any,
@@ -277,21 +380,29 @@ export class CourseService {
     });
     if (!course) throw new NotFoundException('Course not found');
     const isAssigned = course.teachers?.some((t) => t.userId === userId);
-    if (!isAssigned) throw new ForbiddenException('You are not assigned to this course');
+    if (!isAssigned)
+      throw new ForbiddenException('You are not assigned to this course');
 
     let resolvedModuleId = dto.moduleId;
 
     if (!resolvedModuleId) {
       const name = (dto.moduleName ?? '').trim() || 'Assessments';
-      const existing = await this.courseModuleRepository.findByCourseId(courseId);
-      const newMod = await this.courseModuleRepository.create({ title: name, courseId, order: existing.length });
+      const existing =
+        await this.courseModuleRepository.findByCourseId(courseId);
+      const newMod = await this.courseModuleRepository.create({
+        title: name,
+        courseId,
+        order: existing.length,
+      });
       resolvedModuleId = newMod.id;
     } else {
       const mod = await this.courseModuleRepository.findById(resolvedModuleId);
-      if (!mod || mod.courseId !== courseId) throw new NotFoundException('Module not found in this course');
+      if (!mod || mod.courseId !== courseId)
+        throw new NotFoundException('Module not found in this course');
     }
 
-    const existingContents = await this.moduleContentRepository.findByModuleId(resolvedModuleId);
+    const existingContents =
+      await this.moduleContentRepository.findByModuleId(resolvedModuleId);
     return this.moduleContentRepository.create({
       title: dto.title,
       description: dto.description,
@@ -302,8 +413,16 @@ export class CourseService {
     });
   }
 
-  async getCourseWithModulesForTeacher(instituteId: string, courseId: string, userId: string) {
-    const course = await this.courseRepository.findCourseWithModulesForTeacher(courseId, userId, instituteId);
+  async getCourseWithModulesForTeacher(
+    instituteId: string,
+    courseId: string,
+    userId: string,
+  ) {
+    const course = await this.courseRepository.findCourseWithModulesForTeacher(
+      courseId,
+      userId,
+      instituteId,
+    );
     if (!course) {
       throw new NotFoundException('Course not found or not assigned to you');
     }
@@ -331,26 +450,10 @@ export class CourseService {
   }
 
   async getMyAssessmentsForTeacher(instituteId: string, userId: string) {
-    const courses = await this.courseRepository.findCoursesWithQuizzesByTeacher(userId, instituteId);
-    return courses
-      .map((course) => {
-        const { modules, teachers, ...courseRest } = course as any;
-        const quizzes = (modules ?? []).flatMap((mod: any) =>
-          (mod.contents ?? []).map((content: any) => ({
-            content,
-            module: { id: mod.id, title: mod.title, order: mod.order },
-          }))
-        );
-        return {
-          course: { ...courseRest, assignedTeacher: this.mapCourseToResponse(course).assignedTeacher },
-          quizzes,
-        };
-      })
-      .filter((g) => g.quizzes.length > 0);
-  }
-
-  async getMyAssessmentsForStudent(instituteId: string, userId: string) {
-    const courses = await this.courseRepository.findCoursesWithQuizzesByStudent(userId, instituteId);
+    const courses = await this.courseRepository.findCoursesWithQuizzesByTeacher(
+      userId,
+      instituteId,
+    );
     return courses
       .map((course) => {
         const { modules, teachers, ...courseRest } = course as any;
@@ -361,7 +464,35 @@ export class CourseService {
           })),
         );
         return {
-          course: { ...courseRest, assignedTeacher: this.mapCourseToResponse(course).assignedTeacher },
+          course: {
+            ...courseRest,
+            assignedTeacher: this.mapCourseToResponse(course).assignedTeacher,
+          },
+          quizzes,
+        };
+      })
+      .filter((g) => g.quizzes.length > 0);
+  }
+
+  async getMyAssessmentsForStudent(instituteId: string, userId: string) {
+    const courses = await this.courseRepository.findCoursesWithQuizzesByStudent(
+      userId,
+      instituteId,
+    );
+    return courses
+      .map((course) => {
+        const { modules, teachers, ...courseRest } = course as any;
+        const quizzes = (modules ?? []).flatMap((mod: any) =>
+          (mod.contents ?? []).map((content: any) => ({
+            content,
+            module: { id: mod.id, title: mod.title, order: mod.order },
+          })),
+        );
+        return {
+          course: {
+            ...courseRest,
+            assignedTeacher: this.mapCourseToResponse(course).assignedTeacher,
+          },
           quizzes,
         };
       })
@@ -369,22 +500,28 @@ export class CourseService {
   }
 
   async getMyCoursesForStudent(instituteId: string, userId: string) {
-    const courses = await this.courseRepository.findByStudentUserId(userId, instituteId);
-    return courses.map(course => ({
+    const courses = await this.courseRepository.findByStudentUserId(
+      userId,
+      instituteId,
+    );
+    return courses.map((course) => ({
       ...this.mapCourseToResponse(course),
       moduleCount: course.modules?.length ?? 0,
     }));
   }
 
   async getMyCoursesForTeacher(instituteId: string, userId: string) {
-    const courses = await this.courseRepository.findByTeacherUserId(userId, instituteId);
-    return courses.map(course => this.mapCourseToResponse(course));
+    const courses = await this.courseRepository.findByTeacherUserId(
+      userId,
+      instituteId,
+    );
+    return courses.map((course) => this.mapCourseToResponse(course));
   }
 
   async getCourseById(instituteId: string, courseId: string) {
     const course = await this.courseRepository.findOne({
       where: { id: courseId, instituteId } as any,
-      relations: ['teachers', 'teachers.user']
+      relations: ['teachers', 'teachers.user'],
     });
     if (!course) {
       throw new NotFoundException('Course not found');
@@ -392,9 +529,13 @@ export class CourseService {
     return course;
   }
 
-  async updateCourse(instituteId: string, courseId: string, updateDto: UpdateCourseDto) {
+  async updateCourse(
+    instituteId: string,
+    courseId: string,
+    updateDto: UpdateCourseDto,
+  ) {
     const course = await this.getCourseById(instituteId, courseId);
-    
+
     const { assignedTeacherId, ...courseData } = updateDto;
     Object.assign(course, courseData);
 
@@ -402,7 +543,7 @@ export class CourseService {
       if (assignedTeacherId) {
         const teacher = await this.teacherRepository.findOne({
           where: { userId: assignedTeacherId } as any,
-          relations: ['user']
+          relations: ['user'],
         });
         course.teachers = teacher ? [teacher] : [];
       } else {
@@ -445,7 +586,9 @@ export class CourseService {
     },
   ) {
     // Find the content (quiz)
-    const content = await this.moduleContentRepository.findOne({ where: { id: contentId } } as any);
+    const content = await this.moduleContentRepository.findOne({
+      where: { id: contentId },
+    } as any);
     if (!content) {
       throw new NotFoundException('Quiz content not found');
     }
@@ -456,7 +599,9 @@ export class CourseService {
     const prevAttempt = existing[userId];
     const attemptCount: number = prevAttempt?.attemptCount ?? 0;
     if (attemptCount >= maxAttempts) {
-      throw new ConflictException(`Maximum attempts (${maxAttempts}) reached for this assessment.`);
+      throw new ConflictException(
+        `Maximum attempts (${maxAttempts}) reached for this assessment.`,
+      );
     }
 
     // Build a new object so TypeORM detects the JSONB change
@@ -480,7 +625,9 @@ export class CourseService {
     const updatedAttempts = { ...existing, [userId]: attemptEntry };
 
     // Use update() with the new object to force a direct SQL UPDATE
-    await this.moduleContentRepository.update(contentId, { studentAttempts: updatedAttempts } as any);
+    await this.moduleContentRepository.update(contentId, {
+      studentAttempts: updatedAttempts,
+    } as any);
     return {
       success: true,
       message: 'Quiz attempt recorded',
@@ -489,39 +636,61 @@ export class CourseService {
   }
 
   async searchCourseKB(instituteId: string, courseId: string, query: string) {
-    const results = await this.voiceAgentClient.searchCourseKB(instituteId, courseId, query, 3);
+    const results = await this.voiceAgentClient.searchCourseKB(
+      instituteId,
+      courseId,
+      query,
+      3,
+    );
     return { results };
   }
 
   // ── Student report data ────────────────────────────────────────────────────
 
   async getTeacherStudentReport(instituteId: string, teacherUserId: string) {
-    const courses = await this.courseRepository.findCoursesWithQuizzesAndStudentsByTeacher(
-      teacherUserId,
-      instituteId,
-    );
+    const courses =
+      await this.courseRepository.findCoursesWithQuizzesAndStudentsByTeacher(
+        teacherUserId,
+        instituteId,
+      );
 
     // Gather all unique students across teacher's courses
-    const studentMap = new Map<string, {
-      userId: string;
-      firstName: string;
-      lastName: string;
-      email: string;
-      courses: {
-        courseId: string;
-        courseName: string;
-        quizzes: { contentId: string; contentTitle: string; score: number | null; totalMarks: number; attemptedAt: string | null }[];
-      }[];
-    }>();
+    const studentMap = new Map<
+      string,
+      {
+        userId: string;
+        firstName: string;
+        lastName: string;
+        email: string;
+        courses: {
+          courseId: string;
+          courseName: string;
+          quizzes: {
+            contentId: string;
+            contentTitle: string;
+            score: number | null;
+            totalMarks: number;
+            attemptedAt: string | null;
+          }[];
+        }[];
+      }
+    >();
 
     for (const course of courses) {
       const students = (course as any).students ?? [];
       const quizContents = ((course as any).modules ?? []).flatMap((m: any) =>
         (m.contents ?? []).map((c: any) => {
           const questions = c.quizData?.questions ?? [];
-          const totalMarks = questions.reduce((s: number, q: any) => s + (q.marks ?? 1), 0) || 10;
-          return { contentId: c.id, contentTitle: c.title, studentAttempts: c.studentAttempts ?? {}, totalMarks };
-        })
+          const totalMarks =
+            questions.reduce((s: number, q: any) => s + (q.marks ?? 1), 0) ||
+            10;
+          return {
+            contentId: c.id,
+            contentTitle: c.title,
+            studentAttempts: c.studentAttempts ?? {},
+            totalMarks,
+          };
+        }),
       );
 
       for (const student of students) {
@@ -542,7 +711,9 @@ export class CourseService {
           return {
             contentId: q.contentId,
             contentTitle: q.contentTitle,
-            score: attempt ? (attempt.score ?? attempt.totalScore ?? null) : null,
+            score: attempt
+              ? (attempt.score ?? attempt.totalScore ?? null)
+              : null,
             totalMarks: q.totalMarks,
             attemptedAt: attempt?.attemptedAt ?? attempt?.completedAt ?? null,
           };

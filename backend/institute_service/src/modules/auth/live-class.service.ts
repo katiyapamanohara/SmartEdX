@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { LiveSessionRepository } from '../../infra/database/repositories/live-session.repository';
 import { LiveParticipantRepository } from '../../infra/database/repositories/live-participant.repository';
 import { LiveSession, LiveSessionStatus } from './entities/live-session.entity';
@@ -29,12 +33,16 @@ export class LiveClassService {
   }
 
   async getTeacherSessions(teacherId: string, instituteId: string) {
-    const sessions = await this.liveSessionRepo.findByTeacher(teacherId, instituteId);
+    const sessions = await this.liveSessionRepo.findByTeacher(
+      teacherId,
+      instituteId,
+    );
     return sessions.map((s) => this.formatSession(s, teacherId));
   }
 
   async getStudentSessions(instituteId: string) {
-    const sessions = await this.liveSessionRepo.findLiveAndScheduled(instituteId);
+    const sessions =
+      await this.liveSessionRepo.findLiveAndScheduled(instituteId);
     return sessions.map((s) => this.formatSession(s, null));
   }
 
@@ -49,11 +57,17 @@ export class LiveClassService {
     return this.formatSession(session, null);
   }
 
-  async startSession(sessionId: string, teacherId: string, instituteId: string) {
+  async startSession(
+    sessionId: string,
+    teacherId: string,
+    instituteId: string,
+  ) {
     const session = await this.liveSessionRepo.findWithDetails(sessionId);
     if (!session) throw new NotFoundException('Session not found');
-    if (session.teacherId !== teacherId) throw new ForbiddenException('Not your session');
-    if (session.instituteId !== instituteId) throw new ForbiddenException('Unauthorized');
+    if (session.teacherId !== teacherId)
+      throw new ForbiddenException('Not your session');
+    if (session.instituteId !== instituteId)
+      throw new ForbiddenException('Unauthorized');
 
     await this.liveSessionRepo.update(sessionId, {
       status: LiveSessionStatus.LIVE,
@@ -66,8 +80,10 @@ export class LiveClassService {
   async endSession(sessionId: string, teacherId: string, instituteId: string) {
     const session = await this.liveSessionRepo.findWithDetails(sessionId);
     if (!session) throw new NotFoundException('Session not found');
-    if (session.teacherId !== teacherId) throw new ForbiddenException('Not your session');
-    if (session.instituteId !== instituteId) throw new ForbiddenException('Unauthorized');
+    if (session.teacherId !== teacherId)
+      throw new ForbiddenException('Not your session');
+    if (session.instituteId !== instituteId)
+      throw new ForbiddenException('Unauthorized');
 
     await this.liveSessionRepo.update(sessionId, {
       status: LiveSessionStatus.ENDED,
@@ -77,10 +93,15 @@ export class LiveClassService {
     return this.getSession(sessionId);
   }
 
-  async deleteSession(sessionId: string, teacherId: string, instituteId: string) {
+  async deleteSession(
+    sessionId: string,
+    teacherId: string,
+    instituteId: string,
+  ) {
     const session = await this.liveSessionRepo.findWithDetails(sessionId);
     if (!session) throw new NotFoundException('Session not found');
-    if (session.teacherId !== teacherId) throw new ForbiddenException('Not your session');
+    if (session.teacherId !== teacherId)
+      throw new ForbiddenException('Not your session');
     if (session.status === LiveSessionStatus.LIVE)
       throw new ForbiddenException('Cannot delete a live session');
 
@@ -91,9 +112,14 @@ export class LiveClassService {
   async joinSession(sessionId: string, userId: string, instituteId: string) {
     const session = await this.liveSessionRepo.findWithDetails(sessionId);
     if (!session) throw new NotFoundException('Session not found');
-    if (session.instituteId !== instituteId) throw new ForbiddenException('Unauthorized');
+    if (session.instituteId !== instituteId)
+      throw new ForbiddenException('Unauthorized');
 
-    await this.liveParticipantRepo.upsertParticipant(sessionId, userId, instituteId);
+    await this.liveParticipantRepo.upsertParticipant(
+      sessionId,
+      userId,
+      instituteId,
+    );
     return this.getSession(sessionId);
   }
 
@@ -103,7 +129,8 @@ export class LiveClassService {
   }
 
   async getSessionParticipants(sessionId: string) {
-    const participants = await this.liveParticipantRepo.findActiveBySession(sessionId);
+    const participants =
+      await this.liveParticipantRepo.findActiveBySession(sessionId);
     return participants.map((p) => ({
       id: p.userId,
       firstName: p.user?.firstName,

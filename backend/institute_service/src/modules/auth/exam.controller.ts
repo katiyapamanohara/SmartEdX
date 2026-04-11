@@ -1,8 +1,21 @@
 import {
-  Controller, Get, Post, Patch, Delete,
-  Body, Param, UseGuards, HttpCode, HttpStatus,
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiParam,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { ExamService } from './exam.service';
 import { CreateExamDto } from './dto/create-exam.dto';
 import { UpdateExamDto } from './dto/update-exam.dto';
@@ -60,10 +73,7 @@ export class ExamController {
 
   @Get(':examId')
   @ApiOperation({ summary: 'Get a single exam by ID' })
-  getOne(
-    @Param('id') instituteId: string,
-    @Param('examId') examId: string,
-  ) {
+  getOne(@Param('id') instituteId: string, @Param('examId') examId: string) {
     return this.examService.getOne(instituteId, examId);
   }
 
@@ -104,7 +114,9 @@ export class ExamController {
 
   @Post(':examId/integrity-flag')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Student: report an integrity violation during exam' })
+  @ApiOperation({
+    summary: 'Student: report an integrity violation during exam',
+  })
   @ApiParam({ name: 'id', description: 'Institute ID' })
   @ApiParam({ name: 'examId', description: 'Exam ID' })
   reportIntegrityFlag(
@@ -113,7 +125,12 @@ export class ExamController {
     @CurrentUser('userId') userId: string,
     @Body() body: { type: string },
   ) {
-    return this.examService.reportIntegrityFlag(instituteId, examId, userId, body.type as any);
+    return this.examService.reportIntegrityFlag(
+      instituteId,
+      examId,
+      userId,
+      body.type as any,
+    );
   }
 
   @Patch(':examId/integrity-flag/:flagId/reviewed')
@@ -126,14 +143,22 @@ export class ExamController {
     @CurrentUser('userId') teacherUserId: string,
     @Body() body: { userId: string },
   ) {
-    return this.examService.markFlagReviewed(instituteId, examId, body.userId, flagId, teacherUserId);
+    return this.examService.markFlagReviewed(
+      instituteId,
+      examId,
+      body.userId,
+      flagId,
+      teacherUserId,
+    );
   }
 
   // ── Essay grading ─────────────────────────────────────────────────────────
 
   @Patch(':examId/grade-essay/:studentId')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Teacher: save AI-generated essay grade for a student' })
+  @ApiOperation({
+    summary: 'Teacher: save AI-generated essay grade for a student',
+  })
   @ApiParam({ name: 'id', description: 'Institute ID' })
   @ApiParam({ name: 'examId', description: 'Exam ID' })
   @ApiParam({ name: 'studentId', description: 'Student user ID' })
@@ -144,7 +169,13 @@ export class ExamController {
     @CurrentUser('userId') teacherUserId: string,
     @Body() body: { questionId: string; score: number; feedback: string },
   ) {
-    return this.examService.saveEssayGrade(instituteId, examId, studentId, teacherUserId, body);
+    return this.examService.saveEssayGrade(
+      instituteId,
+      examId,
+      studentId,
+      teacherUserId,
+      body,
+    );
   }
 
   // ── Student ───────────────────────────────────────────────────────────────

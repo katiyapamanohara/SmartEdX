@@ -48,7 +48,9 @@ export class ModuleContent {
   @Column({ default: 0 })
   order: number;
 
-  @ManyToOne(() => CourseModule, (courseModule) => courseModule.contents, { onDelete: 'CASCADE' })
+  @ManyToOne(() => CourseModule, (courseModule) => courseModule.contents, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'moduleId' })
   module: CourseModule;
 

@@ -18,7 +18,10 @@ export class SubscriptionRepository extends BaseRepository<Subscription> {
   }
 
   async findAllWithInstitutes(): Promise<Subscription[]> {
-    return this.subscriptionRepo.find({ relations: ['institute'], order: { createdAt: 'DESC' } });
+    return this.subscriptionRepo.find({
+      relations: ['institute'],
+      order: { createdAt: 'DESC' },
+    });
   }
 
   async countByPlan(): Promise<{ plan: string; count: number }[]> {
@@ -32,7 +35,9 @@ export class SubscriptionRepository extends BaseRepository<Subscription> {
   }
 
   async findByOrderId(orderId: string): Promise<Subscription | null> {
-    return this.subscriptionRepo.findOne({ where: { payhereOrderId: orderId } });
+    return this.subscriptionRepo.findOne({
+      where: { payhereOrderId: orderId },
+    });
   }
 
   async getTotalMonthlyRevenue(): Promise<number> {

@@ -10,8 +10,6 @@ import {
 } from 'typeorm';
 import { Course } from './course.entity';
 
-
-
 @Entity('institutes')
 export class Institute {
   @PrimaryGeneratedColumn('uuid')

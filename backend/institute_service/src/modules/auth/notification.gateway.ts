@@ -30,12 +30,19 @@ export class NotificationGateway
     try {
       const token =
         (client.handshake.auth?.token as string) ||
-        (client.handshake.headers?.authorization as string)?.replace('Bearer ', '');
+        (client.handshake.headers?.authorization as string)?.replace(
+          'Bearer ',
+          '',
+        );
 
-      if (!token) { client.disconnect(); return; }
+      if (!token) {
+        client.disconnect();
+        return;
+      }
 
       const payload = this.jwtService.verify(token, {
-        secret: this.configService.get<string>('JWT_SECRET') || 'your-secret-key',
+        secret:
+          this.configService.get<string>('JWT_SECRET') || 'your-secret-key',
       });
 
       (client as any).userId = payload.sub;
@@ -47,7 +54,9 @@ export class NotificationGateway
   }
 
   handleDisconnect(client: Socket) {
-    this.logger.log(`Notification WS disconnected: userId=${(client as any).userId ?? 'unknown'}`);
+    this.logger.log(
+      `Notification WS disconnected: userId=${(client as any).userId ?? 'unknown'}`,
+    );
   }
 
   /** Push a real-time notification to a specific user. */

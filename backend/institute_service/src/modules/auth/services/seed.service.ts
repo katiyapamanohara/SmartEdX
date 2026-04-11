@@ -10,14 +10,17 @@ export class SeedService {
   ) {}
 
   async seedAdminUsers(): Promise<void> {
-     const roles = ['instructor', 'teacher', 'student'];
-     
-     for (const roleName of roles) {
-         const exists = await this.instituteRoleRepository.findByName(roleName);
-         if (!exists) {
-             await this.instituteRoleRepository.create({ name: roleName, description: `Role for ${roleName}` });
-             this.logger.log(`Seeded role: ${roleName}`);
-         }
-     }
+    const roles = ['instructor', 'teacher', 'student'];
+
+    for (const roleName of roles) {
+      const exists = await this.instituteRoleRepository.findByName(roleName);
+      if (!exists) {
+        await this.instituteRoleRepository.create({
+          name: roleName,
+          description: `Role for ${roleName}`,
+        });
+        this.logger.log(`Seeded role: ${roleName}`);
+      }
+    }
   }
 }

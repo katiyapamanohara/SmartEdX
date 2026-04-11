@@ -26,7 +26,9 @@ export class RecordingRepository extends BaseRepository<Recording> {
       .orderBy('recording.createdAt', 'DESC');
 
     if (filters?.categoryId) {
-      qb.andWhere('recording.categoryId = :categoryId', { categoryId: filters.categoryId });
+      qb.andWhere('recording.categoryId = :categoryId', {
+        categoryId: filters.categoryId,
+      });
     }
 
     if (filters?.search) {
@@ -38,7 +40,10 @@ export class RecordingRepository extends BaseRepository<Recording> {
     return qb.getMany();
   }
 
-  async findOneWithRelations(id: string, instituteId: string): Promise<Recording | null> {
+  async findOneWithRelations(
+    id: string,
+    instituteId: string,
+  ): Promise<Recording | null> {
     return this.repo.findOne({
       where: { id, instituteId },
       relations: ['category', 'courseAssignments', 'courseAssignments.course'],

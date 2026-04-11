@@ -1,5 +1,20 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam, ApiBody } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiParam,
+  ApiBody,
+} from '@nestjs/swagger';
 import { CourseModuleService } from './course-module.service';
 import { CreateCourseModuleDto } from './dto/create-course-module.dto';
 import { UpdateCourseModuleDto } from './dto/update-course-module.dto';
@@ -22,7 +37,11 @@ export class CourseModuleController {
     @Param('courseId') courseId: string,
     @Body() createDto: CreateCourseModuleDto,
   ) {
-    return this.courseModuleService.createModule(instituteId, courseId, createDto);
+    return this.courseModuleService.createModule(
+      instituteId,
+      courseId,
+      createDto,
+    );
   }
 
   @Get()
@@ -46,7 +65,11 @@ export class CourseModuleController {
     @Param('courseId') courseId: string,
     @Param('moduleId') moduleId: string,
   ) {
-    return this.courseModuleService.getModuleById(instituteId, courseId, moduleId);
+    return this.courseModuleService.getModuleById(
+      instituteId,
+      courseId,
+      moduleId,
+    );
   }
 
   @Patch(':moduleId')
@@ -61,7 +84,12 @@ export class CourseModuleController {
     @Param('moduleId') moduleId: string,
     @Body() updateDto: UpdateCourseModuleDto,
   ) {
-    return this.courseModuleService.updateModule(instituteId, courseId, moduleId, updateDto);
+    return this.courseModuleService.updateModule(
+      instituteId,
+      courseId,
+      moduleId,
+      updateDto,
+    );
   }
 
   @Delete(':moduleId')
@@ -74,6 +102,10 @@ export class CourseModuleController {
     @Param('courseId') courseId: string,
     @Param('moduleId') moduleId: string,
   ) {
-    return this.courseModuleService.deleteModule(instituteId, courseId, moduleId);
+    return this.courseModuleService.deleteModule(
+      instituteId,
+      courseId,
+      moduleId,
+    );
   }
 }

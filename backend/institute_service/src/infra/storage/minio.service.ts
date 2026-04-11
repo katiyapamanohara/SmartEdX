@@ -9,14 +9,23 @@ export class MinioService {
   private readonly logger = new Logger(MinioService.name);
 
   constructor(private readonly configService: ConfigService) {
-    this.bucketName = this.configService.get<string>('MINIO_BUCKET', 'smartedx-bucket');
+    this.bucketName = this.configService.get<string>(
+      'MINIO_BUCKET',
+      'smartedx-bucket',
+    );
 
     this.minioClient = new Minio.Client({
       endPoint: this.configService.get<string>('MINIO_ENDPOINT', 'localhost'),
       port: parseInt(this.configService.get<string>('MINIO_PORT', '9000'), 10),
       useSSL: this.configService.get<string>('MINIO_USE_SSL') === 'true',
-      accessKey: this.configService.get<string>('MINIO_ACCESS_KEY', 'minioadmin'),
-      secretKey: this.configService.get<string>('MINIO_SECRET_KEY', 'minioadmin'),
+      accessKey: this.configService.get<string>(
+        'MINIO_ACCESS_KEY',
+        'minioadmin',
+      ),
+      secretKey: this.configService.get<string>(
+        'MINIO_SECRET_KEY',
+        'minioadmin',
+      ),
     });
 
     this.checkConnection();
@@ -31,31 +40,34 @@ export class MinioService {
     }
   }
 
-  async uploadFile(file: Express.Multer.File, bucket?: string): Promise<string> {
+  async uploadFile(
+    file: Express.Multer.File,
+    bucket?: string,
+  ): Promise<string> {
     const targetBucket = bucket || this.bucketName;
     const fileName = `${Date.now()}-${file.originalname}`;
-    
+
     try {
       const bucketExists = await this.minioClient.bucketExists(targetBucket);
       if (!bucketExists) {
         await this.minioClient.makeBucket(targetBucket);
         await this.minioClient.setBucketPolicy(
-            targetBucket,
-            JSON.stringify({
-              Version: '2012-10-17',
-              Statement: [
-                {
-                  Effect: 'Allow',
-                  Principal: { AWS: ['*'] },
-                  Action: ['s3:GetObject'],
-                  Resource: [`arn:aws:s3:::${targetBucket}/*`],
-                },
-              ],
-            }),
+          targetBucket,
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Principal: { AWS: ['*'] },
+                Action: ['s3:GetObject'],
+                Resource: [`arn:aws:s3:::${targetBucket}/*`],
+              },
+            ],
+          }),
         );
       }
     } catch (err) {
-       this.logger.error(`Error checking/creating bucket ${targetBucket}`, err);
+      this.logger.error(`Error checking/creating bucket ${targetBucket}`, err);
     }
 
     await this.minioClient.putObject(
@@ -68,7 +80,10 @@ export class MinioService {
       },
     );
 
-    const protocol = this.configService.get<string>('MINIO_USE_SSL') === 'true' ? 'https' : 'http';
+    const protocol =
+      this.configService.get<string>('MINIO_USE_SSL') === 'true'
+        ? 'https'
+        : 'http';
     const host = this.configService.get<string>('MINIO_ENDPOINT', 'localhost');
     const port = this.configService.get<string>('MINIO_PORT', '9000');
 
@@ -76,12 +91,15 @@ export class MinioService {
   }
 
   async getFileUrl(filename: string, bucket?: string): Promise<string> {
-      const targetBucket = bucket || this.bucketName;
-      const protocol = this.configService.get<string>('MINIO_USE_SSL') === 'true' ? 'https' : 'http';
-      const host = this.configService.get<string>('MINIO_ENDPOINT', 'localhost');
-      const port = this.configService.get<string>('MINIO_PORT', '9000');
-      
-      return `${protocol}://${host}:${port}/${targetBucket}/${filename}`;
+    const targetBucket = bucket || this.bucketName;
+    const protocol =
+      this.configService.get<string>('MINIO_USE_SSL') === 'true'
+        ? 'https'
+        : 'http';
+    const host = this.configService.get<string>('MINIO_ENDPOINT', 'localhost');
+    const port = this.configService.get<string>('MINIO_PORT', '9000');
+
+    return `${protocol}://${host}:${port}/${targetBucket}/${filename}`;
   }
 
   async deleteFile(filename: string, bucket?: string): Promise<void> {

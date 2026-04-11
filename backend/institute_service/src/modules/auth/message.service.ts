@@ -1,4 +1,9 @@
-import { Injectable, ForbiddenException, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { MessageRepository } from '../../infra/database/repositories/message.repository';
 import { CourseRepository } from '../../infra/database/repositories/course.repository';
 import { InstituteUserRepository } from '../../infra/database/repositories/institute-user.repository';
@@ -25,7 +30,10 @@ export class MessageService {
    */
   async getContacts(instituteId: string, userId: string, role: string) {
     if (role === 'student') {
-      const courses = await this.courseRepository.findByStudentUserId(userId, instituteId);
+      const courses = await this.courseRepository.findByStudentUserId(
+        userId,
+        instituteId,
+      );
       const teacherMap = new Map<string, any>();
       for (const course of courses) {
         for (const teacher of course.teachers || []) {
@@ -52,7 +60,11 @@ export class MessageService {
     }
 
     if (role === 'teacher' || role === 'instructor') {
-      const courses = await this.courseRepository.findByTeacherUserIdWithStudents(userId, instituteId);
+      const courses =
+        await this.courseRepository.findByTeacherUserIdWithStudents(
+          userId,
+          instituteId,
+        );
       const studentMap = new Map<string, any>();
       for (const course of courses) {
         for (const student of course.students || []) {
@@ -90,15 +102,29 @@ export class MessageService {
     otherUserId: string,
   ) {
     // Validate that the users are connected via a course
-    const isConnected = await this.areUsersConnected(instituteId, currentUserId, otherUserId);
+    const isConnected = await this.areUsersConnected(
+      instituteId,
+      currentUserId,
+      otherUserId,
+    );
     if (!isConnected) {
-      throw new ForbiddenException('You can only message users from your assigned courses');
+      throw new ForbiddenException(
+        'You can only message users from your assigned courses',
+      );
     }
 
     // Mark messages from other user as read
-    await this.messageRepository.markAsRead(otherUserId, currentUserId, instituteId);
+    await this.messageRepository.markAsRead(
+      otherUserId,
+      currentUserId,
+      instituteId,
+    );
 
-    const messages = await this.messageRepository.findConversation(currentUserId, otherUserId, instituteId);
+    const messages = await this.messageRepository.findConversation(
+      currentUserId,
+      otherUserId,
+      instituteId,
+    );
     return messages.map((msg) => ({
       id: msg.id,
       content: msg.content,
@@ -118,9 +144,15 @@ export class MessageService {
     senderId: string,
     dto: CreateMessageDto,
   ) {
-    const isConnected = await this.areUsersConnected(instituteId, senderId, dto.recipientId);
+    const isConnected = await this.areUsersConnected(
+      instituteId,
+      senderId,
+      dto.recipientId,
+    );
     if (!isConnected) {
-      throw new ForbiddenException('You can only message users from your assigned courses');
+      throw new ForbiddenException(
+        'You can only message users from your assigned courses',
+      );
     }
 
     const message = await this.messageRepository.create({
@@ -141,14 +173,18 @@ export class MessageService {
     };
 
     // Push real-time event to recipient via WebSocket
-    this.messageGateway.emitNewMessage(dto.recipientId, { ...payload, isMine: false });
+    this.messageGateway.emitNewMessage(dto.recipientId, {
+      ...payload,
+      isMine: false,
+    });
     // Confirm delivery to sender for multi-tab sync
     this.messageGateway.emitMessageSent(senderId, { ...payload, isMine: true });
 
     // Create a notification for the recipient
     const sender = await this.instituteUserRepository.findById(senderId);
     const senderName = sender
-      ? `${sender.firstName ?? ''} ${sender.lastName ?? ''}`.trim() || sender.email
+      ? `${sender.firstName ?? ''} ${sender.lastName ?? ''}`.trim() ||
+        sender.email
       : 'Someone';
     await this.notificationService.notifyNewMessage(
       dto.recipientId,
@@ -192,13 +228,19 @@ export class MessageService {
     userId2: string,
   ): Promise<boolean> {
     // Check if they share a course (student <-> teacher relationship via enrolled courses)
-    const coursesForUser1 = await this.courseRepository.findByStudentUserId(userId1, instituteId);
+    const coursesForUser1 = await this.courseRepository.findByStudentUserId(
+      userId1,
+      instituteId,
+    );
     const sharedAsStudent1 = coursesForUser1.some((course) =>
       course.teachers?.some((t) => t.userId === userId2),
     );
     if (sharedAsStudent1) return true;
 
-    const coursesForUser2 = await this.courseRepository.findByStudentUserId(userId2, instituteId);
+    const coursesForUser2 = await this.courseRepository.findByStudentUserId(
+      userId2,
+      instituteId,
+    );
     const sharedAsStudent2 = coursesForUser2.some((course) =>
       course.teachers?.some((t) => t.userId === userId1),
     );

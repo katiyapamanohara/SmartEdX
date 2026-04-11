@@ -86,9 +86,7 @@ export class CreateUsersTable1700000000000 implements MigrationInterface {
     );
 
     // Enable UUID extension if not already enabled
-    await queryRunner.query(
-      'CREATE EXTENSION IF NOT EXISTS "uuid-ossp"',
-    );
+    await queryRunner.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"');
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
