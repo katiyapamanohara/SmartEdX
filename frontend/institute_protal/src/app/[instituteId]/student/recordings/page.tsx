@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useParams } from "next/navigation";
 import { VideoIcon } from "@/icons";
 import { authService } from "@/services/authService";
-import { instituteService } from "@/services/instituteService";
 
 type RecordingAssignment = {
   id: string;
@@ -23,6 +22,15 @@ type Recording = {
   assignments: RecordingAssignment[];
 };
 
+type VideoQuestion = {
+  id: string;
+  atSeconds: number;
+  question: string;
+  options: [string, string, string, string];
+  marks: number;
+  // correctAnswer omitted — server strips it for students
+};
+
 // Treat the full deadline day as active (end-of-day local time).
 // This avoids relying on the backend's computed `status` field which can be
 // affected by UTC midnight parsing of date-only strings.
@@ -33,9 +41,6 @@ function isAssignmentActive(a: RecordingAssignment): boolean {
   return !isNaN(endOfDay.getTime()) && endOfDay > new Date();
 }
 
-function normalizeKey(value: unknown): string {
-  return String(value ?? "").trim().toLowerCase();
-}
 
 export default function StudentRecordingsPage() {
   const params = useParams();
@@ -51,6 +56,14 @@ export default function StudentRecordingsPage() {
   const [protectionNotice, setProtectionNotice] = useState<string | null>(null);
   const [watermarkTime, setWatermarkTime] = useState(() => new Date().toLocaleString());
 
+  // ── Timed quiz questions ──────────────────────────────────────────────────
+  const [videoQuestions, setVideoQuestions] = useState<VideoQuestion[]>([]);
+  const [answeredIds, setAnsweredIds] = useState<Set<string>>(new Set());
+  const [collectedAnswers, setCollectedAnswers] = useState<Record<string, number>>({});
+  const [activeQuestion, setActiveQuestion] = useState<VideoQuestion | null>(null);
+  const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const [quizResult, setQuizResult] = useState<{ score: number; totalMarks: number; percentage: number } | null>(null);
+
   const protectedVideoRef = useRef<HTMLVideoElement>(null);
   const protectionTimeoutRef = useRef<number | null>(null);
 
@@ -59,44 +72,22 @@ export default function StudentRecordingsPage() {
     if (!instituteId) return;
     if (!silent) { setLoading(true); setError(null); }
     try {
-      const [enrolledCourses, allRecordings] = await Promise.all([
-        instituteService.getMyEnrolledCourses(instituteId),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/institutes/institutes/${instituteId}/recordings`, {
-          method: "GET",
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/institutes/institutes/${instituteId}/recordings/student`,
+        {
           cache: "no-store",
           headers: {
             Authorization: `Bearer ${authService.getToken()}`,
             "Content-Type": "application/json",
           },
-        }).then(async (res) => {
-          if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            throw new Error(err.message || "Failed to fetch recordings");
-          }
-          return (await res.json()) as Recording[];
-        }),
-      ]);
-
-      const enrolledCourseIds = new Set(enrolledCourses.map((c) => normalizeKey(c.id)).filter(Boolean));
-      const enrolledCourseNames = new Set(enrolledCourses.map((c) => normalizeKey(c.name)).filter(Boolean));
-
-      const assignedToStudent = allRecordings
-        .map((r) => {
-          const filteredAssignments = (r.assignments || []).filter((a) => {
-            const assignmentCourseId = normalizeKey(a.courseId);
-            const assignmentCourseName = normalizeKey(a.courseName);
-            return (
-              (assignmentCourseId && enrolledCourseIds.has(assignmentCourseId)) ||
-              (assignmentCourseName && enrolledCourseNames.has(assignmentCourseName))
-            );
-          });
-          return filteredAssignments.length > 0
-            ? { ...r, assignments: filteredAssignments }
-            : null;
-        })
-        .filter(Boolean) as Recording[];
-
-      setRecordings(assignedToStudent);
+        }
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to fetch recordings");
+      }
+      const data = (await res.json()) as Recording[];
+      setRecordings(data);
     } catch (e) {
       console.error(e);
       if (!silent) setError(e instanceof Error ? e.message : "Failed to load recordings");
@@ -160,9 +151,8 @@ export default function StudentRecordingsPage() {
 
   const stats = useMemo(() => {
     const total = recordings.length;
-    const active = recordings.filter((r) => r.assignments.some(isAssignmentActive)).length;
-    const expired = recordings.filter((r) => r.assignments.every((a) => !isAssignmentActive(a))).length;
-    return { total, active, expired };
+    const active = recordings.length; // backend only returns active assignments
+    return { total, active };
   }, [recordings]);
 
   const watermarkIdentity = useMemo(() => {
@@ -277,6 +267,98 @@ export default function StudentRecordingsPage() {
     return () => window.clearInterval(interval);
   }, [playRecording]);
 
+  // Fetch timed questions when a recording starts playing
+  useEffect(() => {
+    if (!playRecording || !instituteId) {
+      setVideoQuestions([]);
+      setAnsweredIds(new Set());
+      setCollectedAnswers({});
+      setActiveQuestion(null);
+      setSelectedOption(null);
+      setQuizResult(null);
+      return;
+    }
+    (async () => {
+      try {
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/institutes/institutes/${instituteId}/recordings/${playRecording.id}/video-questions`,
+          { headers: { Authorization: `Bearer ${authService.getToken()}` } }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setVideoQuestions(data.questions ?? []);
+        }
+      } catch {
+        // non-blocking
+      }
+    })();
+  }, [playRecording, instituteId]);
+
+  // timeupdate handler — check if we've hit a question timestamp
+  const handleVideoTimeUpdate = useCallback(() => {
+    const video = protectedVideoRef.current;
+    if (!video || activeQuestion) return;
+    const currentTime = video.currentTime;
+    const due = videoQuestions.find(
+      (q) => !answeredIds.has(q.id) && currentTime >= q.atSeconds
+    );
+    if (due) {
+      video.pause();
+      setActiveQuestion(due);
+      setSelectedOption(null);
+    }
+  }, [videoQuestions, answeredIds, activeQuestion]);
+
+  // Submit collected answers when the player closes
+  const closePlayer = useCallback(async () => {
+    const rec = playRecording;
+    const answers = collectedAnswers;
+    setPlayRecording(null);
+    setActiveQuestion(null);
+    setSelectedOption(null);
+
+    if (rec && Object.keys(answers).length > 0 && instituteId) {
+      try {
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/institutes/institutes/${instituteId}/recordings/${rec.id}/video-attempt`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${authService.getToken()}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ answers }),
+          }
+        );
+        if (res.ok) {
+          const result = await res.json();
+          setQuizResult(result);
+        }
+      } catch {
+        // fire and forget
+      }
+    }
+  }, [playRecording, collectedAnswers, instituteId]);
+
+  function submitAnswer() {
+    if (!activeQuestion || selectedOption === null) return;
+    const qId = activeQuestion.id;
+    setCollectedAnswers((prev) => ({ ...prev, [qId]: selectedOption }));
+    setAnsweredIds((prev) => new Set([...prev, qId]));
+    setActiveQuestion(null);
+    setSelectedOption(null);
+    // Resume video
+    protectedVideoRef.current?.play();
+  }
+
+  function skipQuestion() {
+    if (!activeQuestion) return;
+    setAnsweredIds((prev) => new Set([...prev, activeQuestion.id]));
+    setActiveQuestion(null);
+    setSelectedOption(null);
+    protectedVideoRef.current?.play();
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between py-4">
@@ -308,7 +390,7 @@ export default function StudentRecordingsPage() {
         {[
           { label: "Assigned", value: loading ? "-" : String(stats.total) },
           { label: "Active", value: loading ? "-" : String(stats.active) },
-          { label: "Expired", value: loading ? "-" : String(stats.expired) },
+          { label: "Expired", value: "0" },
         ].map((s) => (
           <div key={s.label} className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/3">
             <span className="text-sm text-gray-500 dark:text-gray-400">{s.label}</span>
@@ -456,10 +538,24 @@ export default function StudentRecordingsPage() {
         </p>
       )}
 
+      {/* Quiz result toast */}
+      {quizResult && (
+        <div className="fixed bottom-6 right-6 z-50 rounded-2xl border border-brand-200 bg-white dark:bg-gray-800 dark:border-brand-500/40 shadow-2xl p-5 w-72">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="font-semibold text-gray-900 dark:text-white text-sm">Quiz Complete!</h4>
+            <button onClick={() => setQuizResult(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-lg leading-none">&times;</button>
+          </div>
+          <p className="text-3xl font-bold text-brand-600 dark:text-brand-400">{quizResult.percentage}%</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {quizResult.score} / {quizResult.totalMarks} marks
+          </p>
+        </div>
+      )}
+
       {playRecording && (
         <div
           className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90"
-          onClick={() => setPlayRecording(null)}
+          onClick={() => closePlayer()}
         >
           <div className="absolute inset-x-0 top-0 z-20 border-b border-red-300/30 bg-red-600/85 px-4 py-2 text-center text-xs font-semibold text-white">
             Protected stream: downloading and PiP are blocked where supported.
@@ -473,7 +569,7 @@ export default function StudentRecordingsPage() {
 
           <div className="relative mx-4 w-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
             <button
-              onClick={() => setPlayRecording(null)}
+              onClick={() => closePlayer()}
               className="absolute -top-10 right-0 flex items-center gap-1.5 text-sm text-white/70 transition-colors hover:text-white"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -493,9 +589,53 @@ export default function StudentRecordingsPage() {
                 controlsList="nodownload noremoteplayback"
                 disablePictureInPicture
                 onContextMenu={(e) => e.preventDefault()}
+                onTimeUpdate={handleVideoTimeUpdate}
                 className={`max-h-[70vh] w-full rounded-xl bg-black transition-all ${!isWindowFocused ? "blur-xl" : ""}`}
                 style={{ outline: "none" }}
               />
+
+              {/* Timed question overlay */}
+              {activeQuestion && (
+                <div className="absolute inset-0 z-30 flex items-center justify-center rounded-xl bg-black/75 backdrop-blur-sm p-4">
+                  <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-gray-800 p-6 shadow-2xl">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-xs font-semibold text-white bg-brand-500 px-2 py-0.5 rounded-full">
+                        {activeQuestion.marks} mark{activeQuestion.marks !== 1 ? "s" : ""}
+                      </span>
+                      <span className="text-xs text-gray-400 dark:text-gray-500">Video paused</span>
+                    </div>
+                    <p className="text-base font-semibold text-gray-900 dark:text-white mb-4">{activeQuestion.question}</p>
+                    <div className="flex flex-col gap-2 mb-5">
+                      {activeQuestion.options.map((opt, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setSelectedOption(i)}
+                          className={`text-left px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
+                            selectedOption === i
+                              ? "border-brand-500 bg-brand-50 dark:bg-brand-500/20 text-brand-700 dark:text-brand-300"
+                              : "border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-500/10"
+                          }`}
+                        >
+                          <span className="font-bold mr-2">{String.fromCharCode(65 + i)}.</span>
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex gap-3 justify-end">
+                      <button onClick={skipQuestion} className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
+                        Skip
+                      </button>
+                      <button
+                        onClick={submitAnswer}
+                        disabled={selectedOption === null}
+                        className="px-5 py-2 text-sm font-semibold rounded-xl bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
+                      >
+                        Submit &amp; Continue
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
                 <div
@@ -529,7 +669,14 @@ export default function StudentRecordingsPage() {
                   {new Date(playRecording.uploadDate).toLocaleDateString()}
                 </p>
               </div>
-              <span className="text-xs text-white/50">{playRecording.duration ?? ""}</span>
+              <div className="flex items-center gap-3">
+                {videoQuestions.length > 0 && (
+                  <span className="text-xs text-purple-300 font-medium">
+                    {answeredIds.size}/{videoQuestions.length} questions
+                  </span>
+                )}
+                <span className="text-xs text-white/50">{playRecording.duration ?? ""}</span>
+              </div>
             </div>
           </div>
         </div>

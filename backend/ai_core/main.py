@@ -11,7 +11,8 @@ from routers.teacher_chat import router as teacher_chat_router
 from routers.student_chat import router as student_chat_router
 from routers.voice_assessment import router as voice_assessment_router
 from routers.transcription import router as transcription_router
-    
+from routers.teacher_tools import router as teacher_tools_router
+
 app = FastAPI(
     title="SmartEdX AI Core",
     description="AI-powered quiz generation and institute assistant using Agno framework",
@@ -33,6 +34,7 @@ app.include_router(teacher_chat_router)
 app.include_router(student_chat_router)
 app.include_router(voice_assessment_router)
 app.include_router(transcription_router)
+app.include_router(teacher_tools_router)
 
 
 @app.get("/health")

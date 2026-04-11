@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Put,
   Delete,
   Param,
   Body,
@@ -81,6 +82,16 @@ export class RecordingController {
   }
 
   // ── Recordings ─────────────────────────────────────────────────────────────
+
+  @Get('student')
+  @ApiOperation({ summary: 'Student: get recordings from enrolled courses with active deadline' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  getStudentRecordings(
+    @Param('id') instituteId: string,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.recordingService.getStudentRecordings(instituteId, userId);
+  }
 
   @Get()
   @ApiOperation({ summary: 'List all recordings (with optional search & category filter)' })
@@ -170,5 +181,60 @@ export class RecordingController {
     @Param('assignmentId') assignmentId: string,
   ) {
     return this.recordingService.removeAssignment(instituteId, recordingId, assignmentId);
+  }
+
+  // ── Video questions ────────────────────────────────────────────────────────
+
+  @Get(':recordingId/video-questions')
+  @ApiOperation({ summary: 'Get timed questions for a recording' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiParam({ name: 'recordingId', description: 'Recording ID' })
+  @ApiQuery({ name: 'teacher', required: false, description: 'Pass true to include correct answers' })
+  getVideoQuestions(
+    @Param('id') instituteId: string,
+    @Param('recordingId') recordingId: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+    @Query('teacher') teacher?: string,
+  ) {
+    const isTeacher = teacher === 'true' || role === 'teacher' || role === 'admin' || role === 'institute';
+    return this.recordingService.getVideoQuestions(instituteId, recordingId, isTeacher, isTeacher ? undefined : userId);
+  }
+
+  @Put(':recordingId/video-questions')
+  @ApiOperation({ summary: 'Save/replace all timed questions for a recording (teacher)' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiParam({ name: 'recordingId', description: 'Recording ID' })
+  saveVideoQuestions(
+    @Param('id') instituteId: string,
+    @Param('recordingId') recordingId: string,
+    @Body() body: { questions: any[] },
+  ) {
+    return this.recordingService.saveVideoQuestions(instituteId, recordingId, body.questions);
+  }
+
+  @Post(':recordingId/video-attempt')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Student: submit answers for timed video quiz' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiParam({ name: 'recordingId', description: 'Recording ID' })
+  submitVideoAttempt(
+    @Param('id') instituteId: string,
+    @Param('recordingId') recordingId: string,
+    @CurrentUser('userId') userId: string,
+    @Body() body: { answers: Record<string, number> },
+  ) {
+    return this.recordingService.submitVideoAttempt(instituteId, recordingId, userId, body.answers);
+  }
+
+  @Get(':recordingId/video-stats')
+  @ApiOperation({ summary: 'Teacher: get per-student video quiz performance stats' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiParam({ name: 'recordingId', description: 'Recording ID' })
+  getVideoQuizStats(
+    @Param('id') instituteId: string,
+    @Param('recordingId') recordingId: string,
+  ) {
+    return this.recordingService.getVideoQuizStats(instituteId, recordingId);
   }
 }
