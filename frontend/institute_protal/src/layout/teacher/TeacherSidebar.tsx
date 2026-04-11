@@ -77,14 +77,19 @@ const navItems: NavItem[] = [
   },
 
   {
+    icon: <PieChartIcon />,
+    name: "Performance",
+    path: "/teacher/performance",
+  },
+  {
     icon: <DocsIcon />,
     name: "Reports",
     path: "/teacher/reports",
   },
   {
     icon: <PlugInIcon />,
-    name: "Settings",
-    path: "/teacher/settings",
+    name: "AI Tools",
+    path: "/teacher/ai-tools",
   },
 ];
 

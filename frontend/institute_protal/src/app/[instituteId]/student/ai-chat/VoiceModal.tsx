@@ -72,20 +72,7 @@ function base64ToArrayBuffer(b64: string): ArrayBuffer {
   return buf;
 }
 
-function pcmToWav(pcmBuf: ArrayBuffer, sampleRate: number): ArrayBuffer {
-  const dataLen = pcmBuf.byteLength;
-  const wav = new ArrayBuffer(44 + dataLen);
-  const v   = new DataView(wav);
-  const wr  = (o: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
-  wr(0, "RIFF"); v.setUint32(4, 36 + dataLen, true);
-  wr(8, "WAVE"); wr(12, "fmt "); v.setUint32(16, 16, true);
-  v.setUint16(20, 1, true); v.setUint16(22, 1, true);
-  v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true);
-  v.setUint16(32, 2, true); v.setUint16(34, 16, true);
-  wr(36, "data"); v.setUint32(40, dataLen, true);
-  new Uint8Array(wav, 44).set(new Uint8Array(pcmBuf));
-  return wav;
-}
+
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -100,19 +87,12 @@ export default function VoiceModal({
   const [avatarState, setAvatarState] = useState<AvatarState>("idle");
   const [micMuted, setMicMuted]       = useState(false);
   const [errorMsg, setErrorMsg]       = useState("");
-  const [instName, setInstName]       = useState(context.institute_name ?? "");
-  const [instLogo, setInstLogo]       = useState(instituteLogo ?? "");
+  const instName = context.institute_name ?? "";
+  const instLogo = instituteLogo ?? "";
+  const [screenSharing, setScreenSharing] = useState(false);
 
-  // Fetch institute info on mount to get live logo + name
-  useEffect(() => {
-    instituteService.getInstituteById(instituteId).then((info) => {
-      if (info) {
-        if (info.name) setInstName(info.name);
-        if (info.logo) setInstLogo(info.logo);
-      }
-    });
-  }, [instituteId]);
-
+  // Generation counter — incremented on disconnect to cancel stale in-flight connects
+  const connectGenRef    = useRef(0);
   // Audio / WebSocket refs
   const wsRef            = useRef<WebSocket | null>(null);
   const playCtxRef       = useRef<AudioContext | null>(null);
@@ -130,6 +110,11 @@ export default function VoiceModal({
   const playMasterRef    = useRef<GainNode | null>(null);
   const orbRef           = useRef<HTMLDivElement>(null);
   const animFrameRef     = useRef<number>(0);
+  // Screen share refs
+  const screenStreamRef  = useRef<MediaStream | null>(null);
+  const screenVideoRef   = useRef<HTMLVideoElement>(null);
+  const screenCanvasRef  = useRef<HTMLCanvasElement>(null);
+  const screenIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Orb animation loop ────────────────────────────────────────────────────
   const startOrbAnimation = useCallback(() => {
@@ -189,26 +174,34 @@ export default function VoiceModal({
     setAvatarState("speaking");
 
     const version = playVersionRef.current;
-    const wavBuf  = pcmToWav(base64ToArrayBuffer(base64Pcm), 24000);
+    
+    const rawBuf = base64ToArrayBuffer(base64Pcm);
+    const int16Array = new Int16Array(rawBuf);
+    const numSamples = int16Array.length;
+    
+    // Direct conversion to avoid async decoding overhead and latency
+    const audioBuffer = ctx.createBuffer(1, numSamples, 24000);
+    const channelData = audioBuffer.getChannelData(0);
+    for (let i = 0; i < numSamples; i++) {
+      channelData[i] = int16Array[i] / 32768.0;
+    }
 
-    ctx.decodeAudioData(wavBuf, (audioBuffer) => {
-      if (playVersionRef.current !== version) return;
-      const now     = ctx.currentTime;
-      const startAt = Math.max(nextPlayTimeRef.current, now + 0.05);
-      nextPlayTimeRef.current = startAt + audioBuffer.duration;
-      const source  = ctx.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(playMasterRef.current ?? ctx.destination);
-      activeSourcesRef.current.push(source);
-      source.start(startAt);
-      source.onended = () => {
-        activeSourcesRef.current = activeSourcesRef.current.filter((s) => s !== source);
-        if (activeSourcesRef.current.length === 0 && playVersionRef.current === version) {
-          isAISpeakingRef.current = false;
-          setAvatarState((prev) => (prev === "speaking" ? "listening" : prev));
-        }
-      };
-    }, (err) => console.error("[VoiceModal] decodeAudioData:", err));
+    if (playVersionRef.current !== version) return;
+    const now     = ctx.currentTime;
+    const startAt = Math.max(nextPlayTimeRef.current, now + 0.01);
+    nextPlayTimeRef.current = startAt + audioBuffer.duration;
+    const source  = ctx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(playMasterRef.current ?? ctx.destination);
+    activeSourcesRef.current.push(source);
+    source.start(startAt);
+    source.onended = () => {
+      activeSourcesRef.current = activeSourcesRef.current.filter((s) => s !== source);
+      if (activeSourcesRef.current.length === 0 && playVersionRef.current === version) {
+        isAISpeakingRef.current = false;
+        setAvatarState((prev) => (prev === "speaking" ? "listening" : prev));
+      }
+    };
   }, []);
 
   // ── Parse WebSocket events ─────────────────────────────────────────────────
@@ -259,6 +252,9 @@ export default function VoiceModal({
 
   // ── Disconnect everything ─────────────────────────────────────────────────
   const disconnect = useCallback(() => {
+    if (screenIntervalRef.current) { clearInterval(screenIntervalRef.current); screenIntervalRef.current = null; }
+    screenStreamRef.current?.getTracks().forEach((t) => t.stop());
+    screenStreamRef.current = null;
     cancelAnimationFrame(animFrameRef.current);
     playVersionRef.current += 1;
     for (const src of activeSourcesRef.current) { try { src.stop(0); } catch { /* ignore */ } }
@@ -278,11 +274,16 @@ export default function VoiceModal({
     if (wsRef.current && wsRef.current.readyState <= WebSocket.OPEN) wsRef.current.close();
     wsRef.current = null;
     nextPlayTimeRef.current = 0;
+    // Increment generation so any in-flight connect() bails out after its next await
+    connectGenRef.current++;
   }, []);
 
   // ── Connect to voice agent ─────────────────────────────────────────────────
   const connect = useCallback(async () => {
     if (!selectedCourse) return;
+    // Claim this generation — any previous in-flight connect with a smaller gen
+    // will bail out after its next await, preventing React StrictMode double-sessions.
+    const myGen = ++connectGenRef.current;
     setStep("connecting");
     setErrorMsg("");
 
@@ -301,7 +302,30 @@ export default function VoiceModal({
     const userId    = authService.getUserId() ?? "student";
     const sessionId = `cva-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const wsBase    = process.env.NEXT_PUBLIC_VOICE_AGENT_WS_URL ?? "ws://localhost:5001/voice-agent";
-    const wsUrl     = wsUrlProp ?? `${wsBase}/ws/course-qa/${instituteId}/${selectedCourse.id}/${userId}/${sessionId}?course_name=${encodeURIComponent(selectedCourse.name)}`;
+    // Suppress backend greeting for assessment sessions — they send their own init prompt
+    const greetParam = initMessage ? "&greet=false" : "";
+    const wsUrl     = wsUrlProp ?? `${wsBase}/ws/course-qa/${instituteId}/${selectedCourse.id}/${userId}/${sessionId}?course_name=${encodeURIComponent(selectedCourse.name)}${greetParam}`;
+
+    // Acquire mic permission before opening WS so both happen concurrently
+    let preStream: MediaStream;
+    try {
+      preStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        } as any,
+      });
+    } catch {
+      setErrorMsg("Microphone access denied. Please allow microphone and try again.");
+      setStep("error");
+      return;
+    }
+
+    // Bail if disconnect() was called while getUserMedia was pending
+    if (connectGenRef.current !== myGen) { preStream.getTracks().forEach((t) => t.stop()); return; }
 
     let ws: WebSocket;
     try {
@@ -309,6 +333,7 @@ export default function VoiceModal({
       ws.binaryType = "arraybuffer";
       wsRef.current = ws;
     } catch {
+      preStream.getTracks().forEach((t) => t.stop());
       setErrorMsg("Failed to open WebSocket connection.");
       setStep("error");
       return;
@@ -316,7 +341,7 @@ export default function VoiceModal({
 
     ws.onopen = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } as any });
+        const stream = preStream;
         streamRef.current = stream;
 
         const micCtx  = new AudioContext({ sampleRate: 16000 });
@@ -325,21 +350,36 @@ export default function VoiceModal({
         const micAnalyser = micCtx.createAnalyser();
         micAnalyser.fftSize = 256;
         micAnalyserRef.current = micAnalyser;
-        const processor = micCtx.createScriptProcessor(2048, 1, 1);
+        const processor        = micCtx.createScriptProcessor(1024, 1, 1);
         processorRef.current = processor;
 
         const BARGE_IN_THRESHOLD = 0.022;
-        const BARGE_IN_FRAMES    = 2;
+        const BARGE_IN_FRAMES    = 1;
         let bargeInCount = 0;
+
+        const VAD_THRESHOLD = 0.01;
+        const VAD_HANG_FRAMES = 7; // Half second hangover
+        let vadSilenceCount = 0;
 
         processor.onaudioprocess = (e: AudioProcessingEvent) => {
           const samples = e.inputBuffer.getChannelData(0);
-          if (ws.readyState === WebSocket.OPEN) ws.send(float32ToInt16(samples));
+          
+          let sum = 0;
+          for (let k = 0; k < samples.length; k++) sum += samples[k] * samples[k];
+          const rms = Math.sqrt(sum / samples.length);
+
+          if (rms > VAD_THRESHOLD) {
+            vadSilenceCount = 0;
+          } else {
+            vadSilenceCount++;
+          }
+
+          if (vadSilenceCount <= VAD_HANG_FRAMES) {
+             if (ws.readyState === WebSocket.OPEN) ws.send(float32ToInt16(samples));
+          }
 
           if (isAISpeakingRef.current) {
-            let sum = 0;
-            for (let k = 0; k < samples.length; k++) sum += samples[k] * samples[k];
-            if (Math.sqrt(sum / samples.length) > BARGE_IN_THRESHOLD) {
+            if (rms > BARGE_IN_THRESHOLD) {
               if (++bargeInCount >= BARGE_IN_FRAMES) { bargeInCount = 0; stopAllAudioRef.current(); }
             } else { bargeInCount = 0; }
           } else { bargeInCount = 0; }
@@ -359,8 +399,8 @@ export default function VoiceModal({
         startOrbAnimation();
         setStep("session");
         setAvatarState("listening");
-      } catch {
-        setErrorMsg("Microphone access denied. Please allow microphone and try again.");
+      } catch (err) {
+        setErrorMsg("Audio setup failed. Please refresh and try again.");
         setStep("error");
         ws.close();
       }
@@ -416,21 +456,37 @@ export default function VoiceModal({
         const micAnalyser = micCtx.createAnalyser();
         micAnalyser.fftSize    = 256;
         micAnalyserRef.current = micAnalyser;
-        const processor        = micCtx.createScriptProcessor(2048, 1, 1);
+        const processor        = micCtx.createScriptProcessor(1024, 1, 1);
         processorRef.current   = processor;
 
         const ws = wsRef.current;
         const BARGE_IN_THRESHOLD = 0.022;
-        const BARGE_IN_FRAMES    = 2;
+        const BARGE_IN_FRAMES    = 1;
         let bargeInCount = 0;
+
+        const VAD_THRESHOLD = 0.01;
+        const VAD_HANG_FRAMES = 7; 
+        let vadSilenceCount = 0;
 
         processor.onaudioprocess = (e: AudioProcessingEvent) => {
           const samples = e.inputBuffer.getChannelData(0);
-          if (ws && ws.readyState === WebSocket.OPEN) ws.send(float32ToInt16(samples));
+          
+          let sum = 0;
+          for (let k = 0; k < samples.length; k++) sum += samples[k] * samples[k];
+          const rms = Math.sqrt(sum / samples.length);
+
+          if (rms > VAD_THRESHOLD) {
+            vadSilenceCount = 0;
+          } else {
+            vadSilenceCount++;
+          }
+
+          if (vadSilenceCount <= VAD_HANG_FRAMES) {
+             if (ws && ws.readyState === WebSocket.OPEN) ws.send(float32ToInt16(samples));
+          }
+
           if (isAISpeakingRef.current) {
-            let sum = 0;
-            for (let k = 0; k < samples.length; k++) sum += samples[k] * samples[k];
-            if (Math.sqrt(sum / samples.length) > BARGE_IN_THRESHOLD) {
+            if (rms > BARGE_IN_THRESHOLD) {
               if (++bargeInCount >= BARGE_IN_FRAMES) { bargeInCount = 0; stopAllAudioRef.current(); }
             } else { bargeInCount = 0; }
           } else { bargeInCount = 0; }
@@ -450,7 +506,72 @@ export default function VoiceModal({
     }
   }
 
-  const handleClose = () => { disconnect(); onClose(); };
+  // ── Screen share ──────────────────────────────────────────────────────────
+  const stopScreenShare = useCallback(() => {
+    if (screenIntervalRef.current) { clearInterval(screenIntervalRef.current); screenIntervalRef.current = null; }
+    screenStreamRef.current?.getTracks().forEach((t) => t.stop());
+    screenStreamRef.current = null;
+    if (screenVideoRef.current) screenVideoRef.current.srcObject = null;
+    setScreenSharing(false);
+    const ws = wsRef.current;
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "screen_share_stop" }));
+    }
+  }, []);
+
+  const startScreenShare = useCallback(async () => {
+    try {
+      const stream = await (navigator.mediaDevices as any).getDisplayMedia({ video: { frameRate: 1 }, audio: false });
+      screenStreamRef.current = stream;
+
+      // When user stops via browser native button
+      stream.getVideoTracks()[0].onended = () => stopScreenShare();
+
+      // Attach to hidden video element
+      if (screenVideoRef.current) {
+        screenVideoRef.current.srcObject = stream;
+        await screenVideoRef.current.play().catch(() => {});
+      }
+
+      setScreenSharing(true);
+
+      // Notify AI that screen share started
+      const ws = wsRef.current;
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "screen_share_start" }));
+      }
+
+      // Capture frame every 1.5s and send via WebSocket
+      screenIntervalRef.current = setInterval(() => {
+        const video  = screenVideoRef.current;
+        const canvas = screenCanvasRef.current;
+        const wsCurr = wsRef.current;
+        if (!video || !canvas || !wsCurr || wsCurr.readyState !== WebSocket.OPEN) return;
+        if (video.videoWidth === 0 || video.videoHeight === 0) return;
+
+        const W = Math.min(video.videoWidth,  1280);
+        const H = Math.round(video.videoHeight * (W / video.videoWidth));
+        canvas.width  = W;
+        canvas.height = H;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.drawImage(video, 0, 0, W, H);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+        const base64  = dataUrl.split(",")[1];
+        wsCurr.send(JSON.stringify({ type: "image", data: base64, mimeType: "image/jpeg" }));
+      }, 1500);
+    } catch {
+      // User cancelled or permission denied — ignore
+    }
+  }, [stopScreenShare]);
+
+  // Stop screen share on disconnect
+  const disconnectWithScreen = useCallback(() => {
+    stopScreenShare();
+    disconnect();
+  }, [stopScreenShare, disconnect]);
+
+  const handleClose = () => { disconnectWithScreen(); onClose(); };
 
   // Extract assessment data from initMessage for display
   const assessmentData = initMessage?.type === "assessment_init"
@@ -585,6 +706,43 @@ export default function VoiceModal({
         </span>
       </div>
 
+      {/* Screen share preview (video always mounted so ref is available; hidden when not sharing) */}
+      <video ref={screenVideoRef} autoPlay muted playsInline className="hidden" />
+
+      {screenSharing && (
+        <div className="mb-6 w-full max-w-sm px-6">
+          <div className="relative rounded-2xl overflow-hidden border-2 border-blue-400/60 shadow-lg shadow-blue-500/20">
+            {/* Mirror of the hidden video — shows live preview */}
+            <video
+              autoPlay
+              muted
+              playsInline
+              ref={(el) => { if (el && screenStreamRef.current) el.srcObject = screenStreamRef.current; }}
+              className="w-full rounded-2xl object-contain bg-black max-h-40"
+            />
+            <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500 text-white text-xs font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+              LIVE
+            </div>
+            <button
+              onClick={stopScreenShare}
+              className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-white hover:bg-red-500 transition-colors"
+              title="Stop sharing"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <p className="text-xs text-center mt-2" style={{ color: isDark ? "#6b7280" : "#9ca3af" }}>
+            AI can see your screen — 1 frame / 1.5s
+          </p>
+        </div>
+      )}
+
+      {/* Hidden canvas for screen frame capture */}
+      <canvas ref={screenCanvasRef} className="hidden" />
+
       {/* Controls */}
       <div className="flex items-center gap-4">
         {/* Mute toggle — only while in session */}
@@ -602,6 +760,35 @@ export default function VoiceModal({
             ) : (
               <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+              </svg>
+            )}
+          </button>
+        )}
+
+        {/* Screen share toggle — only while in session */}
+        {step === "session" && (
+          <button
+            onClick={screenSharing ? stopScreenShare : startScreenShare}
+            className={`w-16 h-16 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95`}
+            style={{
+              background: screenSharing
+                ? "rgba(59,130,246,0.25)"
+                : isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)",
+              backdropFilter: "blur(12px)",
+              color: screenSharing ? "#60a5fa" : isDark ? "#ffffff" : "#111827",
+              boxShadow: screenSharing ? "0 0 0 2px rgba(59,130,246,0.5)" : "none",
+            }}
+            title={screenSharing ? "Stop screen share" : "Share screen"}
+          >
+            {screenSharing ? (
+              /* Stop share icon */
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0H3" />
+              </svg>
+            ) : (
+              /* Share screen icon */
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0H3M12 12.75l3-3m0 0-3-3m3 3H9" />
               </svg>
             )}
           </button>

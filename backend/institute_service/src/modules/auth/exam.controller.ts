@@ -1,6 +1,6 @@
 import {
   Controller, Get, Post, Patch, Delete,
-  Body, Param, UseGuards,
+  Body, Param, UseGuards, HttpCode, HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
 import { ExamService } from './exam.service';
@@ -88,6 +88,63 @@ export class ExamController {
     @CurrentUser('role') role: string,
   ) {
     return this.examService.remove(instituteId, examId, userId, role);
+  }
+
+  // ── Integrity ─────────────────────────────────────────────────────────────
+
+  @Get('integrity-flags')
+  @ApiOperation({ summary: 'Teacher: get all integrity flags across my exams' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  getIntegrityFlags(
+    @Param('id') instituteId: string,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.examService.getIntegrityFlagsForTeacher(instituteId, userId);
+  }
+
+  @Post(':examId/integrity-flag')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Student: report an integrity violation during exam' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiParam({ name: 'examId', description: 'Exam ID' })
+  reportIntegrityFlag(
+    @Param('id') instituteId: string,
+    @Param('examId') examId: string,
+    @CurrentUser('userId') userId: string,
+    @Body() body: { type: string },
+  ) {
+    return this.examService.reportIntegrityFlag(instituteId, examId, userId, body.type as any);
+  }
+
+  @Patch(':examId/integrity-flag/:flagId/reviewed')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Teacher: mark an integrity flag as reviewed' })
+  markFlagReviewed(
+    @Param('id') instituteId: string,
+    @Param('examId') examId: string,
+    @Param('flagId') flagId: string,
+    @CurrentUser('userId') teacherUserId: string,
+    @Body() body: { userId: string },
+  ) {
+    return this.examService.markFlagReviewed(instituteId, examId, body.userId, flagId, teacherUserId);
+  }
+
+  // ── Essay grading ─────────────────────────────────────────────────────────
+
+  @Patch(':examId/grade-essay/:studentId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Teacher: save AI-generated essay grade for a student' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiParam({ name: 'examId', description: 'Exam ID' })
+  @ApiParam({ name: 'studentId', description: 'Student user ID' })
+  saveEssayGrade(
+    @Param('id') instituteId: string,
+    @Param('examId') examId: string,
+    @Param('studentId') studentId: string,
+    @CurrentUser('userId') teacherUserId: string,
+    @Body() body: { questionId: string; score: number; feedback: string },
+  ) {
+    return this.examService.saveEssayGrade(instituteId, examId, studentId, teacherUserId, body);
   }
 
   // ── Student ───────────────────────────────────────────────────────────────

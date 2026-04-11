@@ -36,6 +36,7 @@ import { ExamService } from './exam.service';
 import { LiveClassController } from './live-class.controller';
 import { LiveClassService } from './live-class.service';
 import { LiveGateway } from './live.gateway';
+import { VoiceSessionController } from './voice-session.controller';
 
 @Module({
   imports: [
@@ -54,7 +55,7 @@ import { LiveGateway } from './live.gateway';
       inject: [ConfigService],
     }),
   ],
-  controllers: [AuthController, InstituteUserController, CourseController, CourseModuleController, ModuleContentController, RecordingController, MessageController, NotificationController, ExamController, LiveClassController],
+  controllers: [AuthController, InstituteUserController, CourseController, CourseModuleController, ModuleContentController, RecordingController, MessageController, NotificationController, ExamController, LiveClassController, VoiceSessionController],
   providers: [
     AuthService,
     CourseService,

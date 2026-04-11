@@ -393,7 +393,9 @@ class SIPCallSession:
                                 for part in event.content.parts:
                                     if hasattr(part, "inline_data") and part.inline_data:
                                         adk_audio = part.inline_data.data
-                                        sip_audio = self.codec.pcm16k_to_sip(adk_audio)
+                                        mime = getattr(part.inline_data, "mime_type", "") or ""
+                                        rate = AudioCodec.parse_sample_rate(mime, default=24000)
+                                        sip_audio = self.codec.pcm16k_to_sip(adk_audio, input_rate=rate)
                                         self.audio_buffer.append(sip_audio)
 
                                 turn_complete = getattr(event, "turn_complete", False) or getattr(

@@ -444,8 +444,8 @@ def get_runner_for_course(
         f"- If the answer is not in the course material, say so honestly and suggest the student\n"
         f"  consult their teacher or course notes.\n"
         f"- Be encouraging and supportive — you are a tutor, not just a search engine.\n"
-        f"\nCOURSE MATERIAL SEARCH: ALWAYS call search_course_material before answering any question\n"
-        f"about the course content. Do not answer from memory alone."
+        f"\nCOURSE MATERIAL SEARCH: Only call search_course_material if the user asks a specific question\n"
+        f"about facts, topics, or details from the course content. Do not use it for general conversation."
     )
 
     safe_id = course_id.replace("-", "_")
@@ -455,6 +455,7 @@ def get_runner_for_course(
         tools=[
             FunctionTool(func=search_course_material),
             FunctionTool(func=end_call),
+            FunctionTool(func=evaluate_voice_assessment),
         ],
         instruction=system_instructions,
     )

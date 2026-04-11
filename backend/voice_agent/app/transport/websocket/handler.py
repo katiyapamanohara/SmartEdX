@@ -38,6 +38,7 @@ async def websocket_endpoint(
     proactivity: bool = False,
     affective_dialog: bool = False,
     language: Optional[str] = None,
+    greet: bool = True,
 ) -> None:
     """WebSocket endpoint for bidirectional streaming with ADK.
 
@@ -83,6 +84,24 @@ async def websocket_endpoint(
     live_request_queue = await mgr.initialize()
     t_first_response = latency.start_timer()
     first_response_recorded = False
+
+    # Kick off the model's greeting immediately — without this, native-audio
+    # models wait silently for user speech before saying anything.
+    # Suppressed for assessment sessions which send their own init prompt.
+    if greet:
+        greeting_trigger = types.Content(
+            parts=[types.Part(text=(
+                "[SESSION STARTED] This is a LIVE voice conversation — respond like a real person talking, not a formal assistant.\n"
+                "Rules for this session:\n"
+                "- Keep EVERY response to 1-2 short sentences maximum.\n"
+                "- Speak at normal conversational speed — do NOT slow down.\n"
+                "- No preamble, no 'Great question!', no filler. Just answer directly.\n"
+                "- After answering, stop and wait — do not add follow-up questions unless necessary.\n"
+                "Now: greet the student in one short sentence and ask what they need."
+            ))],
+            role="user",
+        )
+        live_request_queue.send_content(greeting_trigger)
 
     # Register audio clip queue for this session (no-op overhead if map is empty)
     audio_clip_queue = register_session_audio_queue(session_id) if AUDIO_CLIP_TOOL_MAP else None
@@ -195,10 +214,29 @@ async def websocket_endpoint(
                     logger.info(f"WS {session_id}: end_assessment early-exit signal sent")
 
                 elif json_message.get("type") == "image":
+                    # Screen frame sent by client — feed directly into Gemini Live as realtime vision
                     image_data = base64.b64decode(json_message["data"])
                     mime_type = json_message.get("mimeType", "image/jpeg")
                     image_blob = types.Blob(mime_type=mime_type, data=image_data)
                     live_request_queue.send_realtime(image_blob)
+                    logger.debug(f"WS {session_id}: screen frame received ({len(image_data)} bytes, {mime_type})")
+
+                elif json_message.get("type") == "screen_share_start":
+                    # Student started screen sharing — inject context note for the AI
+                    ctx = types.Content(
+                        parts=[types.Part(text="[The student has started sharing their screen. You can now see their screen in the video frames being sent. Use this visual context to better assist them.]")],
+                        role="user",
+                    )
+                    live_request_queue.send_content(ctx)
+                    logger.info(f"WS {session_id}: screen share started")
+
+                elif json_message.get("type") == "screen_share_stop":
+                    ctx = types.Content(
+                        parts=[types.Part(text="[The student has stopped sharing their screen.]")],
+                        role="user",
+                    )
+                    live_request_queue.send_content(ctx)
+                    logger.info(f"WS {session_id}: screen share stopped")
 
     async def downstream_task() -> None:
         """Receives events from run_live() and sends to WebSocket."""

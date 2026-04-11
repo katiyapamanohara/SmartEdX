@@ -487,4 +487,75 @@ export class CourseService {
       score,
     };
   }
+
+  async searchCourseKB(instituteId: string, courseId: string, query: string) {
+    const results = await this.voiceAgentClient.searchCourseKB(instituteId, courseId, query, 3);
+    return { results };
+  }
+
+  // ── Student report data ────────────────────────────────────────────────────
+
+  async getTeacherStudentReport(instituteId: string, teacherUserId: string) {
+    const courses = await this.courseRepository.findCoursesWithQuizzesAndStudentsByTeacher(
+      teacherUserId,
+      instituteId,
+    );
+
+    // Gather all unique students across teacher's courses
+    const studentMap = new Map<string, {
+      userId: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+      courses: {
+        courseId: string;
+        courseName: string;
+        quizzes: { contentId: string; contentTitle: string; score: number | null; totalMarks: number; attemptedAt: string | null }[];
+      }[];
+    }>();
+
+    for (const course of courses) {
+      const students = (course as any).students ?? [];
+      const quizContents = ((course as any).modules ?? []).flatMap((m: any) =>
+        (m.contents ?? []).map((c: any) => {
+          const questions = c.quizData?.questions ?? [];
+          const totalMarks = questions.reduce((s: number, q: any) => s + (q.marks ?? 1), 0) || 10;
+          return { contentId: c.id, contentTitle: c.title, studentAttempts: c.studentAttempts ?? {}, totalMarks };
+        })
+      );
+
+      for (const student of students) {
+        const uid = student.userId;
+        if (!studentMap.has(uid)) {
+          studentMap.set(uid, {
+            userId: uid,
+            firstName: student.user?.firstName ?? '',
+            lastName: student.user?.lastName ?? '',
+            email: student.user?.email ?? '',
+            courses: [],
+          });
+        }
+        const entry = studentMap.get(uid)!;
+
+        const quizResults = quizContents.map((q: any) => {
+          const attempt = q.studentAttempts[uid];
+          return {
+            contentId: q.contentId,
+            contentTitle: q.contentTitle,
+            score: attempt ? (attempt.score ?? attempt.totalScore ?? null) : null,
+            totalMarks: q.totalMarks,
+            attemptedAt: attempt?.attemptedAt ?? attempt?.completedAt ?? null,
+          };
+        });
+
+        entry.courses.push({
+          courseId: course.id,
+          courseName: course.name,
+          quizzes: quizResults,
+        });
+      }
+    }
+
+    return Array.from(studentMap.values());
+  }
 }

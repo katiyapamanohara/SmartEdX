@@ -1,6 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+export interface KbSearchResult {
+  content: string;
+  page: number | null;
+  title: string;
+  score: number;
+}
+
 export interface IndexContentPayload {
   institute_id: string;
   course_id: string;
@@ -60,6 +67,36 @@ export class VoiceAgentClient {
       this.logger.error(
         `[voice-agent] Failed to queue indexing for content ${payload.content_id}: ${err}`,
       );
+    }
+  }
+
+  /**
+   * Semantic search within a course's Qdrant collection.
+   * Returns the top matching content chunks for the given query.
+   */
+  async searchCourseKB(
+    instituteId: string,
+    courseId: string,
+    query: string,
+    limit = 3,
+  ): Promise<KbSearchResult[]> {
+    const url = `${this.baseUrl}/api/course-kb/search`;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ institute_id: instituteId, course_id: courseId, query, limit }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!response.ok) {
+        this.logger.warn(`[voice-agent] kb-search returned ${response.status}`);
+        return [];
+      }
+      const data = await response.json();
+      return (data.results ?? []) as KbSearchResult[];
+    } catch (err) {
+      this.logger.error(`[voice-agent] kb-search failed: ${err}`);
+      return [];
     }
   }
 

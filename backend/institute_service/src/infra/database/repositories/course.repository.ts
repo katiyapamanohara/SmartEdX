@@ -101,4 +101,19 @@ export class CourseRepository extends BaseRepository<Course> {
       .orderBy('course.createdAt', 'DESC')
       .getMany();
   }
+
+  async findCoursesWithQuizzesAndStudentsByTeacher(userId: string, instituteId: string): Promise<Course[]> {
+    return this.courseRepository
+      .createQueryBuilder('course')
+      .innerJoin('course.teachers', 'teacher', 'teacher.userId = :userId', { userId })
+      .leftJoinAndSelect('course.students', 'student')
+      .leftJoinAndSelect('student.user', 'studentUser')
+      .leftJoinAndSelect('course.modules', 'module')
+      .leftJoinAndSelect('module.contents', 'content', "content.type = 'quiz'")
+      .where('course.instituteId = :instituteId', { instituteId })
+      .orderBy('course.createdAt', 'DESC')
+      .addOrderBy('module.order', 'ASC')
+      .addOrderBy('content.order', 'ASC')
+      .getMany();
+  }
 }

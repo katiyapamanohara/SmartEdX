@@ -4,6 +4,7 @@ Centralizes the duplicated session init → greeting → streaming → cleanup
 pattern used by all three transports (WebSocket, SIP-over-WS, native SIP).
 """
 
+import asyncio
 import logging
 from typing import Optional
 
@@ -60,6 +61,7 @@ class ADKSessionManager:
         self.transcript_handler = TranscriptHandler(session_id, transcript_store, self.langfuse)
         self.live_request_queue: Optional[LiveRequestQueue] = None
         self.core_session_id: Optional[str] = None
+        self._core_session_task: Optional[asyncio.Task] = None
 
     def _build_language_lock_prompt(self) -> str:
         """Return a strict language lock policy for the current session.
@@ -102,21 +104,26 @@ class ADKSessionManager:
 
         self.live_request_queue = LiveRequestQueue()
 
-        # Start SmartEdX Core session (non-fatal)
-        try:
-            core_response = start_assistant_session(
-                session_id=self.session_id,
-                user_id=self.user_id,
-                institute_id=self.institute_id,
-                is_sip=self.is_sip,
-                call_id=self.call_id,
-            )
-            self.core_session_id = core_response.get("session_id") or core_response.get("id")
-            logger.debug(f"Started Core session: {self.core_session_id}")
-        except requests.exceptions.HTTPError as e:
-            logger.warning(f"Core session start failed (HTTP {e.response.status_code}): {e}")
-        except requests.exceptions.RequestException as e:
-            logger.warning(f"Core unreachable: {e}")
+        # Start SmartEdX Core session in a background thread — non-fatal and
+        # not needed until finalize(), so don't block the voice stream startup.
+        async def _start_core_session():
+            try:
+                core_response = await asyncio.to_thread(
+                    start_assistant_session,
+                    session_id=self.session_id,
+                    user_id=self.user_id,
+                    institute_id=self.institute_id,
+                    is_sip=self.is_sip,
+                    call_id=self.call_id,
+                )
+                self.core_session_id = core_response.get("session_id") or core_response.get("id")
+                logger.debug(f"Started Core session: {self.core_session_id}")
+            except requests.exceptions.HTTPError as e:
+                logger.warning(f"Core session start failed (HTTP {e.response.status_code}): {e}")
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"Core unreachable: {e}")
+
+        self._core_session_task = asyncio.create_task(_start_core_session())
 
         latency.stop_timer("session_init", t_init, self.session_id)
         return self.live_request_queue
@@ -146,11 +153,18 @@ class ADKSessionManager:
             usage_details=accumulated_usage,
         )
 
+        # Ensure Core session start task has completed (fast if already done)
+        if self._core_session_task is not None:
+            try:
+                await asyncio.wait_for(self._core_session_task, timeout=5.0)
+            except (asyncio.TimeoutError, Exception):
+                pass
+
         # End Core session
         if self.core_session_id is not None:
             try:
                 final_transcript = self.transcript_handler.get_transcript()
-                end_assistant_session(session_id=self.core_session_id, history=final_transcript)
+                await asyncio.to_thread(end_assistant_session, session_id=self.core_session_id, history=final_transcript)
                 logger.debug(f"Ended Core session: {self.core_session_id}")
             except requests.exceptions.RequestException as e:
                 logger.warning(f"Core session end failed: {e}")
