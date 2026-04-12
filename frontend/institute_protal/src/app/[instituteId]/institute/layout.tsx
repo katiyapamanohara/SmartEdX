@@ -4,7 +4,6 @@ import { useSidebar } from "@/context/SidebarContext";
 import InstituteHeader from "@/layout/institute/InstituteHeader";
 import InstituteSidebar from "@/layout/institute/InstituteSidebar";
 import InstituteBackdrop from "@/layout/institute/InstituteBackdrop";
-import FloatingAiChat from "@/components/institute/FloatingAiChat";
 import React, { useEffect } from "react";
 import { useParams } from "next/navigation";
 import { authService } from "@/services/authService";
@@ -46,8 +45,6 @@ export default function InstituteLayout({
         <div className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">{children}</div>
       </div>
 
-      {/* Global AI Assistant — available on every page */}
-      <FloatingAiChat instituteId={instituteId} />
     </div>
   );
 }

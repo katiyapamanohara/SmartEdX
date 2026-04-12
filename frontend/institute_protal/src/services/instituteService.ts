@@ -6,6 +6,7 @@ export interface Institute {
   logo?: string;
   plan?: string;
   enabledFeatures?: string[];
+  currency?: string;
 }
 
 export interface Course {
@@ -17,6 +18,9 @@ export interface Course {
   description?: string;
   instituteId?: string;
   moduleCount?: number;
+  price?: number | null;
+  paymentType?: 'fixed' | 'monthly';
+  monthlyPrice?: number | null;
   assignedTeacher?: {
     id: string;
     firstName: string;

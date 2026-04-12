@@ -39,6 +39,9 @@ export class Institute {
   @Column({ nullable: true })
   phoneNumber: string;
 
+  @Column({ type: 'varchar', length: 10, default: 'USD', nullable: true })
+  currency: string;
+
   @Column({ type: 'text', nullable: true })
   primaryUseCases: string; // Stored as JSON string
 

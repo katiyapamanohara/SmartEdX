@@ -6,6 +6,12 @@ import CourseList from "./components/CourseList";
 import CourseModal from "./components/CourseModal";
 import { FiPlus, FiSearch } from "react-icons/fi";
 
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: "$", EUR: "€", GBP: "£", INR: "₹", AUD: "A$", CAD: "C$",
+  SGD: "S$", AED: "د.إ", LKR: "Rs", JPY: "¥", CNY: "¥", BRL: "R$",
+  MYR: "RM", NGN: "₦", PKR: "₨", ZAR: "R",
+};
+
 const CoursesPage = () => {
   const params = useParams();
   const instituteId = params?.instituteId as string;
@@ -16,10 +22,14 @@ const CoursesPage = () => {
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [searchCode, setSearchCode] = useState("");
   const [searchBatch, setSearchBatch] = useState("");
+  const [currencySym, setCurrencySym] = useState("$");
 
   useEffect(() => {
     if (instituteId) {
       fetchCourses();
+      instituteService.getInstituteById(instituteId).then((inst) => {
+        if (inst?.currency) setCurrencySym(CURRENCY_SYMBOLS[inst.currency] ?? inst.currency);
+      });
     }
   }, [instituteId]);
 
@@ -135,6 +145,7 @@ const CoursesPage = () => {
         isLoading={isLoading}
         onEdit={handleEditCourse}
         onDelete={handleDeleteCourse}
+        currencySym={currencySym}
       />
 
       <CourseModal

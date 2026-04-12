@@ -5,6 +5,12 @@ import { instituteService, Course } from "@/services/instituteService";
 import { BoxIconLine } from "@/icons";
 import { useFeatures } from "@/context/InstituteFeatureContext";
 
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: "$", EUR: "€", GBP: "£", INR: "₹", AUD: "A$", CAD: "C$",
+  SGD: "S$", AED: "د.إ", LKR: "Rs", JPY: "¥", CNY: "¥", BRL: "R$",
+  MYR: "RM", NGN: "₦", PKR: "₨", ZAR: "R",
+};
+
 export default function StudentMyCoursesPage() {
   const params = useParams();
   const router = useRouter();
@@ -12,14 +18,19 @@ export default function StudentMyCoursesPage() {
   const { hasFeature } = useFeatures();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currencySym, setCurrencySym] = useState("$");
 
   useEffect(() => {
     if (!instituteId) return;
     (async () => {
       setLoading(true);
       try {
-        const data = await instituteService.getMyEnrolledCourses(instituteId);
+        const [data, inst] = await Promise.all([
+          instituteService.getMyEnrolledCourses(instituteId),
+          instituteService.getInstituteById(instituteId),
+        ]);
         setCourses(data);
+        if (inst?.currency) setCurrencySym(CURRENCY_SYMBOLS[inst.currency] ?? inst.currency);
       } catch (e) {
         console.error(e);
       } finally {
@@ -94,11 +105,20 @@ export default function StudentMyCoursesPage() {
               key={course.id}
               className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 overflow-hidden hover:shadow-md transition-shadow"
             >
-              {course.coverImage ? (
-                <img src={course.coverImage} alt={course.name} className="w-full h-36 object-cover" />
-              ) : (
-                <div className="w-full h-36 bg-linear-to-br from-brand-500 to-purple-500" />
-              )}
+              <div className="relative">
+                {course.coverImage ? (
+                  <img src={course.coverImage} alt={course.name} className="w-full h-36 object-cover" />
+                ) : (
+                  <div className="w-full h-36 bg-linear-to-br from-brand-500 to-purple-500" />
+                )}
+                <span className={`absolute bottom-2 right-2 px-2.5 py-1 text-xs font-bold rounded-lg backdrop-blur-sm border ${
+                  course.price
+                    ? "bg-green-500/80 text-white border-green-400/40"
+                    : "bg-white/20 text-white border-white/30"
+                }`}>
+                  {course.price ? `${currencySym}${parseFloat(String(course.price)).toFixed(2)}` : "Free"}
+                </span>
+              </div>
               <div className="p-5">
                 <h3 className="font-semibold text-gray-800 dark:text-white text-base leading-snug">{course.name}</h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Code: {course.code}</p>
