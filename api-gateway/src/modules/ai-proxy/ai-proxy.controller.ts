@@ -255,6 +255,60 @@ export class AiProxyController {
     );
   }
 
+  // ── Teacher tools: lesson plan (JSON or multipart with optional file) ───────
+  @Post('teacher-tools/lesson-plan')
+  @ApiOperation({ summary: 'Generate a lesson plan (optionally from uploaded file)' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
+  async lessonPlan(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: any,
+    @Headers() headers: any,
+  ) {
+    return this.aiProxyService.forwardTeacherToolsLessonPlan(
+      'api/teacher-tools/lesson-plan',
+      file,
+      body,
+      headers,
+    );
+  }
+
+  // ── Teacher tools: essay grader ──────────────────────────────────────────────
+  @Post('teacher-tools/grade-essay')
+  @ApiOperation({ summary: 'Grade a student essay with AI' })
+  async gradeEssay(@Body() body: any, @Headers() headers: any) {
+    return this.aiProxyService.forwardRequest(
+      'api/teacher-tools/grade-essay',
+      'POST',
+      body,
+      headers,
+    );
+  }
+
+  // ── Teacher tools: class performance insights ────────────────────────────────
+  @Post('teacher-tools/class-insights')
+  @ApiOperation({ summary: 'Generate class performance insights' })
+  async classInsights(@Body() body: any, @Headers() headers: any) {
+    return this.aiProxyService.forwardRequest(
+      'api/teacher-tools/class-insights',
+      'POST',
+      body,
+      headers,
+    );
+  }
+
+  // ── Teacher tools: at-risk student analysis ──────────────────────────────────
+  @Post('teacher-tools/at-risk')
+  @ApiOperation({ summary: 'Identify at-risk students' })
+  async atRisk(@Body() body: any, @Headers() headers: any) {
+    return this.aiProxyService.forwardRequest(
+      'api/teacher-tools/at-risk',
+      'POST',
+      body,
+      headers,
+    );
+  }
+
   // ── Catch-all for everything else (health, docs, etc.) ────────
   @All('*')
   @ApiOperation({ summary: 'Proxy all other AI Core requests' })

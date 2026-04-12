@@ -37,6 +37,7 @@ export default function TeacherVirtualLabsPage() {
   const [isAssigning, setIsAssigning] = useState(false);
   const [assignSuccess, setAssignSuccess] = useState(false);
   const [loadingCourses, setLoadingCourses] = useState(false);
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
 
   const subjects = ["all", ...Object.keys(SUBJECT_META)];
   const difficulties = ["all", "beginner", "intermediate", "advanced"];
@@ -126,7 +127,7 @@ export default function TeacherVirtualLabsPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Virtual Labs</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
           Browse and assign interactive simulations to your course modules.
         </p>
       </div>
@@ -138,25 +139,25 @@ export default function TeacherVirtualLabsPage() {
           placeholder="Search simulations..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 px-4 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 outline-none focus:ring-2 focus:ring-blue-500/20"
+          className="flex-1 px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 outline-none focus:ring-2 focus:ring-blue-500/20"
         />
         <select
           value={subjectFilter}
           onChange={(e) => setSubjectFilter(e.target.value)}
-          className="px-4 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 outline-none"
+          className="px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 outline-none"
         >
           {subjects.map((s) => (
             <option key={s} value={s}>
               {s === "all"
                 ? "All Subjects"
-                : `${SUBJECT_META[s]?.icon ?? ""} ${SUBJECT_META[s]?.label ?? s}`}
+                : `${SUBJECT_META[s]?.label ?? s}`}
             </option>
           ))}
         </select>
         <select
           value={difficultyFilter}
           onChange={(e) => setDifficultyFilter(e.target.value)}
-          className="px-4 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 outline-none"
+          className="px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 outline-none"
         >
           {difficulties.map((d) => (
             <option key={d} value={d}>
@@ -167,7 +168,7 @@ export default function TeacherVirtualLabsPage() {
       </div>
 
       {/* Stats */}
-      <p className="text-xs text-gray-400">
+      <p className="text-xs text-gray-500 dark:text-gray-400">
         Showing {filtered.length} of {SIMULATIONS.length} simulations
       </p>
 
@@ -175,6 +176,16 @@ export default function TeacherVirtualLabsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
         {filtered.map((sim) => {
           const meta = SUBJECT_META[sim.subject];
+          
+          let imageUrl = undefined;
+          if (sim.thumbnail?.startsWith("http") || sim.thumbnail?.startsWith("/")) {
+            imageUrl = sim.thumbnail;
+          } else if (sim.source === "PhET" && sim.url.includes("phet.colorado.edu")) {
+            imageUrl = sim.url.replace(/_en\.html$/, "-600.png");
+          }
+
+          const hasImage = imageUrl && !imageErrors[sim.id];
+
           return (
             <div
               key={sim.id}
@@ -182,10 +193,23 @@ export default function TeacherVirtualLabsPage() {
             >
               {/* Color header */}
               <div
-                className="h-24 flex items-center justify-center text-4xl"
-                style={{ background: meta?.color ?? "#e5e7eb" }}
+                className="relative h-32 flex items-center justify-center overflow-hidden"
+                style={{ backgroundColor: meta?.color ?? "#e5e7eb" }}
               >
-                {meta?.icon ?? "🔬"}
+                {hasImage ? (
+                  <img
+                    src={imageUrl}
+                    alt={sim.title}
+                    className="w-full h-full object-cover"
+                    onError={() => setImageErrors((prev) => ({ ...prev, [sim.id]: true }))}
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/5 dark:bg-black/20 mix-blend-overlay">
+                    <span className="text-5xl font-black text-black/10 dark:text-black/30 tracking-tighter select-none">
+                      {sim.title.substring(0, 2).toUpperCase()}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="flex-1 p-4 space-y-2">
@@ -199,20 +223,20 @@ export default function TeacherVirtualLabsPage() {
                     {sim.difficulty}
                   </span>
                 </div>
-                <p className="text-xs text-gray-500 line-clamp-2">{sim.description}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">{sim.description}</p>
 
                 <div className="flex flex-wrap gap-1 pt-1">
                   {sim.tags.slice(0, 3).map((tag) => (
                     <span
                       key={tag}
-                      className="px-2 py-0.5 text-[10px] bg-gray-100 dark:bg-gray-800 text-gray-500 rounded-full"
+                      className="px-2 py-0.5 text-[10px] bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-full"
                     >
                       {tag}
                     </span>
                   ))}
                 </div>
 
-                <div className="flex items-center justify-between pt-1 text-[10px] text-gray-400">
+                <div className="flex items-center justify-between pt-1 text-[10px] text-gray-500 dark:text-gray-400">
                   <span>{meta?.label ?? sim.subject}</span>
                   <span>{sim.platform}</span>
                 </div>
@@ -221,7 +245,7 @@ export default function TeacherVirtualLabsPage() {
               <div className="p-4 pt-0 flex gap-2">
                 <button
                   onClick={() => setPreviewSim(sim)}
-                  className="flex-1 py-2 text-xs font-semibold border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  className="flex-1 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 >
                   Preview
                 </button>
@@ -241,8 +265,7 @@ export default function TeacherVirtualLabsPage() {
       </div>
 
       {filtered.length === 0 && (
-        <div className="text-center py-16 text-gray-400">
-          <p className="text-4xl mb-3">🔍</p>
+        <div className="text-center py-16 text-gray-500 dark:text-gray-400">
           <p className="text-sm font-medium">No simulations match your filters.</p>
         </div>
       )}
@@ -254,11 +277,11 @@ export default function TeacherVirtualLabsPage() {
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-800">
               <div>
                 <h2 className="text-base font-bold text-gray-800 dark:text-white">{previewSim.title}</h2>
-                <p className="text-xs text-gray-500">{previewSim.topic} · {previewSim.platform}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{previewSim.topic} · {previewSim.platform}</p>
               </div>
               <button
                 onClick={() => setPreviewSim(null)}
-                className="p-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+                className="p-2 text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -277,7 +300,7 @@ export default function TeacherVirtualLabsPage() {
             <div className="px-6 py-3 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-3">
               <button
                 onClick={() => setPreviewSim(null)}
-                className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg"
+                className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg"
               >
                 Close
               </button>
@@ -312,17 +335,20 @@ export default function TeacherVirtualLabsPage() {
             </div>
 
             <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl flex items-center gap-3">
-              <span className="text-2xl">{SUBJECT_META[selected.subject]?.icon ?? "🔬"}</span>
               <div>
                 <p className="text-sm font-bold text-gray-800 dark:text-white">{selected.title}</p>
-                <p className="text-xs text-gray-500">{selected.topic}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{selected.topic}</p>
               </div>
             </div>
 
             {assignSuccess ? (
               <div className="text-center py-6">
-                <div className="text-4xl mb-2">✅</div>
-                <p className="text-sm font-bold text-green-600">Simulation assigned successfully!</p>
+                <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto mb-3">
+                  <svg className="w-6 h-6 text-green-600 dark:text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <p className="text-sm font-bold text-green-600 dark:text-green-500">Simulation assigned successfully!</p>
               </div>
             ) : (
               <>
@@ -330,7 +356,7 @@ export default function TeacherVirtualLabsPage() {
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Select Course</label>
                     {loadingCourses ? (
-                      <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
+                      <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500 py-2">
                         <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                         Loading courses...
                       </div>
@@ -338,7 +364,7 @@ export default function TeacherVirtualLabsPage() {
                       <select
                         value={selectedCourseId}
                         onChange={(e) => setSelectedCourseId(e.target.value)}
-                        className="w-full px-3 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800 outline-none"
+                        className="w-full px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800 outline-none"
                       >
                         <option value="">Choose a course...</option>
                         {courses.map((c) => (
@@ -356,7 +382,7 @@ export default function TeacherVirtualLabsPage() {
                       <select
                         value={selectedModuleId}
                         onChange={(e) => setSelectedModuleId(e.target.value)}
-                        className="w-full px-3 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800 outline-none"
+                        className="w-full px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800 outline-none"
                       >
                         <option value="">Choose a module...</option>
                         {modules.map((m) => (
@@ -372,7 +398,7 @@ export default function TeacherVirtualLabsPage() {
                 <div className="flex gap-3 pt-2">
                   <button
                     onClick={() => setSelected(null)}
-                    className="flex-1 py-2.5 text-sm text-gray-500 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    className="flex-1 py-2.5 text-sm text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                   >
                     Cancel
                   </button>

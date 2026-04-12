@@ -17,6 +17,7 @@ import {
   VideoIcon,
   ChatIcon,
   InfoIcon,
+  BoxCubeIcon,
 } from "../../icons/index";
 import { MdVideoLibrary } from "react-icons/md";
 
@@ -27,29 +28,12 @@ type NavItem = {
   subItems?: { name: string; path: string; pro?: boolean; new?: boolean }[];
 };
 
-const CORE_STUDENT_NAV: NavItem[] = [
-  { icon: <GridIcon />, name: "Dashboard", path: "/student" },
-  { icon: <BoxIconLine />, name: "My Courses", path: "/student/my-courses" },
-  { icon: <TaskIcon />, name: "Assignments", path: "/student/assignments" },
-  { icon: <DocsIcon />, name: "Exams", path: "/student/exams" },
-  {
-    icon: (
-      <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 9.75a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375m-13.5 3.01c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.184-4.183a1.14 1.14 0 0 1 .778-.332 48.294 48.294 0 0 0 5.83-.498c1.585-.233 2.708-1.626 2.708-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
-      </svg>
-    ),
-    name: "AI Tutor",
-    path: "/student/ai-chat",
-  },
-  { icon: <ChatIcon />, name: "Messages", path: "/student/messages" },
-  { icon: <PieChartIcon />, name: "Performance", path: "/student/performance" },
-  { icon: <InfoIcon />, name: "Support", path: "/student/support" },
-];
+
 
 const FEATURE_STUDENT_NAV: { feature: string; item: NavItem }[] = [
   { feature: "recordings",   item: { icon: <MdVideoLibrary className="w-6 h-6" />, name: "Recordings",   path: "/student/recordings" } },
-  { feature: "live_sessions",item: { icon: <VideoIcon />,                          name: "Live Classes", path: "/student/live-classes" } },
-  { feature: "virtual_labs", item: { icon: <span className="text-lg">🧪</span>,   name: "Virtual Labs", path: "/student/virtual-labs" } },
+  { feature: "live_sessions",item: { icon: <VideoIcon />,                           name: "Live Classes", path: "/student/live-classes" } },
+  { feature: "virtual_labs", item: { icon: <BoxCubeIcon />,                         name: "Virtual Labs", path: "/student/virtual-labs" } },
 ];
 
 
@@ -76,8 +60,25 @@ const StudentSidebar: React.FC = () => {
   }, [instituteId]);
 
   const { enabledFeatures } = useFeatures();
+  const aiTutorEnabled = enabledFeatures.includes("ai_tutor");
+
   const navItems: NavItem[] = [
-    ...CORE_STUDENT_NAV,
+    { icon: <GridIcon />, name: "Dashboard", path: "/student" },
+    aiTutorEnabled
+      ? {
+          icon: <BoxIconLine />,
+          name: "My Courses",
+          subItems: [
+            { name: "My Courses", path: "/student/my-courses" },
+            { name: "AI Tutor", path: "/student/ai-chat" },
+          ],
+        }
+      : { icon: <BoxIconLine />, name: "My Courses", path: "/student/my-courses" },
+    { icon: <TaskIcon />, name: "Assignments", path: "/student/assignments" },
+    { icon: <DocsIcon />, name: "Exams", path: "/student/exams" },
+    { icon: <ChatIcon />, name: "Messages", path: "/student/messages" },
+    { icon: <PieChartIcon />, name: "Performance", path: "/student/performance" },
+    { icon: <InfoIcon />, name: "Support", path: "/student/support" },
     ...FEATURE_STUDENT_NAV
       .filter(({ feature }) => enabledFeatures.includes(feature))
       .map(({ item }) => item),
