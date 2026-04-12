@@ -367,24 +367,37 @@ export class AuthService {
       throw new NotFoundException('Institute not found');
     }
     const courses = await this.courseRepository.findByInstituteId(instituteId);
-    return courses.map((c) => ({
-      id: c.id,
-      name: c.name,
-      code: c.code,
-      description: c.description,
-      batchNumber: c.batchNumber,
-      coverImage: c.coverImage,
-      price: c.price,
-      paymentType: (c as any).paymentType ?? 'fixed',
-      monthlyPrice: (c as any).monthlyPrice ?? null,
-      assignedTeacher: (c as any).assignedTeacher
-        ? {
-            firstName: (c as any).assignedTeacher.firstName,
-            lastName: (c as any).assignedTeacher.lastName,
-            profilePicture: (c as any).assignedTeacher.profilePicture ?? null,
-          }
-        : null,
-    }));
+    return courses.map((c) => {
+      const assignedTeacher =
+        c.teachers && c.teachers.length > 0 && c.teachers[0].user
+          ? {
+              id: c.teachers[0].userId,
+              firstName: c.teachers[0].user.firstName,
+              lastName: c.teachers[0].user.lastName,
+              email: c.teachers[0].user.email,
+              profilePicture: c.teachers[0].user.profilePicture ?? null,
+            }
+          : null;
+
+      return {
+        id: c.id,
+        name: c.name,
+        code: c.code,
+        description: c.description,
+        batchNumber: c.batchNumber,
+        coverImage: c.coverImage,
+        price: c.price,
+        paymentType: (c as any).paymentType ?? 'fixed',
+        monthlyPrice: (c as any).monthlyPrice ?? null,
+        assignedTeacher,
+        modules: c.modules?.map((m) => ({
+          id: m.id,
+          title: m.title,
+          description: m.description,
+          order: m.order,
+        })),
+      };
+    });
   }
 
   async getInstituteVoiceConfig(id: string) {

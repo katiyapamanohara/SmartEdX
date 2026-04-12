@@ -45,7 +45,11 @@ export function middleware(request: NextRequest) {
     pathname === '/signin' || 
     pathname.endsWith('/signin');
 
-  const isCoursesRoute = pathname.endsWith('/courses') || pathname.includes('/courses/');
+  const isCoursesListOrDetail = 
+    pathname.endsWith('/courses') || 
+    (pathname.includes('/courses/') && !pathname.includes('/modules'));
+
+  const isCoursesRoute = isCoursesListOrDetail;
 
  
   if (!token) {
