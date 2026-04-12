@@ -7,6 +7,7 @@ import dynamic from "next/dynamic";
 import { ApexOptions } from "apexcharts";
 import { instituteService, Course, StudentAssessmentGroup } from "@/services/instituteService";
 import { authService } from "@/services/authService";
+import { useFeatures } from "@/context/InstituteFeatureContext";
 import { BoxIconLine, ArrowUpIcon, TaskIcon } from "@/icons";
 import { FiMic, FiCheckCircle, FiClock, FiBookOpen } from "react-icons/fi";
 import VoiceAssessmentPlayer from "@/components/student/VoiceAssessmentPlayer";
@@ -23,6 +24,8 @@ export default function StudentDashboard() {
   const [loading, setLoading] = useState(true);
   const [voicePlayerOpen, setVoicePlayerOpen] = useState(false);
   const [courseAssistantOpen, setCourseAssistantOpen] = useState(false);
+
+  const { hasFeature } = useFeatures();
 
   const [user, setUser] = useState<ReturnType<typeof authService.getUser>>(null);
   const userId = user?.id ?? null;
@@ -92,6 +95,7 @@ export default function StudentDashboard() {
                 : `You have ${metrics.pending} pending assessment${metrics.pending !== 1 ? "s" : ""} across ${metrics.courseCount} course${metrics.courseCount !== 1 ? "s" : ""}.`}
             </p>
           </div>
+          {hasFeature("ai_tutor") && (
           <div className="flex items-center gap-2 shrink-0">
             <Link
               href={`/${instituteId}/student/ai-chat`}
@@ -102,8 +106,8 @@ export default function StudentDashboard() {
               </svg>
               Ask AI Tutor
             </Link>
-           
           </div>
+          )}
         </div>
 
         {/* ── Metric Cards ── */}

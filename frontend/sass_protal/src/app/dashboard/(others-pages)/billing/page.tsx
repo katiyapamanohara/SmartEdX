@@ -70,7 +70,8 @@ const PLANS = [
     popular: true,
     features: [
       "Everything in Starter",
-      "AI Tools & Grading",
+      "AI Tools & Grading (Teacher)",
+      "AI Tutor (Student)",
       "Exam Proctoring",
       "Advanced Reports",
       "Up to 1,000 students",
@@ -99,8 +100,8 @@ const PLANS = [
 
 const PLAN_FEATURES: Record<string, string[]> = {
   starter: ["live_sessions", "recordings"],
-  pro: ["live_sessions", "recordings", "ai_tools", "exam_proctoring", "advanced_reports"],
-  enterprise: ["live_sessions", "recordings", "ai_tools", "exam_proctoring", "advanced_reports", "virtual_labs", "voice_agent"],
+  pro: ["live_sessions", "recordings", "ai_tools", "ai_tutor", "exam_proctoring", "advanced_reports"],
+  enterprise: ["live_sessions", "recordings", "ai_tools", "ai_tutor", "exam_proctoring", "advanced_reports", "virtual_labs", "voice_agent"],
 };
 
 const FEATURE_META: Record<string, { label: string; description: string; category: string }> = {
@@ -115,8 +116,13 @@ const FEATURE_META: Record<string, { label: string; description: string; categor
     category: "Core",
   },
   ai_tools: {
-    label: "AI Tools & Grading",
+    label: "AI Tools & Grading (Teacher)",
     description: "Lesson plan generator, AI essay grader, class insights and at-risk alerts",
+    category: "AI",
+  },
+  ai_tutor: {
+    label: "AI Tutor (Student)",
+    description: "Personal AI tutor for students — course-aware chat and Q&A assistant",
     category: "AI",
   },
   exam_proctoring: {
@@ -1070,7 +1076,8 @@ export default function BillingPage() {
                           {[
                             { label: "Live Classes", key: "live_sessions" },
                             { label: "Recordings", key: "recordings" },
-                            { label: "AI Tools & Grading", key: "ai_tools" },
+                            { label: "AI Tools & Grading (Teacher)", key: "ai_tools" },
+                            { label: "AI Tutor (Student)", key: "ai_tutor" },
                             { label: "Exam Proctoring", key: "exam_proctoring" },
                             { label: "Advanced Reports", key: "advanced_reports" },
                             { label: "Virtual Labs", key: "virtual_labs" },

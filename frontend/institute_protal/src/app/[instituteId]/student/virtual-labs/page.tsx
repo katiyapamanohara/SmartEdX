@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { instituteService } from "@/services/instituteService";
-import { SUBJECT_META } from "@/lib/simulationCatalog";
+import { SIMULATIONS, SUBJECT_META } from "@/lib/simulationCatalog";
 import { useInstituteFeatures } from "@/hooks/useInstituteFeatures";
 
 type SimContent = {
@@ -31,6 +31,7 @@ export default function StudentVirtualLabsPage() {
   const [activeFilter, setActiveFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [activeSim, setActiveSim] = useState<SimContent | null>(null);
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const fetchSimulations = async () => {
@@ -111,16 +112,15 @@ export default function StudentVirtualLabsPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Virtual Labs</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
           Interactive simulations assigned to your enrolled courses.
         </p>
       </div>
 
       {simulations.length === 0 ? (
         <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
-          <p className="text-5xl mb-4">🧪</p>
           <h2 className="text-base font-bold text-gray-700 dark:text-white mb-2">No simulations yet</h2>
-          <p className="text-sm text-gray-400 max-w-sm">
+          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm">
             Your teachers haven&apos;t assigned any virtual labs to your courses yet. Check back later!
           </p>
         </div>
@@ -133,7 +133,7 @@ export default function StudentVirtualLabsPage() {
               placeholder="Search simulations..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="flex-1 px-4 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 outline-none focus:ring-2 focus:ring-blue-500/20"
+              className="flex-1 px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 outline-none focus:ring-2 focus:ring-blue-500/20"
             />
             <div className="flex gap-2 flex-wrap">
               {courses.map((c) => (
@@ -152,33 +152,59 @@ export default function StudentVirtualLabsPage() {
             </div>
           </div>
 
-          <p className="text-xs text-gray-400">{filtered.length} simulation{filtered.length !== 1 ? "s" : ""} available</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">{filtered.length} simulation{filtered.length !== 1 ? "s" : ""} available</p>
 
           {/* Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {filtered.map((sim) => {
               const subject = detectSubject(sim.title);
               const meta = SUBJECT_META[subject] ?? SUBJECT_META["mathematics"];
+              
+              const catalogSim = SIMULATIONS.find(s => s.url === sim.url || s.title === sim.title);
+              let imageUrl = undefined;
+              if (catalogSim?.thumbnail?.startsWith("http") || catalogSim?.thumbnail?.startsWith("/")) {
+                imageUrl = catalogSim.thumbnail;
+              } else if (catalogSim?.source === "PhET" && sim.url.includes("phet.colorado.edu")) {
+                imageUrl = sim.url.replace(/_en\.html$/, "-600.png");
+              } else if (sim.url.includes("phet.colorado.edu")) {
+                imageUrl = sim.url.replace(/_en\.html$/, "-600.png");
+              }
+
+              const hasImage = imageUrl && !imageErrors[sim.id];
+
               return (
                 <div
                   key={sim.id}
                   className="flex flex-col bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow"
                 >
                   <div
-                    className="h-20 flex items-center justify-center text-3xl"
-                    style={{ background: meta.color }}
+                    className="relative h-32 flex items-center justify-center overflow-hidden"
+                    style={{ backgroundColor: meta.color ?? "#e5e7eb" }}
                   >
-                    {meta.icon}
+                    {hasImage ? (
+                      <img
+                        src={imageUrl}
+                        alt={sim.title}
+                        className="w-full h-full object-cover"
+                        onError={() => setImageErrors((prev) => ({ ...prev, [sim.id]: true }))}
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/5 dark:bg-black/20 mix-blend-overlay">
+                        <span className="text-5xl font-black text-black/10 dark:text-black/30 tracking-tighter select-none">
+                          {sim.title.substring(0, 2).toUpperCase()}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex-1 p-4 space-y-2">
                     <h3 className="text-sm font-bold text-gray-800 dark:text-white leading-tight">{sim.title}</h3>
                     {sim.description && (
-                      <p className="text-xs text-gray-500 line-clamp-2">{sim.description}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">{sim.description}</p>
                     )}
-                    <div className="flex flex-col gap-1 text-[10px] text-gray-400">
-                      <span>📚 {sim.courseName}</span>
-                      <span>📁 {sim.moduleName}</span>
+                    <div className="flex flex-col gap-1 text-[10px] text-gray-500 dark:text-gray-400">
+                      <span>{sim.courseName}</span>
+                      <span>{sim.moduleName}</span>
                     </div>
                   </div>
 
@@ -200,8 +226,7 @@ export default function StudentVirtualLabsPage() {
           </div>
 
           {filtered.length === 0 && (
-            <div className="text-center py-12 text-gray-400">
-              <p className="text-3xl mb-2">🔍</p>
+            <div className="text-center py-12 text-gray-500 dark:text-gray-400">
               <p className="text-sm">No simulations match your search.</p>
             </div>
           )}

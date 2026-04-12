@@ -3,11 +3,13 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { instituteService, Course } from "@/services/instituteService";
 import { BoxIconLine } from "@/icons";
+import { useFeatures } from "@/context/InstituteFeatureContext";
 
 export default function StudentMyCoursesPage() {
   const params = useParams();
   const router = useRouter();
   const instituteId = params?.instituteId as string;
+  const { hasFeature } = useFeatures();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -113,6 +115,7 @@ export default function StudentMyCoursesPage() {
                     {course.moduleCount ?? 0} module{(course.moduleCount ?? 0) !== 1 ? "s" : ""}
                   </span>
                   <div className="flex items-center gap-2">
+                    {hasFeature("ai_tutor") && (
                     <button
                       onClick={() => openAiTutor(course)}
                       className="inline-flex items-center gap-1 text-xs font-medium text-white bg-brand-500 hover:bg-brand-600 px-2.5 py-1 rounded-lg transition-colors"
@@ -122,6 +125,7 @@ export default function StudentMyCoursesPage() {
                       </svg>
                       AI Tutor
                     </button>
+                    )}
                     <a
                       href={`/${instituteId}/student/my-courses/${course.id}/modules`}
                       className="inline-flex items-center gap-1 text-sm font-medium text-brand-500 hover:underline"
