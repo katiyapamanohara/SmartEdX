@@ -174,6 +174,7 @@ export default function AIToolsPage() {
   const params = useParams();
   const instituteId = params?.instituteId as string;
   const [activeTab, setActiveTab] = useState<Tab>("chat");
+  const [chatCourse, setChatCourse] = useState<{ id: string; name: string } | null>(null);
 
   const { isLoading: featuresLoading } = useInstituteFeatures({
     requiredFeature: "ai_tools",
@@ -188,11 +189,14 @@ export default function AIToolsPage() {
     );
   }
 
+  const hideTabs = activeTab === "chat" && chatCourse !== null;
+
   // ── Unified full-screen layout for ALL tabs ──────────────────────────────────
   return (
     <div className="flex flex-col px-4 pt-3 pb-4 gap-3">
 
-      {/* Compact pill tab switcher */}
+      {/* Compact pill tab switcher — hidden once chat is open */}
+      {!hideTabs && (
       <div className="flex items-center justify-center gap-1.5 flex-wrap">
 
         {TABS.map((t) => (
@@ -209,11 +213,12 @@ export default function AIToolsPage() {
           </button>
         ))}
       </div>
+      )}
 
       {/* Content */}
       <div>
         {activeTab === "chat" && (
-          <AIChatTab instituteId={instituteId} />
+          <AIChatTab instituteId={instituteId} selectedCourse={chatCourse} onCourseSelect={setChatCourse} />
         )}
 
         {activeTab !== "chat" && (
@@ -233,10 +238,13 @@ export default function AIToolsPage() {
 // TAB 0 — AI CHAT  (teacher assistant with voice)
 // ══════════════════════════════════════════════════════════════════════════════
 
-function AIChatTab({ instituteId }: { instituteId: string }) {
+function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
+  instituteId: string;
+  selectedCourse: { id: string; name: string } | null;
+  onCourseSelect: (course: { id: string; name: string } | null) => void;
+}) {
   const [courses, setCourses]             = useState<{ id: string; name: string }[]>([]);
   const [coursesLoading, setCoursesLoading] = useState(true);
-  const [selectedCourse, setSelectedCourse] = useState<{ id: string; name: string } | null>(null);
 
   const [messages, setMessages]   = useState<TeacherChatMessage[]>([]);
   const [input, setInput]         = useState("");
@@ -290,7 +298,7 @@ function AIChatTab({ instituteId }: { instituteId: string }) {
   }, [input]);
 
   function handleSelectCourse(course: { id: string; name: string }) {
-    setSelectedCourse(course);
+    onCourseSelect(course);
     const user = authService.getUser();
     const name = user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() : "";
     setMessages([{
@@ -421,7 +429,7 @@ function AIChatTab({ instituteId }: { instituteId: string }) {
     <div className="flex flex-col h-[calc(100vh-9rem)] rounded-2xl bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-3 px-6 py-4 shrink-0 bg-linear-to-r from-brand-50 to-indigo-50 dark:from-brand-500/5 dark:to-indigo-500/5">
-        <button onClick={() => { setSelectedCourse(null); setMessages([]); }}
+        <button onClick={() => { onCourseSelect(null); setMessages([]); }}
           className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-white/60 dark:hover:bg-gray-800 transition-colors shrink-0"
           title="Change course">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
