@@ -1,6 +1,8 @@
 """Teacher AI tools router — lesson plans, essay grading, class insights, at-risk analysis."""
 
-from fastapi import APIRouter, HTTPException
+import json
+
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from agents.teacher_tools_agent import (
@@ -9,6 +11,7 @@ from agents.teacher_tools_agent import (
     generate_lesson_plan,
     grade_essay,
 )
+from utils.document_extractor import extract_text
 
 router = APIRouter(prefix="/api/teacher-tools", tags=["teacher-tools"])
 
@@ -17,26 +20,57 @@ router = APIRouter(prefix="/api/teacher-tools", tags=["teacher-tools"])
 
 
 class LessonPlanRequest(BaseModel):
-    topic: str
-    subject: str
-    gradeLevel: str
+    topic: str = ""
+    subject: str = ""
+    gradeLevel: str = ""
     durationMinutes: int = 60
     objectives: list[str] = []
     additionalContext: str = ""
 
 
 @router.post("/lesson-plan")
-async def create_lesson_plan(body: LessonPlanRequest):
-    if not body.topic.strip():
-        raise HTTPException(status_code=400, detail="topic is required.")
+async def create_lesson_plan(
+    # JSON body fields (used when no file is uploaded)
+    body: LessonPlanRequest | None = None,
+    # Multipart fields (used when a file is uploaded alongside form data)
+    file: UploadFile | None = File(default=None),
+    topic: str | None = Form(default=None),
+    subject: str | None = Form(default=None),
+    gradeLevel: str | None = Form(default=None),
+    durationMinutes: str | None = Form(default=None),
+    objectives: str | None = Form(default=None),
+    additionalContext: str | None = Form(default=None),
+):
+    # Resolve fields: prefer form data over JSON body
+    resolved_topic      = topic      or (body.topic      if body else "") or ""
+    resolved_subject    = subject    or (body.subject    if body else "") or ""
+    resolved_grade      = gradeLevel or (body.gradeLevel if body else "") or ""
+    resolved_duration   = int(durationMinutes) if durationMinutes else (body.durationMinutes if body else 60)
+    resolved_objectives = json.loads(objectives) if objectives else (body.objectives if body else [])
+    resolved_context    = additionalContext or (body.additionalContext if body else "") or ""
+
+    # Extract text from uploaded file and append to context
+    if file and file.filename:
+        try:
+            file_bytes = await file.read()
+            extracted  = extract_text(file_bytes, file.filename)
+            resolved_context = f"{resolved_context}\n\n--- Uploaded material ({file.filename}) ---\n{extracted[:8000]}"
+            if not resolved_topic.strip():
+                resolved_topic = f"Content from {file.filename}"
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=f"Could not extract text from file: {exc}")
+
+    if not resolved_topic.strip():
+        raise HTTPException(status_code=400, detail="topic is required (or upload a file).")
+
     try:
         plan = await generate_lesson_plan(
-            topic=body.topic,
-            subject=body.subject,
-            grade_level=body.gradeLevel,
-            duration_minutes=body.durationMinutes,
-            objectives=body.objectives,
-            additional_context=body.additionalContext,
+            topic=resolved_topic,
+            subject=resolved_subject,
+            grade_level=resolved_grade,
+            duration_minutes=resolved_duration,
+            objectives=resolved_objectives,
+            additional_context=resolved_context,
         )
         return plan.model_dump()
     except Exception as exc:

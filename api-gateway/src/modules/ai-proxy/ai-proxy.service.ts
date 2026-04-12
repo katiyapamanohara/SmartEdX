@@ -34,7 +34,8 @@ export class AiProxyService {
       const isLlmPath =
         path.includes('chat') ||
         path.includes('description') ||
-        path.includes('quiz');
+        path.includes('quiz') ||
+        path.includes('teacher-tools');
       const timeoutMs = isLlmPath ? 120_000 : 30_000;
 
       const response = await firstValueFrom(
@@ -316,6 +317,63 @@ export class AiProxyService {
       this.logger.error(
         `Error forwarding teacher chat to ${url}: ${error.message}`,
       );
+      throw error;
+    }
+  }
+
+  async forwardTeacherToolsLessonPlan(
+    path: string,
+    file: Express.Multer.File | undefined,
+    body: any,
+    headers?: any,
+  ): Promise<any> {
+    // If no file — forward as plain JSON so the AI core can use its Pydantic model directly
+    if (!file) {
+      return this.forwardRequest(path, 'POST', body, headers);
+    }
+
+    // With a file — send as multipart so the AI core can extract its text
+    const url = `${this.aiCoreUrl}/${path}`;
+    this.logger.log(`Forwarding lesson plan file upload to ${url}`);
+
+    const formData = new FormData();
+    formData.append('file', file.buffer, {
+      filename: file.originalname,
+      contentType: file.mimetype,
+      knownLength: file.size,
+    });
+
+    const textFields = [
+      'topic', 'subject', 'gradeLevel', 'durationMinutes', 'objectives', 'additionalContext',
+    ];
+    for (const field of textFields) {
+      if (body[field] !== undefined) formData.append(field, String(body[field]));
+    }
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.request({
+          method: 'POST',
+          url,
+          data: formData,
+          headers: {
+            ...formData.getHeaders(),
+            ...(headers?.authorization ? { authorization: headers.authorization } : {}),
+          },
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
+          validateStatus: (status) => status < 500,
+          timeout: 120_000,
+        }),
+      );
+      if (response.status >= 400) throw new HttpException(response.data, response.status);
+      return response.data;
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      if (error.response) {
+        this.logger.error(`Lesson plan upload error: ${error.response.status}`);
+        throw new HttpException(error.response.data, error.response.status);
+      }
       throw error;
     }
   }

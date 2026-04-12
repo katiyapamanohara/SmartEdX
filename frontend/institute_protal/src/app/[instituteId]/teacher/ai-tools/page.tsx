@@ -4,6 +4,8 @@ import { useParams } from "next/navigation";
 import { authService } from "@/services/authService";
 import { examService, Exam } from "@/services/examService";
 import { useInstituteFeatures } from "@/hooks/useInstituteFeatures";
+import { useFeatures } from "@/context/InstituteFeatureContext";
+import VoiceModal from "../../student/ai-chat/VoiceModal";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -147,14 +149,22 @@ const ACTIVITY_COLOR: Record<string, string> = {
 
 // ── Tab types ──────────────────────────────────────────────────────────────────
 
-type Tab = "lesson" | "essay" | "insights" | "atrisk";
-
-const TABS: { id: Tab; label: string; desc: string }[] = [
-  { id: "lesson", label: "Lesson Plan", desc: "Auto-generate structured lesson plans" },
-  { id: "essay", label: "Essay Grader", desc: "AI grades student essay submissions" },
-  { id: "insights", label: "Class Insights", desc: "Performance analytics & recommendations" },
-  { id: "atrisk", label: "At-Risk Alerts", desc: "Identify struggling students early" },
+type Tab = "chat" | "lesson" | "essay" | "insights" | "atrisk";
+const TABS: { id: Tab; label: string; icon: string; desc: string }[] = [
+  { id: "chat",     label: "AI Chat",       icon: "💬", desc: "Chat with your AI teaching assistant" },
+  { id: "lesson",   label: "Lesson Plan",   icon: "📝", desc: "Auto-generate structured lesson plans" },
+  { id: "essay",    label: "Essay Grader",  icon: "📊", desc: "AI grades student essay submissions" },
+  { id: "insights", label: "Class Insights",icon: "📉", desc: "Performance analytics & recommendations" },
+  { id: "atrisk",   label: "At-Risk Alerts",icon: "🎯", desc: "Identify struggling students early" },
 ];
+
+// ── TeacherChat types ──────────────────────────────────────────────────────────
+
+interface TeacherChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  fileName?: string;
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
@@ -163,7 +173,7 @@ const TABS: { id: Tab; label: string; desc: string }[] = [
 export default function AIToolsPage() {
   const params = useParams();
   const instituteId = params?.instituteId as string;
-  const [activeTab, setActiveTab] = useState<Tab>("lesson");
+  const [activeTab, setActiveTab] = useState<Tab>("chat");
 
   const { isLoading: featuresLoading } = useInstituteFeatures({
     requiredFeature: "ai_tools",
@@ -178,47 +188,393 @@ export default function AIToolsPage() {
     );
   }
 
+  // ── Unified full-screen layout for ALL tabs ──────────────────────────────────
   return (
-    <div className="p-6 space-y-6 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            Teacher AI Tools
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Powered by AI — save hours every week on planning, grading, and analysis.
-          </p>
-        </div>
-      </div>
+    <div className="flex flex-col h-[calc(100vh-4rem)] px-4 pt-3 pb-0 gap-3 overflow-hidden">
 
-      {/* Tab bar */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {/* Compact pill tab switcher */}
+      <div className="flex items-center justify-center gap-1.5 flex-wrap shrink-0">
+       
         {TABS.map((t) => (
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id)}
-            className={`flex flex-col items-start gap-1 p-4 rounded-xl border-2 text-left transition-all ${
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
               activeTab === t.id
-                ? "border-brand-500 bg-brand-50 dark:bg-brand-900/20"
-                : "border-gray-200 dark:border-gray-700 hover:border-brand-300 dark:hover:border-brand-600 bg-white dark:bg-white/[0.03]"
+                ? "bg-brand-500 text-white shadow-sm"
+                : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
             }`}
           >
-            <span className="text-xl">{t.icon}</span>
-            <span className={`text-sm font-semibold ${activeTab === t.id ? "text-brand-600 dark:text-brand-400" : "text-gray-900 dark:text-white"}`}>
-              {t.label}
-            </span>
-            <span className="text-xs text-gray-500 dark:text-gray-400 leading-tight">{t.desc}</span>
+            {t.icon} {t.label}
           </button>
         ))}
       </div>
 
-      {/* Tab content */}
-      <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.03] overflow-hidden">
-        {activeTab === "lesson" && <LessonPlanTab instituteId={instituteId} />}
-        {activeTab === "essay" && <EssayGraderTab instituteId={instituteId} />}
-        {activeTab === "insights" && <ClassInsightsTab instituteId={instituteId} />}
-        {activeTab === "atrisk" && <AtRiskTab instituteId={instituteId} />}
+      {/* Content fills the remaining height */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {/* Chat: flex chat layout, fills parent */}
+        {activeTab === "chat" && (
+          <AIChatTab instituteId={instituteId} />
+        )}
+
+        {/* Other tabs: scrollable card */}
+        {activeTab !== "chat" && (
+          <div className="h-full overflow-y-auto rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3">
+            {activeTab === "lesson"   && <LessonPlanTab   instituteId={instituteId} />}
+            {activeTab === "essay"    && <EssayGraderTab  instituteId={instituteId} />}
+            {activeTab === "insights" && <ClassInsightsTab instituteId={instituteId} />}
+            {activeTab === "atrisk"   && <AtRiskTab        instituteId={instituteId} />}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TAB 0 — AI CHAT  (teacher assistant with voice)
+// ══════════════════════════════════════════════════════════════════════════════
+
+function AIChatTab({ instituteId }: { instituteId: string }) {
+  const [courses, setCourses]             = useState<{ id: string; name: string }[]>([]);
+  const [coursesLoading, setCoursesLoading] = useState(true);
+  const [selectedCourse, setSelectedCourse] = useState<{ id: string; name: string } | null>(null);
+
+  const [messages, setMessages]   = useState<TeacherChatMessage[]>([]);
+  const [input, setInput]         = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [isDark, setIsDark]       = useState(false);
+
+  const { hasFeature } = useFeatures();
+  const voiceEnabled = hasFeature("voice_agent");
+
+  const bottomRef   = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Dark-mode detection
+  useEffect(() => {
+    const check = () => setIsDark(document.documentElement.classList.contains("dark"));
+    check();
+    const obs = new MutationObserver(check);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
+
+  // Load teacher courses from student-report (derives which courses this teacher has)
+  useEffect(() => {
+    const token = getToken();
+    fetch(`${API}/api/institutes/institutes/${instituteId}/courses/student-report`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : [])
+      .then((rows: StudentRow[]) => {
+        const map = new Map<string, string>();
+        rows.forEach(s => s.courses.forEach(c => map.set(c.courseId, c.courseName)));
+        setCourses(Array.from(map.entries()).map(([id, name]) => ({ id, name })));
+        setCoursesLoading(false);
+      })
+      .catch(() => { setCourses([]); setCoursesLoading(false); });
+  }, [instituteId]);
+
+  // Auto-scroll
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, chatLoading]);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`;
+  }, [input]);
+
+  function handleSelectCourse(course: { id: string; name: string }) {
+    setSelectedCourse(course);
+    const user = authService.getUser();
+    const name = user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() : "";
+    setMessages([{
+      role: "assistant",
+      content:
+        `Hi${name ? ` ${name}` : ""}! 👋 I'm your AI teaching assistant for **${course.name}**.\n\n` +
+        `I can help you with:\n` +
+        `• 📝 Craft lesson plans & structured activities\n` +
+        `• 🧠 Explain difficult concepts or suggest analogies\n` +
+        `• 📊 Analyze student performance patterns\n` +
+        `• 💡 Suggest teaching strategies & differentiation tips\n` +
+        `• 📄 Review uploaded documents or presentations\n` +
+        `• ❓ Answer any teaching or curriculum questions\n\n` +
+        `What would you like help with today?`,
+    }]);
+  }
+
+  const sendMessage = useCallback(async (text: string, file?: File | null) => {
+    const trimmed = text.trim();
+    if ((!trimmed && !file) || chatLoading) return;
+
+    const messageText = trimmed || `Please analyze this file: ${file!.name}`;
+    const userMsg: TeacherChatMessage = { role: "user", content: messageText, fileName: file?.name };
+    const updated = [...messages, userMsg];
+    setMessages(updated);
+    setInput("");
+    setPendingFile(null);
+    setChatLoading(true);
+
+    try {
+      const token = getToken();
+      const user  = authService.getUser();
+
+      const formData = new FormData();
+      formData.append("messages",    JSON.stringify(updated.map(m => ({ role: m.role, content: m.content }))));
+      formData.append("institute_id", instituteId);
+      formData.append("teacher_id",   user?.id ?? "");
+      formData.append("context", JSON.stringify({
+        course_name:  selectedCourse?.name,
+        course_id:    selectedCourse?.id,
+        teacher_name: user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() : "",
+        role: "teacher",
+      }));
+      if (token) formData.append("auth_token", token);
+      if (file)  formData.append("file", file);
+
+      const res = await fetch(`${API}/api/ai/teacher-chat/message`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+
+      if (!res.ok) throw new Error(res.statusText);
+      const data: { reply: string } = await res.json();
+      setMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
+    } catch {
+      setMessages(prev => [...prev, { role: "assistant", content: "Sorry, something went wrong. Please try again!" }]);
+    } finally {
+      setChatLoading(false);
+    }
+  }, [messages, chatLoading, instituteId, selectedCourse]);
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(input, pendingFile); }
+  }
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setPendingFile(e.target.files?.[0] ?? null);
+    e.target.value = "";
+  }
+
+  // ── Course selection screen ───────────────────────────────────────────────
+  if (!selectedCourse) {
+    return (
+      <div className="flex flex-col items-center justify-start min-h-[500px] p-8">
+        <div className="max-w-xl w-full">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand-50 dark:bg-brand-500/10 mb-4">
+              <span className="text-3xl">💬</span>
+            </div>
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90 mb-1">Select a Course to Start</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Get tailored AI teaching assistance for a specific course.</p>
+          </div>
+
+          {coursesLoading ? (
+            <div className="space-y-3">
+              {[0,1,2].map(i => <div key={i} className="h-16 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />)}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {courses.length === 0 && (
+                <p className="text-center text-sm text-gray-400 dark:text-gray-500 pb-4">No courses with students found — starting in general mode.</p>
+              )}
+              {courses.map(course => (
+                <button key={course.id} onClick={() => handleSelectCourse(course)}
+                  className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl bg-white dark:bg-gray-800/50 hover:bg-brand-50/50 dark:hover:bg-brand-500/5 transition-all text-left group border border-gray-100 dark:border-gray-700">
+                  <div className="w-10 h-10 rounded-lg bg-linear-to-br from-brand-400 to-indigo-500 flex items-center justify-center shrink-0">
+                    <span className="text-white font-bold text-sm">{course.name.charAt(0).toUpperCase()}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 dark:text-white truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">{course.name}</p>
+                  </div>
+                  <svg className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:text-brand-400 transition-colors shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                  </svg>
+                </button>
+              ))}
+              <button onClick={() => handleSelectCourse({ id: "general", name: "General Teaching" })}
+                className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl bg-brand-50 dark:bg-brand-500/10 hover:bg-brand-100 dark:hover:bg-brand-500/20 transition-all text-left border border-brand-100 dark:border-brand-800">
+                <div className="w-10 h-10 rounded-lg bg-linear-to-br from-violet-400 to-brand-500 flex items-center justify-center shrink-0">
+                  <span className="text-white text-lg">🤖</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800 dark:text-white">General AI Assistant</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Chat about any teaching topic</p>
+                </div>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Chat screen (full-height, matches student layout) ────────────────────
+  const voiceWsUrl = (() => {
+    const user    = authService.getUser();
+    const wsBase  = process.env.NEXT_PUBLIC_VOICE_AGENT_WS_URL ?? "ws://localhost:5001/voice-agent";
+    const userId  = user?.id ?? "teacher";
+    const session = `tva-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    return `${wsBase}/ws/course-qa/${instituteId}/${selectedCourse.id}/${userId}/${session}?course_name=${encodeURIComponent(selectedCourse.name)}&role=teacher`;
+  })();
+
+  return (
+    <div className="flex flex-col h-full rounded-2xl bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-3 px-6 py-4 shrink-0 bg-linear-to-r from-brand-50 to-indigo-50 dark:from-brand-500/5 dark:to-indigo-500/5">
+        <button onClick={() => { setSelectedCourse(null); setMessages([]); }}
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-white/60 dark:hover:bg-gray-800 transition-colors shrink-0"
+          title="Change course">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+          </svg>
+        </button>
+        <div className="w-10 h-10 rounded-xl bg-linear-to-br from-brand-400 to-indigo-500 shadow-md shadow-brand-500/25 flex items-center justify-center shrink-0">
+          <span className="text-white text-lg">🤖</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90 truncate">{selectedCourse.name}</h3>
+          <p className="text-[11px] text-gray-500 dark:text-gray-400">AI Teaching Assistant · SmartEdX</p>
+        </div>
+        <span className="flex items-center gap-1.5 text-[11px] font-medium text-green-600 dark:text-green-500 shrink-0">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+          Ready to help
+        </span>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4 custom-scrollbar">
+        {messages.map((msg, i) => <TeacherMessageBubble key={i} msg={msg} />)}
+        {chatLoading && <ChatTypingIndicator />}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Pending file badge */}
+      {pendingFile && (
+        <div className="mx-6 mb-2 flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-brand-50 dark:bg-brand-500/10">
+          <svg className="w-4 h-4 text-brand-500 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
+          </svg>
+          <span className="text-[11px] text-brand-700 dark:text-brand-400 flex-1 truncate">{pendingFile.name}</span>
+          <button onClick={() => setPendingFile(null)} className="text-brand-400 hover:text-brand-600 transition-colors">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* Input */}
+      <div className="px-6 pb-6 pt-1 shrink-0">
+        <div className="flex items-center gap-2 rounded-full bg-white dark:bg-gray-800 shadow-md px-4 py-3">
+          {/* Hidden file input */}
+          <input ref={fileInputRef} type="file"
+            accept=".pdf,.docx,.pptx,.txt,.csv,.md,.png,.jpg,.jpeg,.webp"
+            onChange={handleFileChange} className="hidden" />
+
+          {/* Attach button */}
+          <button onClick={() => fileInputRef.current?.click()} disabled={chatLoading} title="Attach file"
+            className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-40">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
+            </svg>
+          </button>
+
+          {/* Textarea */}
+          <textarea ref={textareaRef} rows={1} value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={pendingFile ? `Ask about ${pendingFile.name}…` : "Ask anything…"}
+            disabled={chatLoading}
+            className="flex-1 resize-none bg-transparent text-sm text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 outline-none leading-relaxed disabled:opacity-50 max-h-[120px]" />
+
+          {/* Send / Mic combo — mirrors student behaviour */}
+          <button
+            onClick={() =>
+              input.trim() || pendingFile
+                ? sendMessage(input, pendingFile)
+                : voiceEnabled ? setVoiceMode(true) : undefined
+            }
+            disabled={chatLoading || (!input.trim() && !pendingFile && !voiceEnabled)}
+            title={!voiceEnabled && !input.trim() && !pendingFile ? "Voice Agent not enabled" : undefined}
+            className="shrink-0 w-9 h-9 rounded-full bg-gray-700 dark:bg-gray-600 hover:bg-gray-800 dark:hover:bg-gray-500 text-white flex items-center justify-center transition-all hover:scale-105 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {input.trim() || pendingFile ? (
+              /* Send arrow */
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+              </svg>
+            ) : (
+              /* Mic icon */
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"
+                style={{ opacity: voiceEnabled ? 1 : 0.4 }}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+              </svg>
+            )}
+          </button>
+        </div>
+        <p className="mt-2 text-center text-[10px] text-gray-400 dark:text-gray-600">
+          This AI can make mistakes. Please verify important info.
+        </p>
+      </div>
+
+      {/* ── Full-screen voice overlay (identical to student side) ─────────────── */}
+      {voiceMode && voiceEnabled && (
+        <VoiceModal
+          isDark={isDark}
+          instituteLogo={null}
+          context={{ selected_course: selectedCourse.name }}
+          selectedCourse={{ id: selectedCourse.id, name: selectedCourse.name, code: "" } as any}
+          instituteId={instituteId}
+          wsUrl={voiceWsUrl}
+          label="Teacher Assistant"
+          onClose={() => setVoiceMode(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function TeacherMessageBubble({ msg }: { msg: TeacherChatMessage }) {
+  const isUser = msg.role === "user";
+  return (
+    <div className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
+      {!isUser && (
+        <div className="w-7 h-7 rounded-full bg-linear-to-br from-brand-400 to-indigo-500 flex items-center justify-center shrink-0 mt-0.5 text-sm">🤖</div>
+      )}
+      <div className={`max-w-[80%] ${isUser ? "order-1" : ""}`}>
+        {msg.fileName && (
+          <div className="mb-1 flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
+            <span>📎</span>{msg.fileName}
+          </div>
+        )}
+        <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
+          isUser
+            ? "bg-brand-500 text-white rounded-br-sm"
+            : "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-bl-sm"
+        }`}>
+          {msg.content}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChatTypingIndicator() {
+  return (
+    <div className="flex gap-3 justify-start">
+      <div className="w-7 h-7 rounded-full bg-linear-to-br from-brand-400 to-indigo-500 flex items-center justify-center shrink-0 mt-0.5 text-sm">🤖</div>
+      <div className="px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-800 rounded-bl-sm flex items-center gap-1.5">
+        {[0,1,2].map(i => (
+          <span key={i} className="w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-500 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+        ))}
       </div>
     </div>
   );
@@ -231,24 +587,62 @@ export default function AIToolsPage() {
 function LessonPlanTab({ instituteId }: { instituteId: string }) {
   const [topic, setTopic] = useState("");
   const [subject, setSubject] = useState("");
-  const [gradeLevel, setGradeLevel] = useState("");
+  const [gradeLevel] = useState("");
   const [duration, setDuration] = useState(60);
   const [objectives, setObjectives] = useState("");
+  const [courses, setCourses] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    const token = getToken();
+    fetch(`${API}/api/institutes/institutes/${instituteId}/courses/student-report`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : [])
+      .then((rows: StudentRow[]) => {
+        const map = new Map<string, string>();
+        rows.forEach(s => s.courses.forEach(c => map.set(c.courseId, c.courseName)));
+        setCourses(Array.from(map.entries()).map(([id, name]) => ({ id, name })));
+      })
+      .catch(() => {});
+  }, [instituteId]);
   const [context, setContext] = useState("");
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [plan, setPlan] = useState<LessonPlan | null>(null);
   const [error, setError] = useState("");
+  const lessonFileRef = useRef<HTMLInputElement>(null);
 
   async function generate() {
-    if (!topic.trim()) { setError("Topic is required."); return; }
+    if (!topic.trim() && !uploadedFile) { setError("Enter a topic or upload a file."); return; }
     setError(""); setLoading(true); setPlan(null);
     try {
-      const result = await aiPost("/teacher-tools/lesson-plan", {
-        topic, subject, gradeLevel,
-        durationMinutes: duration,
-        objectives: objectives.split("\n").map(s => s.trim()).filter(Boolean),
-        additionalContext: context,
-      });
+      let result: LessonPlan;
+      if (uploadedFile) {
+        const token = getToken();
+        const fd = new FormData();
+        fd.append("file", uploadedFile);
+        if (topic.trim())     fd.append("topic", topic.trim());
+        if (subject.trim())   fd.append("subject", subject.trim());
+        if (gradeLevel.trim()) fd.append("gradeLevel", gradeLevel.trim());
+        fd.append("durationMinutes", String(duration));
+        if (objectives.trim())
+          fd.append("objectives", JSON.stringify(objectives.split("\n").map(s => s.trim()).filter(Boolean)));
+        if (context.trim()) fd.append("additionalContext", context.trim());
+        const res = await fetch(`${API}/api/ai/teacher-tools/lesson-plan`, {
+          method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: fd,
+        });
+        if (!res.ok) throw new Error(`AI request failed (${res.status})`);
+        result = await res.json();
+      } else {
+        result = await aiPost("/teacher-tools/lesson-plan", {
+          topic, subject, gradeLevel,
+          durationMinutes: duration,
+          objectives: objectives.split("\n").map(s => s.trim()).filter(Boolean),
+          additionalContext: context,
+        });
+      }
       setPlan(result);
     } catch (e: any) {
       setError(e.message);
@@ -286,8 +680,8 @@ function LessonPlanTab({ instituteId }: { instituteId: string }) {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="grid md:grid-cols-2 gap-6">
+    <div className="p-6 space-y-6 flex flex-col items-center">
+      <div className="w-full max-w-xl">
         {/* Form */}
         <div className="space-y-4">
           <h2 className="text-base font-semibold text-gray-900 dark:text-white">Lesson Details</h2>
@@ -298,14 +692,26 @@ function LessonPlanTab({ instituteId }: { instituteId: string }) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Subject</label>
-              <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="e.g. Biology"
-                className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Grade / Level</label>
-              <input value={gradeLevel} onChange={e => setGradeLevel(e.target.value)} placeholder="e.g. Grade 10"
-                className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500" />
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Course</label>
+              {courses.length > 0 ? (
+                <select
+                  value={subject}
+                  onChange={e => setSubject(e.target.value)}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                >
+                  <option value="">— select course —</option>
+                  {courses.map(c => (
+                    <option key={c.id} value={c.name}>{c.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  value={subject}
+                  onChange={e => setSubject(e.target.value)}
+                  placeholder="e.g. Biology"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              )}
             </div>
           </div>
           <div>
@@ -325,22 +731,44 @@ function LessonPlanTab({ instituteId }: { instituteId: string }) {
               placeholder="e.g. Students have prior knowledge of cells, lab equipment available"
               className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none" />
           </div>
+
+          {/* File upload */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+              Upload Material — optional (PDF, PPTX, DOCX, TXT)
+            </label>
+            <input ref={lessonFileRef} type="file"
+              accept=".pdf,.pptx,.docx,.txt,.md"
+              onChange={e => { setUploadedFile(e.target.files?.[0] ?? null); e.target.value = ""; }}
+              className="hidden" />
+            {uploadedFile ? (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-900/10 text-sm">
+                <span className="text-brand-500 shrink-0">📎</span>
+                <span className="flex-1 truncate text-brand-700 dark:text-brand-400 text-xs">{uploadedFile.name}</span>
+                <button onClick={() => setUploadedFile(null)}
+                  className="text-brand-400 hover:text-red-500 transition-colors text-xs font-bold shrink-0">✕</button>
+              </div>
+            ) : (
+              <button onClick={() => lessonFileRef.current?.click()}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700 text-sm text-gray-500 dark:text-gray-400 hover:border-brand-300 dark:hover:border-brand-600 hover:text-brand-600 transition-colors">
+                <span>📎</span> Click to upload course material…
+              </button>
+            )}
+            {uploadedFile && !topic.trim() && (
+              <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Topic will be auto-detected from the uploaded file.</p>
+            )}
+          </div>
+
           {error && <p className="text-xs text-red-500">{error}</p>}
           <button onClick={generate} disabled={loading}
             className="w-full py-2.5 rounded-lg bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
-            {loading ? <><Spinner />Generating lesson plan…</> : "Generate Lesson Plan"}
+            {loading ? <><Spinner />Generating lesson plan…</> : "✨ Generate Lesson Plan"}
           </button>
         </div>
 
-        {/* Preview placeholder */}
-        {!plan && !loading && (
-          <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 p-8 text-center">
-            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Your lesson plan will appear here</span>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Fill in the details and click Generate</p>
-          </div>
-        )}
+
         {loading && (
-          <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-brand-200 dark:border-brand-700 p-8 text-center">
+          <div className="md:col-span-2 flex flex-col items-center justify-center py-16 text-center">
             <Spinner size="lg" />
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">AI is crafting your lesson plan…</p>
           </div>
@@ -349,7 +777,7 @@ function LessonPlanTab({ instituteId }: { instituteId: string }) {
 
       {/* Result */}
       {plan && (
-        <div className="space-y-5 border-t border-gray-100 dark:border-gray-800 pt-6">
+        <div className="space-y-5 border-t border-gray-100 dark:border-gray-800 pt-6 w-full max-w-3xl">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-lg font-bold text-gray-900 dark:text-white">{plan.title}</h2>
@@ -900,7 +1328,7 @@ function AtRiskTab({ instituteId }: { instituteId: string }) {
               { label: "At Risk", value: analysis.atRiskCount, color: "text-red-600" },
               { label: "Safe", value: analysis.totalAnalyzed - analysis.atRiskCount, color: "text-green-600" },
             ].map(s => (
-              <div key={s.label} className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 text-center bg-white dark:bg-white/[0.03]">
+              <div key={s.label} className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 text-center bg-white dark:bg-white/3">
                 <div className={`text-3xl font-bold ${s.color}`}>{s.value}</div>
                 <div className="text-xs text-gray-500 mt-1">{s.label}</div>
               </div>
@@ -919,7 +1347,7 @@ function AtRiskTab({ instituteId }: { instituteId: string }) {
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">At-Risk Students ({analysis.atRiskStudents.length})</h3>
                 {analysis.atRiskStudents.map(s => (
-                  <div key={s.studentId} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.03] overflow-hidden">
+                  <div key={s.studentId} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 overflow-hidden">
                     <button className="w-full flex items-center gap-4 p-4 text-left hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors"
                       onClick={() => setExpandedStudent(expandedStudent === s.studentId ? null : s.studentId)}>
                       <div className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-bold uppercase ${RISK_COLOR[s.riskLevel]}`}>{s.riskLevel}</div>
@@ -979,7 +1407,7 @@ function AtRiskTab({ instituteId }: { instituteId: string }) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-white/[0.03]">
+    <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-white/3">
       <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">{title}</h3>
       {children}
     </div>
