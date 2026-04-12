@@ -35,7 +35,7 @@ export default function AiChatPage() {
   const searchParams = useSearchParams();
   const instituteId = params?.instituteId as string;
 
-  const { isLoading: featuresLoading } = useInstituteFeatures({
+  const { isLoading: featuresLoading, hasFeature: hasInstFeature } = useInstituteFeatures({
     requiredFeature: "ai_tutor",
     redirectTo: `/${instituteId}/student`,
   });
@@ -201,7 +201,7 @@ export default function AiChatPage() {
     e.target.value = "";
   }
 
-  if (featuresLoading) {
+  if (featuresLoading || !hasInstFeature("ai_tutor")) {
     return (
       <div className="flex items-center justify-center min-h-[500px]">
         <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
