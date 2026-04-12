@@ -35,13 +35,14 @@ function InstituteCustomizeContent() {
 
   const PLAN_DEFAULTS: Record<string, string[]> = {
     starter: ["live_sessions", "recordings"],
-    pro: ["live_sessions", "recordings", "ai_tools", "exam_proctoring", "advanced_reports"],
-    enterprise: ["live_sessions", "recordings", "ai_tools", "exam_proctoring", "advanced_reports", "virtual_labs", "voice_agent"],
+    pro: ["live_sessions", "recordings", "ai_tools", "ai_tutor", "exam_proctoring", "advanced_reports"],
+    enterprise: ["live_sessions", "recordings", "ai_tools", "ai_tutor", "exam_proctoring", "advanced_reports", "virtual_labs", "voice_agent"],
   };
 
   const FEATURE_META: Record<string, { label: string; description: string; icon: string; plans: string[] }> = {
     virtual_labs: { label: "Virtual Labs", description: "Physics, chemistry, and engineering simulations embedded via PhET & GeoGebra.", icon: "🧪", plans: ["enterprise"] },
-    ai_tools: { label: "AI Tools", description: "Lesson plan generator, AI essay grader, class insights, and at-risk alerts.", icon: "🤖", plans: ["pro", "enterprise"] },
+    ai_tools: { label: "AI Tools (Teacher)", description: "Lesson plan generator, AI essay grader, class insights, and at-risk alerts.", icon: "🤖", plans: ["pro", "enterprise"] },
+    ai_tutor: { label: "AI Tutor (Student)", description: "Personal AI tutor for students — course-aware chat and Q&A assistant.", icon: "🎓", plans: ["pro", "enterprise"] },
     voice_agent: { label: "Voice Agent", description: "AI voice assistant for student Q&A and real-time tutoring.", icon: "🎙️", plans: ["enterprise"] },
     exam_proctoring: { label: "Exam Proctoring", description: "Face verification and integrity monitoring for online exams.", icon: "👁️", plans: ["pro", "enterprise"] },
     live_sessions: { label: "Live Classes", description: "Real-time video classes with screen sharing and chat.", icon: "📹", plans: ["starter", "pro", "enterprise"] },

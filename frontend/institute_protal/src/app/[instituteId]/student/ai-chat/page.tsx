@@ -7,6 +7,7 @@ import { authService } from "@/services/authService";
 import { instituteService, Course } from "@/services/instituteService";
 import VoiceModal from "./VoiceModal";
 import { useFeatures } from "@/context/InstituteFeatureContext";
+import { useInstituteFeatures } from "@/hooks/useInstituteFeatures";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,6 +34,11 @@ export default function AiChatPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const instituteId = params?.instituteId as string;
+
+  const { isLoading: featuresLoading } = useInstituteFeatures({
+    requiredFeature: "ai_tutor",
+    redirectTo: `/${instituteId}/student`,
+  });
 
   const [courses, setCourses]               = useState<Course[]>([]);
   const [coursesLoading, setCoursesLoading] = useState(true);
@@ -193,6 +199,14 @@ export default function AiChatPage() {
     const file = e.target.files?.[0] ?? null;
     setPendingFile(file);
     e.target.value = "";
+  }
+
+  if (featuresLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[500px]">
+        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
   // ── Course selection screen ───────────────────────────────────────────────
