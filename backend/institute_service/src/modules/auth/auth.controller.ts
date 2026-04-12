@@ -184,6 +184,16 @@ export class AuthController {
   }
 
   @Public()
+  @Get('institutes/:id/courses')
+  @ApiOperation({ summary: 'Get public course listing for an institute' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiResponse({ status: 200, description: 'Returns public course list' })
+  @ApiResponse({ status: 404, description: 'Institute not found' })
+  async getPublicCourses(@Param('id') id: string) {
+    return this.authService.getPublicCourses(id);
+  }
+
+  @Public()
   @Get('institutes/:id/voice-config')
   @ApiOperation({ summary: 'Get institute voice agent configuration' })
   @ApiParam({ name: 'id', description: 'Institute ID' })

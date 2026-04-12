@@ -76,6 +76,28 @@ export interface StudentAssessmentGroup {
 class InstituteService {
   private readonly apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
+  async getPublicInstituteInfo(id: string): Promise<Institute | null> {
+    try {
+      const response = await fetch(`${this.apiUrl}/api/institutes/auth/institutes/${id}/info`);
+      if (!response.ok) return null;
+      return await response.json();
+    } catch (error) {
+      console.error("InstituteService.getPublicInstituteInfo Error:", error);
+      return null;
+    }
+  }
+
+  async getPublicCourses(instituteId: string): Promise<Course[]> {
+    try {
+      const response = await fetch(`${this.apiUrl}/api/institutes/auth/institutes/${instituteId}/courses`);
+      if (!response.ok) return [];
+      return await response.json();
+    } catch (error) {
+      console.error("InstituteService.getPublicCourses Error:", error);
+      return [];
+    }
+  }
+
   async getInstituteById(id: string): Promise<Institute | null> {
     const token = authService.getToken();
     if (!token) return null;

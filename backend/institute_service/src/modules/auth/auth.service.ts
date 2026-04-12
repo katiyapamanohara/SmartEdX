@@ -361,6 +361,32 @@ export class AuthService {
     };
   }
 
+  async getPublicCourses(instituteId: string) {
+    const institute = await this.instituteRepository.findById(instituteId);
+    if (!institute) {
+      throw new NotFoundException('Institute not found');
+    }
+    const courses = await this.courseRepository.findByInstituteId(instituteId);
+    return courses.map((c) => ({
+      id: c.id,
+      name: c.name,
+      code: c.code,
+      description: c.description,
+      batchNumber: c.batchNumber,
+      coverImage: c.coverImage,
+      price: c.price,
+      paymentType: (c as any).paymentType ?? 'fixed',
+      monthlyPrice: (c as any).monthlyPrice ?? null,
+      assignedTeacher: (c as any).assignedTeacher
+        ? {
+            firstName: (c as any).assignedTeacher.firstName,
+            lastName: (c as any).assignedTeacher.lastName,
+            profilePicture: (c as any).assignedTeacher.profilePicture ?? null,
+          }
+        : null,
+    }));
+  }
+
   async getInstituteVoiceConfig(id: string) {
     const institute = await this.instituteRepository.findById(id);
     if (!institute) {
