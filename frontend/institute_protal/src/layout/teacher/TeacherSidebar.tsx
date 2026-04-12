@@ -18,7 +18,6 @@ import {
   PieChartIcon,
   ChatIcon,
   DocsIcon,
-  PlugInIcon,
   BoxCubeIcon,
 } from "../../icons/index";
 
@@ -29,22 +28,11 @@ type NavItem = {
   subItems?: { name: string; path: string; pro?: boolean; new?: boolean }[];
 };
 
-const CORE_NAV_ITEMS: NavItem[] = [
-  { icon: <GridIcon />, name: "Dashboard", path: "/teacher" },
-  { icon: <BoxIconLine />, name: "Courses", path: "/teacher/courses" },
-  { icon: <TaskIcon />, name: "Assessments", path: "/teacher/assessments" },
-  { icon: <DocsIcon />, name: "Exams", path: "/teacher/exams" },
-  { icon: <ChatIcon />, name: "Messages", path: "/teacher/messages" },
-  { icon: <GroupIcon />, name: "Students", path: "/teacher/students" },
-  { icon: <PieChartIcon />, name: "Performance", path: "/teacher/performance" },
-  { icon: <DocsIcon />, name: "Reports", path: "/teacher/reports" },
-];
 
 const FEATURE_NAV_ITEMS: { feature: string; item: NavItem }[] = [
   { feature: "recordings",     item: { icon: <MdVideoLibrary className="w-6 h-6" />, name: "Recordings",         path: "/teacher/recordings" } },
   { feature: "live_sessions",  item: { icon: <VideoIcon />,                          name: "Live Classes",        path: "/teacher/live-classes" } },
   { feature: "exam_proctoring",item: { icon: <PieChartIcon />,                       name: "Integrity Monitor",   path: "/teacher/integrity-monitor" } },
-  { feature: "ai_tools",       item: { icon: <PlugInIcon />,                         name: "AI Tools",            path: "/teacher/ai-tools" } },
   { feature: "virtual_labs",   item: { icon: <BoxCubeIcon />,                        name: "Virtual Labs",        path: "/teacher/virtual-labs" } },
 ];
 
@@ -72,8 +60,26 @@ const TeacherSidebar: React.FC = () => {
   }, [instituteId]);
 
   const { enabledFeatures } = useFeatures();
+  const aiToolsEnabled = enabledFeatures.includes("ai_tools");
+
   const navItems: NavItem[] = [
-    ...CORE_NAV_ITEMS,
+    { icon: <GridIcon />, name: "Dashboard", path: "/teacher" },
+    aiToolsEnabled
+      ? {
+          icon: <BoxIconLine />,
+          name: "Courses",
+          subItems: [
+            { name: "Courses", path: "/teacher/courses" },
+            { name: "AI Tools", path: "/teacher/ai-tools" },
+          ],
+        }
+      : { icon: <BoxIconLine />, name: "Courses", path: "/teacher/courses" },
+    { icon: <TaskIcon />, name: "Assessments", path: "/teacher/assessments" },
+    { icon: <DocsIcon />, name: "Exams", path: "/teacher/exams" },
+    { icon: <ChatIcon />, name: "Messages", path: "/teacher/messages" },
+    { icon: <GroupIcon />, name: "Students", path: "/teacher/students" },
+    { icon: <PieChartIcon />, name: "Performance", path: "/teacher/performance" },
+    { icon: <DocsIcon />, name: "Reports", path: "/teacher/reports" },
     ...FEATURE_NAV_ITEMS
       .filter(({ feature }) => enabledFeatures.includes(feature))
       .map(({ item }) => item),

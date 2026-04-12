@@ -5,7 +5,7 @@ import { authService } from "@/services/authService";
 import { examService, Exam } from "@/services/examService";
 import { useInstituteFeatures } from "@/hooks/useInstituteFeatures";
 import { useFeatures } from "@/context/InstituteFeatureContext";
-import VoiceModal from "../../student/ai-chat/VoiceModal";
+import VoiceModal from "../ai-tools/VoiceModal";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -151,11 +151,11 @@ const ACTIVITY_COLOR: Record<string, string> = {
 
 type Tab = "chat" | "lesson" | "essay" | "insights" | "atrisk";
 const TABS: { id: Tab; label: string; icon: string; desc: string }[] = [
-  { id: "chat",     label: "AI Chat",       icon: "💬", desc: "Chat with your AI teaching assistant" },
-  { id: "lesson",   label: "Lesson Plan",   icon: "📝", desc: "Auto-generate structured lesson plans" },
-  { id: "essay",    label: "Essay Grader",  icon: "📊", desc: "AI grades student essay submissions" },
-  { id: "insights", label: "Class Insights",icon: "📉", desc: "Performance analytics & recommendations" },
-  { id: "atrisk",   label: "At-Risk Alerts",icon: "🎯", desc: "Identify struggling students early" },
+  { id: "chat",     label: "AI Chat",       icon: "", desc: "Chat with your AI teaching assistant" },
+  { id: "lesson",   label: "Lesson Plan",   icon: "", desc: "Auto-generate structured lesson plans" },
+  { id: "essay",    label: "Essay Grader",  icon: "", desc: "AI grades student essay submissions" },
+  { id: "insights", label: "Class Insights",icon: "", desc: "Performance analytics & recommendations" },
+  { id: "atrisk",   label: "At-Risk Alerts",icon: "", desc: "Identify struggling students early" },
 ];
 
 // ── TeacherChat types ──────────────────────────────────────────────────────────
@@ -190,11 +190,11 @@ export default function AIToolsPage() {
 
   // ── Unified full-screen layout for ALL tabs ──────────────────────────────────
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] px-4 pt-3 pb-0 gap-3 overflow-hidden">
+    <div className="flex flex-col px-4 pt-3 pb-4 gap-3">
 
       {/* Compact pill tab switcher */}
-      <div className="flex items-center justify-center gap-1.5 flex-wrap shrink-0">
-       
+      <div className="flex items-center justify-center gap-1.5 flex-wrap">
+
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -210,16 +210,14 @@ export default function AIToolsPage() {
         ))}
       </div>
 
-      {/* Content fills the remaining height */}
-      <div className="flex-1 min-h-0 overflow-hidden">
-        {/* Chat: flex chat layout, fills parent */}
+      {/* Content */}
+      <div>
         {activeTab === "chat" && (
           <AIChatTab instituteId={instituteId} />
         )}
 
-        {/* Other tabs: scrollable card */}
         {activeTab !== "chat" && (
-          <div className="h-full overflow-y-auto rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3">
+          <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3">
             {activeTab === "lesson"   && <LessonPlanTab   instituteId={instituteId} />}
             {activeTab === "essay"    && <EssayGraderTab  instituteId={instituteId} />}
             {activeTab === "insights" && <ClassInsightsTab instituteId={instituteId} />}
@@ -300,12 +298,12 @@ function AIChatTab({ instituteId }: { instituteId: string }) {
       content:
         `Hi${name ? ` ${name}` : ""}! 👋 I'm your AI teaching assistant for **${course.name}**.\n\n` +
         `I can help you with:\n` +
-        `• 📝 Craft lesson plans & structured activities\n` +
-        `• 🧠 Explain difficult concepts or suggest analogies\n` +
-        `• 📊 Analyze student performance patterns\n` +
-        `• 💡 Suggest teaching strategies & differentiation tips\n` +
-        `• 📄 Review uploaded documents or presentations\n` +
-        `• ❓ Answer any teaching or curriculum questions\n\n` +
+        `• Craft lesson plans & structured activities\n` +
+        `• Explain difficult concepts or suggest analogies\n` +
+        `• Analyze student performance patterns\n` +
+        `• Suggest teaching strategies & differentiation tips\n` +
+        `• Review uploaded documents or presentations\n` +
+        `• Answer any teaching or curriculum questions\n\n` +
         `What would you like help with today?`,
     }]);
   }
@@ -366,12 +364,10 @@ function AIChatTab({ instituteId }: { instituteId: string }) {
   // ── Course selection screen ───────────────────────────────────────────────
   if (!selectedCourse) {
     return (
-      <div className="flex flex-col items-center justify-start min-h-[500px] p-8">
+      <div className="flex flex-col items-center justify-center py-12 px-8">
         <div className="max-w-xl w-full">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand-50 dark:bg-brand-500/10 mb-4">
-              <span className="text-3xl">💬</span>
-            </div>
+            
             <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90 mb-1">Select a Course to Start</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400">Get tailored AI teaching assistance for a specific course.</p>
           </div>
@@ -387,10 +383,8 @@ function AIChatTab({ instituteId }: { instituteId: string }) {
               )}
               {courses.map(course => (
                 <button key={course.id} onClick={() => handleSelectCourse(course)}
-                  className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl bg-white dark:bg-gray-800/50 hover:bg-brand-50/50 dark:hover:bg-brand-500/5 transition-all text-left group border border-gray-100 dark:border-gray-700">
-                  <div className="w-10 h-10 rounded-lg bg-linear-to-br from-brand-400 to-indigo-500 flex items-center justify-center shrink-0">
-                    <span className="text-white font-bold text-sm">{course.name.charAt(0).toUpperCase()}</span>
-                  </div>
+                className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl bg-brand-50 dark:bg-brand-500/10 hover:bg-brand-100 dark:hover:bg-brand-500/20 transition-all text-left border border-brand-100 dark:border-brand-800">
+                 
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-800 dark:text-white truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">{course.name}</p>
                   </div>
@@ -401,9 +395,7 @@ function AIChatTab({ instituteId }: { instituteId: string }) {
               ))}
               <button onClick={() => handleSelectCourse({ id: "general", name: "General Teaching" })}
                 className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl bg-brand-50 dark:bg-brand-500/10 hover:bg-brand-100 dark:hover:bg-brand-500/20 transition-all text-left border border-brand-100 dark:border-brand-800">
-                <div className="w-10 h-10 rounded-lg bg-linear-to-br from-violet-400 to-brand-500 flex items-center justify-center shrink-0">
-                  <span className="text-white text-lg">🤖</span>
-                </div>
+               
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-800 dark:text-white">General AI Assistant</p>
                   <p className="text-xs text-gray-400 mt-0.5">Chat about any teaching topic</p>
@@ -426,7 +418,7 @@ function AIChatTab({ instituteId }: { instituteId: string }) {
   })();
 
   return (
-    <div className="flex flex-col h-full rounded-2xl bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-9rem)] rounded-2xl bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-3 px-6 py-4 shrink-0 bg-linear-to-r from-brand-50 to-indigo-50 dark:from-brand-500/5 dark:to-indigo-500/5">
         <button onClick={() => { setSelectedCourse(null); setMessages([]); }}
@@ -436,9 +428,7 @@ function AIChatTab({ instituteId }: { instituteId: string }) {
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
           </svg>
         </button>
-        <div className="w-10 h-10 rounded-xl bg-linear-to-br from-brand-400 to-indigo-500 shadow-md shadow-brand-500/25 flex items-center justify-center shrink-0">
-          <span className="text-white text-lg">🤖</span>
-        </div>
+        
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90 truncate">{selectedCourse.name}</h3>
           <p className="text-[11px] text-gray-500 dark:text-gray-400">AI Teaching Assistant · SmartEdX</p>
@@ -546,9 +536,7 @@ function TeacherMessageBubble({ msg }: { msg: TeacherChatMessage }) {
   const isUser = msg.role === "user";
   return (
     <div className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
-      {!isUser && (
-        <div className="w-7 h-7 rounded-full bg-linear-to-br from-brand-400 to-indigo-500 flex items-center justify-center shrink-0 mt-0.5 text-sm">🤖</div>
-      )}
+   
       <div className={`max-w-[80%] ${isUser ? "order-1" : ""}`}>
         {msg.fileName && (
           <div className="mb-1 flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
@@ -570,7 +558,7 @@ function TeacherMessageBubble({ msg }: { msg: TeacherChatMessage }) {
 function ChatTypingIndicator() {
   return (
     <div className="flex gap-3 justify-start">
-      <div className="w-7 h-7 rounded-full bg-linear-to-br from-brand-400 to-indigo-500 flex items-center justify-center shrink-0 mt-0.5 text-sm">🤖</div>
+    
       <div className="px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-800 rounded-bl-sm flex items-center gap-1.5">
         {[0,1,2].map(i => (
           <span key={i} className="w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-500 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
