@@ -45,9 +45,15 @@ export function middleware(request: NextRequest) {
     pathname === '/signin' || 
     pathname.endsWith('/signin');
 
+  const isCoursesListOrDetail = 
+    pathname.endsWith('/courses') || 
+    (pathname.includes('/courses/') && !pathname.includes('/modules'));
+
+  const isCoursesRoute = isCoursesListOrDetail;
+
  
   if (!token) {
-    if (isPublicRoute) {
+    if (isPublicRoute || isCoursesRoute) {
       return NextResponse.next();
     }
     
@@ -70,7 +76,7 @@ export function middleware(request: NextRequest) {
   const userInstituteId = decoded?.instituteId;
 
   // Strict Institute Check: If we are in an institute route, user MUST belong to that institute
-  if (instituteId && instituteId !== 'signin' && instituteId !== 'dashboard' && instituteId !== 'error-404') {
+  if (instituteId && instituteId !== 'signin' && instituteId !== 'dashboard' && instituteId !== 'error-404' && !isCoursesRoute) {
      if (userInstituteId && userInstituteId !== instituteId) {
         console.warn(`Middleware: Institute mismatch. User ${userInstituteId} tried to access ${instituteId}`);
         const url = request.nextUrl.clone();

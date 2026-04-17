@@ -8,6 +8,8 @@ import { ExamRepository } from '../../infra/database/repositories/exam.repositor
 import { CourseRepository } from '../../infra/database/repositories/course.repository';
 import { StudentRepository } from '../../infra/database/repositories/student.repository';
 import { InstituteUserRepository } from '../../infra/database/repositories/institute-user.repository';
+import { FaceRecClient } from '../../infra/http/face-rec.client';
+import { NotificationGateway } from './notification.gateway';
 import { CreateExamDto } from './dto/create-exam.dto';
 import { UpdateExamDto } from './dto/update-exam.dto';
 import { SubmitExamDto } from './dto/submit-exam.dto';
@@ -20,14 +22,20 @@ import {
 } from './entities/exam.entity';
 import { randomUUID } from 'crypto';
 
+const HIGH_VIOLATION_THRESHOLD = 3;
+
 const SEVERITY_MAP: Record<IntegrityViolationType, IntegrityFlag['severity']> =
   {
     face_absent: 'high',
     face_verify_failed: 'high',
     multiple_faces: 'high',
-    tab_switch: 'medium',
+    live_face_mismatch: 'high',
+    screen_share_disabled: 'high',
+    suspicious_screen: 'high',
+    copy_attempt: 'high',
+    tab_switch: 'high',
     camera_disabled: 'medium',
-    fullscreen_exit: 'low',
+    fullscreen_exit: 'medium',
   };
 
 @Injectable()
@@ -37,6 +45,8 @@ export class ExamService {
     private readonly courseRepository: CourseRepository,
     private readonly studentRepository: StudentRepository,
     private readonly instituteUserRepository: InstituteUserRepository,
+    private readonly faceRecClient: FaceRecClient,
+    private readonly notificationGateway: NotificationGateway,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -82,6 +92,9 @@ export class ExamService {
       passingScore: exam.passingScore,
       maxAttempts: exam.maxAttempts ?? 1,
       requireFaceId: exam.requireFaceId ?? false,
+      requireScreenShare: exam.requireScreenShare ?? false,
+      enableLiveFaceCheck: exam.enableLiveFaceCheck ?? false,
+      autoFailOnCheat: exam.autoFailOnCheat ?? false,
       totalMarks,
       questionCount: exam.questions.length,
       questions,
@@ -123,7 +136,7 @@ export class ExamService {
       if (!course) throw new NotFoundException('Course not found');
     }
 
-    const status: ExamStatus = dto.scheduledAt ? 'scheduled' : 'draft';
+    const status: ExamStatus = (dto.status as ExamStatus) ?? (dto.scheduledAt ? 'scheduled' : 'draft');
 
     const exam = await this.examRepository.create({
       title: dto.title,
@@ -137,6 +150,9 @@ export class ExamService {
       passingScore: dto.passingScore,
       maxAttempts: dto.maxAttempts ?? 1,
       requireFaceId: dto.requireFaceId ?? false,
+      requireScreenShare: dto.requireScreenShare ?? false,
+      enableLiveFaceCheck: dto.enableLiveFaceCheck ?? false,
+      autoFailOnCheat: dto.autoFailOnCheat ?? false,
       questions: dto.questions as any,
       status,
       studentAttempts: {},
@@ -171,9 +187,14 @@ export class ExamService {
     if (dto.durationMinutes !== undefined)
       patch.durationMinutes = dto.durationMinutes;
     if (dto.passingScore !== undefined) patch.passingScore = dto.passingScore;
+    if (dto.maxAttempts !== undefined) patch.maxAttempts = dto.maxAttempts;
     if (dto.questions !== undefined) patch.questions = dto.questions as any;
     if (dto.status !== undefined) patch.status = dto.status as ExamStatus;
     if (dto.courseId !== undefined) patch.courseId = dto.courseId;
+    if (dto.requireFaceId !== undefined) patch.requireFaceId = dto.requireFaceId;
+    if (dto.requireScreenShare !== undefined) patch.requireScreenShare = dto.requireScreenShare;
+    if (dto.enableLiveFaceCheck !== undefined) patch.enableLiveFaceCheck = dto.enableLiveFaceCheck;
+    if (dto.autoFailOnCheat !== undefined) patch.autoFailOnCheat = dto.autoFailOnCheat;
 
     // Auto-set status when scheduledAt is provided
     if (dto.scheduledAt && !dto.status) {
@@ -255,15 +276,25 @@ export class ExamService {
     );
     if (!exam) throw new NotFoundException('Exam not found');
 
-    const status = this.computeStatus(exam);
-    if (status !== 'active') {
-      throw new BadRequestException('Exam is not currently active');
-    }
-
+    const computedStatus = this.computeStatus(exam);
     const maxAttempts = exam.maxAttempts ?? 1;
     const prevAttempt = exam.studentAttempts?.[userId];
     const usedAttempts: number =
       prevAttempt?.attemptCount ?? (prevAttempt ? 1 : 0);
+
+    // Allow submission if:
+    // (a) Exam is currently within its active window, OR
+    // (b) Exam was published (status !== 'draft') and student still has remaining attempts.
+    //     This covers both "Publish Now" (stored status = 'active') and
+    //     "Publish & Schedule" (stored status = 'scheduled') after the window closes.
+    const canSubmit =
+      computedStatus === 'active' ||
+      (exam.status !== 'draft' && usedAttempts < maxAttempts);
+
+    if (!canSubmit) {
+      throw new BadRequestException('Exam is not currently active');
+    }
+
     if (usedAttempts >= maxAttempts) {
       throw new BadRequestException(
         `Maximum attempts (${maxAttempts}) reached for this exam`,
@@ -317,6 +348,7 @@ export class ExamService {
       percentage,
       passed,
       passingScore: exam.passingScore,
+      pendingEssayReview: hasPendingEssay,
     };
   }
 
@@ -405,12 +437,190 @@ export class ExamService {
     };
 
     const existing = exam.integrityFlags ?? {};
-    const userFlags = existing[userId] ?? [];
-    const updated = { ...existing, [userId]: [...userFlags, flag] };
+    const userFlags = [...(existing[userId] ?? []), flag];
+    const updatedFlags = { ...existing, [userId]: userFlags };
+
+    // Resolve student full name for alerts
+    const studentUser = await this.instituteUserRepository.findById(userId);
+    const studentName = studentUser
+      ? [studentUser.firstName, studentUser.lastName].filter(Boolean).join(' ') || studentUser.email
+      : userId;
+
+    // Auto-fail check: count high-severity flags for this student
+    let autoFailed = false;
+    if (exam.autoFailOnCheat) {
+      const highCount = userFlags.filter((f) => f.severity === 'high').length;
+      if (highCount >= HIGH_VIOLATION_THRESHOLD) {
+        const prevAttempt = exam.studentAttempts?.[userId];
+        // Only auto-fail if not already failed or submitted
+        if (!prevAttempt?.autoFailed) {
+          const totalMarks = exam.questions.reduce((s, q) => s + q.marks, 0);
+          const autoFailAttempt: ExamAttempt & { attemptCount: number; autoFailed: boolean } = {
+            answers: prevAttempt?.answers ?? {},
+            score: 0,
+            totalMarks,
+            passed: false,
+            submittedAt: new Date().toISOString(),
+            pendingEssayReview: false,
+            autoFailed: true,
+            attemptCount: (prevAttempt?.attemptCount ?? 0) + 1,
+          };
+          const updatedAttempts = {
+            ...(exam.studentAttempts ?? {}),
+            [userId]: autoFailAttempt,
+          };
+          await this.examRepository.update(examId, {
+            integrityFlags: updatedFlags,
+            studentAttempts: updatedAttempts,
+          } as any);
+
+          // Notify teacher: student was auto-failed
+          this.notificationGateway.emitNotification(exam.createdByUserId, {
+            type: 'cheat_alert',
+            title: 'Student Auto-Failed — Cheating Detected',
+            body: `${studentName} was automatically failed in "${exam.title}" after repeated violations.`,
+            metadata: {
+              examId,
+              examTitle: exam.title,
+              studentId: userId,
+              studentName,
+              studentEmail: studentUser?.email ?? '',
+              violationType: type,
+              severity: flag.severity,
+              totalHighFlags: userFlags.filter((f) => f.severity === 'high').length,
+              allFlags: userFlags,
+              autoFailed: true,
+              timestamp: flag.timestamp,
+            },
+            timestamp: flag.timestamp,
+          });
+
+          return { success: true, flag, autoFailed: true };
+        }
+      }
+    } else if (flag.severity === 'high') {
+      // autoFailOnCheat disabled — alert teacher in real time with full student details
+      this.notificationGateway.emitNotification(exam.createdByUserId, {
+        type: 'cheat_alert',
+        title: 'Cheating Detected',
+        body: `${studentName} triggered a ${flag.severity}-severity violation (${type}) in "${exam.title}".`,
+        metadata: {
+          examId,
+          examTitle: exam.title,
+          studentId: userId,
+          studentName,
+          studentEmail: studentUser?.email ?? '',
+          violationType: type,
+          severity: flag.severity,
+          totalHighFlags: userFlags.filter((f) => f.severity === 'high').length,
+          allFlags: userFlags,
+          autoFailed: false,
+          timestamp: flag.timestamp,
+        },
+        timestamp: flag.timestamp,
+      });
+    }
+
     await this.examRepository.update(examId, {
-      integrityFlags: updated,
+      integrityFlags: updatedFlags,
     } as any);
-    return { success: true, flag };
+    return { success: true, flag, autoFailed };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Live face check (continuous recognition via face_recognition_server)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  async liveFaceCheck(
+    instituteId: string,
+    examId: string,
+    userId: string,
+    imageB64: string,
+  ) {
+    const exam = await this.examRepository.findByIdWithRelations(
+      examId,
+      instituteId,
+    );
+    if (!exam) throw new NotFoundException('Exam not found');
+    if (!exam.enableLiveFaceCheck) {
+      return { verified: true, distance: 0, threshold: 0.5, autoFailed: false };
+    }
+
+    const student = await this.studentRepository.findOne({ where: { userId } });
+    if (!student?.faceDescriptor) {
+      // No descriptor enrolled — flag camera_disabled as warning, don't hard-fail
+      return { verified: false, distance: 1, threshold: 0.5, autoFailed: false, noDescriptor: true };
+    }
+
+    let verifyResult: { verified: boolean; distance: number; threshold: number };
+    try {
+      verifyResult = await this.faceRecClient.verifyImage(student.faceDescriptor, imageB64);
+    } catch {
+      return { verified: false, distance: 1, threshold: 0.5, autoFailed: false };
+    }
+
+    if (!verifyResult.verified) {
+      // Report live_face_mismatch and check auto-fail
+      const result = await this.reportIntegrityFlag(
+        instituteId,
+        examId,
+        userId,
+        'live_face_mismatch',
+      );
+      return { ...verifyResult, autoFailed: result.autoFailed ?? false };
+    }
+
+    return { ...verifyResult, autoFailed: false };
+  }
+
+  // ── Screen content analysis ────────────────────────────────────────────────
+
+  async screenCheck(
+    instituteId: string,
+    examId: string,
+    userId: string,
+    imageB64: string,
+  ): Promise<{ suspicious: boolean; reason: string; autoFailed: boolean }> {
+    const exam = await this.examRepository.findOne({
+      where: { id: examId, instituteId },
+    });
+    if (!exam) throw new NotFoundException('Exam not found');
+
+    // Call ai_core via the API gateway
+    const gatewayUrl = process.env.API_GATEWAY_URL ?? 'http://localhost:5001';
+    let suspicious = false;
+    let reason = '';
+
+    try {
+      const res = await fetch(`${gatewayUrl}/api/ai/screen/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_b64: imageB64 }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        suspicious = !!data.suspicious;
+        reason = data.reason ?? '';
+      }
+    } catch (err) {
+      // If analysis fails, don't penalise the student
+      return { suspicious: false, reason: 'Analysis unavailable', autoFailed: false };
+    }
+
+    if (!suspicious) {
+      return { suspicious: false, reason, autoFailed: false };
+    }
+
+    // Report as integrity flag — this handles teacher notification + auto-fail logic
+    const result = await this.reportIntegrityFlag(
+      instituteId,
+      examId,
+      userId,
+      'suspicious_screen',
+    );
+
+    return { suspicious: true, reason, autoFailed: result.autoFailed ?? false };
   }
 
   async getIntegrityFlagsForTeacher(

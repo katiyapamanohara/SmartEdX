@@ -44,7 +44,7 @@ export class AiProxyService {
           url,
           data: body,
           headers: this.filterHeaders(headers),
-          validateStatus: (status) => status < 500,
+          validateStatus: (status) => status < 600,
           timeout: timeoutMs,
         }),
       );
@@ -86,6 +86,7 @@ export class AiProxyService {
     if (body.num_questions)
       formData.append('num_questions', String(body.num_questions));
     if (body.difficulty) formData.append('difficulty', body.difficulty);
+    if (body.question_type) formData.append('question_type', body.question_type);
 
     try {
       const response = await firstValueFrom(
@@ -101,7 +102,9 @@ export class AiProxyService {
           },
           maxContentLength: Infinity,
           maxBodyLength: Infinity,
-          validateStatus: (status) => status < 500,
+          // Accept all responses including 4xx so we can forward them properly
+          validateStatus: (status) => status < 600,
+          timeout: 180_000, // allow for up to 3 retries with backoff in ai_core
         }),
       );
 

@@ -100,4 +100,13 @@ export class CreateInstituteDto {
   @IsString()
   @IsOptional()
   primaryUseCases?: string;
+
+  @ApiProperty({
+    example: 'USD',
+    description: 'Institute billing currency (ISO 4217 code)',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  currency?: string;
 }

@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsNumber, IsIn, Min } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateCourseDto {
   @ApiProperty({ example: 'Introduction to Computer Science' })
@@ -31,4 +32,23 @@ export class CreateCourseDto {
   @IsString()
   @IsOptional()
   assignedTeacherId?: string;
+
+  @ApiProperty({ example: 49.99, description: 'Course price — omit or null for free', required: false })
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  @Type(() => Number)
+  price?: number | null;
+
+  @ApiProperty({ example: 'fixed', enum: ['fixed', 'monthly'], description: 'Payment type: one-time fixed price or recurring monthly', required: false })
+  @IsIn(['fixed', 'monthly'])
+  @IsOptional()
+  paymentType?: 'fixed' | 'monthly';
+
+  @ApiProperty({ example: 9.99, description: 'Monthly subscription price — used when paymentType is monthly', required: false })
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  @Type(() => Number)
+  monthlyPrice?: number | null;
 }
