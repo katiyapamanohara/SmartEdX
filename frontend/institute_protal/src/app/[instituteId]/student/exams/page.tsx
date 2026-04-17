@@ -525,80 +525,91 @@ function TakeExamModal({
     let mounted = true;
 
     (async () => {
+      // ── Step 1: acquire camera (only this failure = camera_disabled flag) ──
+      let stream: MediaStream;
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        if (!mounted) { stream.getTracks().forEach((t) => t.stop()); return; }
-        cameraStreamRef.current = stream;
-
-        const video = document.createElement("video");
-        video.srcObject = stream;
-        video.muted = true;
-        video.playsInline = true;
-        await video.play();
-        faceCheckVideoRef.current = video;
-
-        // Always load TinyFaceDetector for presence check
-        faceapi = await import("@vladmandic/face-api");
-        await faceapi.nets.tinyFaceDetector.loadFromUri("/models");
-
-        // Check every 30 s for presence; every 60 s run live recognition if enabled
-        let checkCount = 0;
-        intervalId = setInterval(async () => {
-          if (!mounted || !faceCheckVideoRef.current || !faceapi) return;
-          checkCount++;
-
-          // ── Face presence (TinyFaceDetector) ───
-          try {
-            const detections = await faceapi.detectAllFaces(
-              faceCheckVideoRef.current,
-              new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.4 }),
-            );
-            const count = detections.length;
-            const now = Date.now();
-
-            if (count === 0) {
-              const last = flagCooldown.current["face_absent"] ?? 0;
-              if (now - last >= 30_000) {
-                flagCooldown.current["face_absent"] = now;
-                const res = await examService.reportIntegrityFlag(instituteId, exam.id, "face_absent");
-                setFlagWarning("⚠️ Face not detected. Stay in front of the camera.");
-                setTimeout(() => setFlagWarning(""), 6000);
-                if (res?.autoFailed && !submitRef.current) { submitRef.current = true; setAutoFailed(true); }
-              }
-            } else if (count > 1) {
-              const last = flagCooldown.current["multiple_faces"] ?? 0;
-              if (now - last >= 30_000) {
-                flagCooldown.current["multiple_faces"] = now;
-                const res = await examService.reportIntegrityFlag(instituteId, exam.id, "multiple_faces");
-                setFlagWarning("⚠️ Multiple faces detected. Only one person allowed.");
-                setTimeout(() => setFlagWarning(""), 6000);
-                if (res?.autoFailed && !submitRef.current) { submitRef.current = true; setAutoFailed(true); }
-              }
-            }
-          } catch { /* silent */ }
-
-          // ── Live face recognition (face_recognition_server) every 2nd tick = 60 s ──
-          if (exam.enableLiveFaceCheck && checkCount % 2 === 0) {
-            try {
-              const canvas = document.createElement("canvas");
-              canvas.width = faceCheckVideoRef.current.videoWidth || 320;
-              canvas.height = faceCheckVideoRef.current.videoHeight || 240;
-              canvas.getContext("2d")!.drawImage(faceCheckVideoRef.current, 0, 0);
-              const imageB64 = canvas.toDataURL("image/jpeg", 0.85);
-
-              const result = await examService.liveFaceCheck(instituteId, exam.id, imageB64);
-              if (result && !result.verified) {
-                setFlagWarning("⚠️ Face recognition failed. Ensure you are the enrolled student.");
-                setTimeout(() => setFlagWarning(""), 6000);
-                if (result.autoFailed && !submitRef.current) { submitRef.current = true; setAutoFailed(true); }
-              }
-            } catch { /* silent */ }
-          }
-        }, 30_000);
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
       } catch {
+        // Camera genuinely blocked — flag it
         const res = await examService.reportIntegrityFlag(instituteId, exam.id, "camera_disabled");
         if (res?.autoFailed && !submitRef.current) { submitRef.current = true; setAutoFailed(true); }
+        return;
       }
+
+      if (!mounted) { stream.getTracks().forEach((t) => t.stop()); return; }
+      cameraStreamRef.current = stream;
+
+      const video = document.createElement("video");
+      video.srcObject = stream;
+      video.muted = true;
+      video.playsInline = true;
+      try { await video.play(); } catch { /* silent — autoplay may be blocked */ }
+      faceCheckVideoRef.current = video;
+
+      // ── Step 2: load face-api models (failure here is silent — don't flag camera) ──
+      try {
+        faceapi = await import("@vladmandic/face-api");
+        await faceapi.nets.tinyFaceDetector.loadFromUri("/models");
+      } catch {
+        // Models unavailable — skip face detection entirely, camera still works
+        return;
+      }
+
+      // ── Step 3: periodic checks ───────────────────────────────────────────
+      // Every 30 s: face presence.  Every 60 s: live recognition (if enabled).
+      let checkCount = 0;
+      intervalId = setInterval(async () => {
+        if (!mounted || !faceCheckVideoRef.current || !faceapi) return;
+        checkCount++;
+
+        // ── Face presence (TinyFaceDetector) ───
+        try {
+          const detections = await faceapi.detectAllFaces(
+            faceCheckVideoRef.current,
+            new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.4 }),
+          );
+          const count = detections.length;
+          const now = Date.now();
+
+          if (count === 0) {
+            const last = flagCooldown.current["face_absent"] ?? 0;
+            if (now - last >= 30_000) {
+              flagCooldown.current["face_absent"] = now;
+              const res = await examService.reportIntegrityFlag(instituteId, exam.id, "face_absent");
+              setFlagWarning("⚠️ Face not detected. Stay in front of the camera.");
+              setTimeout(() => setFlagWarning(""), 6000);
+              if (res?.autoFailed && !submitRef.current) { submitRef.current = true; setAutoFailed(true); }
+            }
+          } else if (count > 1) {
+            const last = flagCooldown.current["multiple_faces"] ?? 0;
+            if (now - last >= 30_000) {
+              flagCooldown.current["multiple_faces"] = now;
+              const res = await examService.reportIntegrityFlag(instituteId, exam.id, "multiple_faces");
+              setFlagWarning("⚠️ Multiple faces detected. Only one person allowed.");
+              setTimeout(() => setFlagWarning(""), 6000);
+              if (res?.autoFailed && !submitRef.current) { submitRef.current = true; setAutoFailed(true); }
+            }
+          }
+        } catch { /* silent */ }
+
+        // ── Live face recognition (face_recognition_server) every 2nd tick = 60 s ──
+        if (exam.enableLiveFaceCheck && checkCount % 2 === 0) {
+          try {
+            const canvas = document.createElement("canvas");
+            canvas.width = faceCheckVideoRef.current.videoWidth || 320;
+            canvas.height = faceCheckVideoRef.current.videoHeight || 240;
+            canvas.getContext("2d")!.drawImage(faceCheckVideoRef.current, 0, 0);
+            const imageB64 = canvas.toDataURL("image/jpeg", 0.85);
+
+            const result = await examService.liveFaceCheck(instituteId, exam.id, imageB64);
+            if (result && !result.verified) {
+              setFlagWarning("⚠️ Face recognition failed. Ensure you are the enrolled student.");
+              setTimeout(() => setFlagWarning(""), 6000);
+              if (result.autoFailed && !submitRef.current) { submitRef.current = true; setAutoFailed(true); }
+            }
+          } catch { /* silent */ }
+        }
+      }, 30_000);
     })();
 
     return () => {
