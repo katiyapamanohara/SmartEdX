@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import json
+import logging
 import uuid
 from typing import Literal, Optional
 
@@ -11,6 +13,48 @@ from agno.agent import Agent
 from pydantic import BaseModel, Field
 
 from config import settings
+
+logger = logging.getLogger(__name__)
+
+# ─── Retry helper ────────────────────────────────────────────────────────────
+
+_RATE_LIMIT_SIGNALS = ("429", "resource_exhausted", "rate limit", "quota", "too many requests")
+
+
+def _is_rate_limit_error(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return any(sig in msg for sig in _RATE_LIMIT_SIGNALS)
+
+
+async def _run_with_backoff(agent: Agent, prompt: str, max_attempts: int = 3):
+    """Run agent.arun(prompt) with exponential backoff on rate-limit errors."""
+    delays = [5, 20, 60]  # seconds between retries
+    last_exc: Exception | None = None
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return await agent.arun(prompt)
+        except Exception as exc:
+            last_exc = exc
+            if _is_rate_limit_error(exc):
+                if attempt < max_attempts:
+                    wait = delays[attempt - 1]
+                    logger.warning(
+                        "Attempt %d/%d hit rate limit — retrying in %ds. Error: %s",
+                        attempt, max_attempts, wait, exc,
+                    )
+                    await asyncio.sleep(wait)
+                else:
+                    logger.error(
+                        "All %d attempts exhausted due to rate limiting. Last error: %s",
+                        max_attempts, exc,
+                    )
+                    raise
+            else:
+                # Non-rate-limit error — fail immediately
+                raise
+
+    raise last_exc  # unreachable but satisfies type checkers
 
 QuestionType = Literal["mcq", "essay", "both"]
 
@@ -217,7 +261,7 @@ async def generate_questions(
         f"--- CONTENT END ---"
     )
 
-    result = await agent.arun(prompt)
+    result = await _run_with_backoff(agent, prompt)
 
     if isinstance(result.content, UnifiedQuizOut):
         return result.content

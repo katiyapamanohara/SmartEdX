@@ -9,7 +9,7 @@ import {
 } from 'typeorm';
 import { InstituteUser } from './institute-user.entity';
 
-export type NotificationType = 'message' | 'email' | 'reminder';
+export type NotificationType = 'message' | 'email' | 'reminder' | 'cheat_alert';
 
 @Entity('notifications')
 @Index(['userId', 'instituteId'])

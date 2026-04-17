@@ -41,11 +41,16 @@ export interface Exam {
   questionCount: number;
   questions: ExamQuestion[];
   requireFaceId: boolean;
+  requireScreenShare: boolean;
+  enableLiveFaceCheck: boolean;
+  autoFailOnCheat: boolean;
   maxAttempts: number;
   createdByUserId: string;
   createdAt: string;
   updatedAt: string;
-  myAttempt?: ExamAttempt | null;
+  myAttempt?: (ExamAttempt & { autoFailed?: boolean }) | null;
+  /** Teacher/admin only — all student attempts keyed by userId */
+  studentAttempts?: Record<string, ExamAttempt & { attemptCount?: number; autoFailed?: boolean }>;
 }
 
 export interface CreateExamPayload {
@@ -57,6 +62,9 @@ export interface CreateExamPayload {
   durationMinutes: number;
   passingScore: number;
   requireFaceId?: boolean;
+  requireScreenShare?: boolean;
+  enableLiveFaceCheck?: boolean;
+  autoFailOnCheat?: boolean;
   maxAttempts?: number;
   questions: ExamQuestion[];
 }
@@ -147,16 +155,54 @@ class ExamService {
   async reportIntegrityFlag(
     instituteId: string,
     examId: string,
-    type: "tab_switch" | "face_absent" | "multiple_faces" | "face_verify_failed" | "camera_disabled" | "fullscreen_exit"
-  ): Promise<void> {
+    type: "tab_switch" | "face_absent" | "multiple_faces" | "face_verify_failed" | "camera_disabled" | "fullscreen_exit" | "screen_share_disabled" | "live_face_mismatch" | "suspicious_screen" | "copy_attempt"
+  ): Promise<{ autoFailed?: boolean }> {
     try {
-      await fetch(`${this.base(instituteId)}/${examId}/integrity-flag`, {
+      const res = await fetch(`${this.base(instituteId)}/${examId}/integrity-flag`, {
         method: "POST",
         headers: this.headers(),
         body: JSON.stringify({ type }),
       });
+      if (res.ok) return res.json();
     } catch {
       // fire-and-forget — never block the student
+    }
+    return {};
+  }
+
+  async liveFaceCheck(
+    instituteId: string,
+    examId: string,
+    imageB64: string,
+  ): Promise<{ verified: boolean; distance: number; threshold: number; autoFailed: boolean } | null> {
+    try {
+      const res = await fetch(`${this.base(instituteId)}/${examId}/live-face-check`, {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify({ image_b64: imageB64 }),
+      });
+      if (!res.ok) return null;
+      return res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async screenCheck(
+    instituteId: string,
+    examId: string,
+    imageB64: string,
+  ): Promise<{ suspicious: boolean; reason: string; autoFailed: boolean } | null> {
+    try {
+      const res = await fetch(`${this.base(instituteId)}/${examId}/screen-check`, {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify({ image_b64: imageB64 }),
+      });
+      if (!res.ok) return null;
+      return res.json();
+    } catch {
+      return null;
     }
   }
 

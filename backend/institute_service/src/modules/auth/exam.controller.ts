@@ -178,6 +178,52 @@ export class ExamController {
     );
   }
 
+  // ── Live face check ───────────────────────────────────────────────────────
+
+  @Post(':examId/live-face-check')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Student: periodic live face recognition check during exam',
+  })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiParam({ name: 'examId', description: 'Exam ID' })
+  liveFaceCheck(
+    @Param('id') instituteId: string,
+    @Param('examId') examId: string,
+    @CurrentUser('userId') userId: string,
+    @Body() body: { image_b64: string },
+  ) {
+    return this.examService.liveFaceCheck(
+      instituteId,
+      examId,
+      userId,
+      body.image_b64,
+    );
+  }
+
+  // ── Screen content check ─────────────────────────────────────────────────
+
+  @Post(':examId/screen-check')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Student: periodic screen share analysis for cheating detection',
+  })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiParam({ name: 'examId', description: 'Exam ID' })
+  screenCheck(
+    @Param('id') instituteId: string,
+    @Param('examId') examId: string,
+    @CurrentUser('userId') userId: string,
+    @Body() body: { image_b64: string },
+  ) {
+    return this.examService.screenCheck(
+      instituteId,
+      examId,
+      userId,
+      body.image_b64,
+    );
+  }
+
   // ── Student ───────────────────────────────────────────────────────────────
 
   @Post(':examId/submit')

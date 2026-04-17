@@ -5,6 +5,7 @@ from typing import Literal, Optional
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
+from agents.quiz_generator import _is_rate_limit_error  # noqa: WPS450
 from agents.quiz_generator import (
     QuizOut,
     QuizQuestionOut,
@@ -60,6 +61,11 @@ async def generate_from_text(body: GenerateFromTextRequest):
             body.question_type,
         )
     except Exception as e:
+        if _is_rate_limit_error(e):
+            raise HTTPException(
+                status_code=429,
+                detail="The AI service is temporarily rate-limited. Please wait a moment and try again.",
+            )
         raise HTTPException(status_code=500, detail=f"AI generation failed: {e}")
 
     return GenerateUnifiedResponse(questions=result.questions)
@@ -103,6 +109,11 @@ async def generate_from_file(
     try:
         result: UnifiedQuizOut = await generate_questions(text, num_questions, difficulty, question_type)
     except Exception as e:
+        if _is_rate_limit_error(e):
+            raise HTTPException(
+                status_code=429,
+                detail="The AI service is temporarily rate-limited. Please wait a moment and try again.",
+            )
         raise HTTPException(status_code=500, detail=f"AI generation failed: {e}")
 
     return GenerateUnifiedResponse(questions=result.questions)
@@ -145,6 +156,11 @@ async def generate(
     try:
         result: QuizOut = await generate_quiz(text, num_questions, difficulty)
     except Exception as e:
+        if _is_rate_limit_error(e):
+            raise HTTPException(
+                status_code=429,
+                detail="The AI service is temporarily rate-limited. Please wait a moment and try again.",
+            )
         raise HTTPException(status_code=500, detail=f"AI generation failed: {e}")
 
     return GenerateResponse(questions=result.questions)

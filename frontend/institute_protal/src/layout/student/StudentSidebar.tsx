@@ -78,7 +78,7 @@ const StudentSidebar: React.FC = () => {
     { icon: <DocsIcon />, name: "Exams", path: "/student/exams" },
     { icon: <ChatIcon />, name: "Messages", path: "/student/messages" },
     { icon: <PieChartIcon />, name: "Performance", path: "/student/performance" },
-    { icon: <InfoIcon />, name: "Support", path: "/student/support" },
+  
     ...FEATURE_STUDENT_NAV
       .filter(({ feature }) => enabledFeatures.includes(feature))
       .map(({ item }) => item),

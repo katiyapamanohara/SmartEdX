@@ -10,21 +10,33 @@ import {
   IsNumber,
   Min,
   Max,
-  ArrayMinSize,
   IsBoolean,
+  IsIn,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ExamQuestionDto {
   @ApiProperty() @IsString() @IsNotEmpty() id: string;
+
+  @ApiPropertyOptional({ enum: ['mcq', 'essay'] })
+  @IsOptional()
+  @IsIn(['mcq', 'essay'])
+  type?: 'mcq' | 'essay';
+
   @ApiProperty() @IsString() @IsNotEmpty() question: string;
-  @ApiProperty({ type: [String], minItems: 4, maxItems: 4 })
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
   @IsArray()
-  @ArrayMinSize(4)
-  options: [string, string, string, string];
-  @ApiProperty() @IsInt() @Min(0) @Max(3) correctAnswer: number;
+  options?: string[];
+
+  @ApiPropertyOptional() @IsOptional() @IsInt() @Min(0) @Max(3) correctAnswer?: number;
+
   @ApiProperty() @IsNumber() @Min(1) marks: number;
+
   @ApiPropertyOptional() @IsOptional() @IsString() explanation?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString() sampleAnswer?: string;
 }
 
 export class CreateExamDto {
@@ -42,6 +54,13 @@ export class CreateExamDto {
   @Max(10)
   maxAttempts?: number;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() requireFaceId?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() requireScreenShare?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() enableLiveFaceCheck?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() autoFailOnCheat?: boolean;
+  @ApiPropertyOptional({ enum: ['draft', 'scheduled', 'active', 'completed'] })
+  @IsOptional()
+  @IsIn(['draft', 'scheduled', 'active', 'completed'])
+  status?: string;
   @ApiProperty({ type: [ExamQuestionDto] })
   @IsArray()
   @ValidateNested({ each: true })

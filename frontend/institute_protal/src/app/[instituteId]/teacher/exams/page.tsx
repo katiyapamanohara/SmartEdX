@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
-import { examService, Exam, ExamQuestion, CreateExamPayload, ExamStatus, QuestionType } from "@/services/examService";
+import { examService, Exam, ExamQuestion, ExamAttempt, CreateExamPayload, ExamStatus, QuestionType } from "@/services/examService";
 import { aiService } from "@/services/aiService";
 import { instituteService, Course } from "@/services/instituteService";
 
@@ -434,6 +434,9 @@ function ExamModal({ courses, initial, onSave, onClose }: ExamModalProps) {
   const [passingScore, setPassingScore] = useState(initial?.passingScore ?? 50);
   const [questions, setQuestions] = useState<ExamQuestion[]>(initial?.questions ?? []);
   const [requireFaceId, setRequireFaceId] = useState(initial?.requireFaceId ?? false);
+  const [requireScreenShare, setRequireScreenShare] = useState(initial?.requireScreenShare ?? false);
+  const [enableLiveFaceCheck, setEnableLiveFaceCheck] = useState(initial?.enableLiveFaceCheck ?? false);
+  const [autoFailOnCheat, setAutoFailOnCheat] = useState(initial?.autoFailOnCheat ?? false);
   const [maxAttempts, setMaxAttempts] = useState(initial?.maxAttempts ?? 1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -446,17 +449,46 @@ function ExamModal({ courses, initial, onSave, onClose }: ExamModalProps) {
   };
 
   const handleSubmit = async (publish: boolean) => {
-    if (!title.trim()) { setTab("details"); return setError("Title is required"); }
-    if (!courseId) { setTab("details"); return setError("Select a course"); }
-    if (questions.length === 0) { setTab("questions"); return setError("Add at least one question"); }
+    // Validate details
+    if (!title.trim()) {
+      setTab("details");
+      setError("Title is required");
+      return;
+    }
+    if (!courseId) {
+      setTab("details");
+      setError("Select a course");
+      return;
+    }
+    // Validate questions
+    if (questions.length === 0) {
+      setTab("questions");
+      setError(publish ? "Add at least one question before publishing" : "Add at least one question");
+      return;
+    }
     for (const q of questions) {
-      if (!q.question.trim()) { setTab("questions"); return setError("All questions must have text"); }
+      if (!q.question.trim()) {
+        setTab("questions");
+        setError("All questions must have text");
+        return;
+      }
       if (q.type === "mcq" && (q.options ?? []).some((o) => !o.trim())) {
-        setTab("questions"); return setError("All MCQ options must be filled");
+        setTab("questions");
+        setError("All MCQ options must be filled");
+        return;
       }
     }
     setError("");
     setSaving(true);
+
+    // Determine status:
+    // - Publish + scheduledAt  → "scheduled"
+    // - Publish + no date      → "active" (publish immediately)
+    // - Save as Draft          → no status override (keeps current or default "draft")
+    const statusOverride: { status?: ExamStatus } = publish
+      ? { status: scheduledAt ? "scheduled" : "active" }
+      : {};
+
     await onSave({
       title: title.trim(),
       description: description.trim() || undefined,
@@ -466,9 +498,12 @@ function ExamModal({ courses, initial, onSave, onClose }: ExamModalProps) {
       durationMinutes,
       passingScore,
       requireFaceId,
+      requireScreenShare,
+      enableLiveFaceCheck,
+      autoFailOnCheat,
       maxAttempts,
       questions,
-      ...(publish && scheduledAt ? { status: "scheduled" as ExamStatus } : {}),
+      ...statusOverride,
     });
     setSaving(false);
   };
@@ -508,120 +543,148 @@ function ExamModal({ courses, initial, onSave, onClose }: ExamModalProps) {
           ))}
         </div>
 
-        <div className="px-6 py-5 flex flex-col gap-4 max-h-[65vh] overflow-y-auto">
-          {/* Details Tab */}
-          {tab === "details" && (
-            <>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Title *</label>
-                <input value={title} onChange={(e) => setTitle(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-800 dark:text-white outline-none focus:border-brand-400"
-                  placeholder="Midterm Examination" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Assign to Course *</label>
-                <select value={courseId} onChange={(e) => setCourseId(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-800 dark:text-white outline-none focus:border-brand-400">
-                  <option value="">Select course…</option>
-                  {courses.map((c) => <option key={c.id} value={c.id}>{c.name} {c.batchNumber ? `(${c.batchNumber})` : ""}</option>)}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Scheduled Date & Time</label>
-                  <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)}
-                    className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-800 dark:text-white outline-none focus:border-brand-400" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Duration (minutes)</label>
-                  <input type="number" min={5} value={durationMinutes} onChange={(e) => setDurationMinutes(Number(e.target.value))}
-                    className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-800 dark:text-white outline-none focus:border-brand-400" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Passing Score (%)</label>
-                <input type="number" min={0} max={100} value={passingScore} onChange={(e) => setPassingScore(Number(e.target.value))}
-                  className="w-40 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-800 dark:text-white outline-none focus:border-brand-400" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description</label>
-                <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2}
-                  className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-800 dark:text-white outline-none focus:border-brand-400 resize-none"
-                  placeholder="Optional description…" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Student Instructions</label>
-                <textarea value={instructions} onChange={(e) => setInstructions(e.target.value)} rows={2}
-                  className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-800 dark:text-white outline-none focus:border-brand-400 resize-none"
-                  placeholder="e.g. Read each question carefully before answering." />
-              </div>
+        {/* Validation error — always visible regardless of active tab */}
+        {error && (
+          <div className="mx-6 mt-4 flex items-center gap-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-2.5">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="text-red-500 shrink-0">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <p className="text-sm text-red-600 dark:text-red-400 font-medium">{error}</p>
+          </div>
+        )}
 
-              {/* Max Attempts */}
-              <div className="flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-gray-700">
-                <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0 text-gray-500 dark:text-gray-400 font-bold text-sm">
-                  #
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Max Attempts</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">How many times a student can attempt this exam</p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button type="button" onClick={() => setMaxAttempts((p) => Math.max(1, p - 1))}
-                    className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors font-bold text-lg leading-none">−</button>
-                  <span className="w-6 text-center text-sm font-bold text-gray-900 dark:text-white">{maxAttempts}</span>
-                  <button type="button" onClick={() => setMaxAttempts((p) => Math.min(10, p + 1))}
-                    className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors font-bold text-lg leading-none">+</button>
-                </div>
-              </div>
+        <div className="px-6 py-5 max-h-[65vh] overflow-y-auto">
 
-              {/* Face ID toggle */}
+          {/* ── Details Tab ──────────────────────────────────────────────── */}
+          <div className={`flex flex-col gap-4 ${tab !== "details" ? "hidden" : ""}`}>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Title *</label>
+              <input value={title} onChange={(e) => setTitle(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-800 dark:text-white outline-none focus:border-brand-400"
+                placeholder="Midterm Examination" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Assign to Course *</label>
+              <select value={courseId} onChange={(e) => setCourseId(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-800 dark:text-white outline-none focus:border-brand-400">
+                <option value="">Select course…</option>
+                {courses.map((c) => <option key={c.id} value={c.id}>{c.name} {c.batchNumber ? `(${c.batchNumber})` : ""}</option>)}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Scheduled Date & Time</label>
+                <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-800 dark:text-white outline-none focus:border-brand-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Duration (minutes)</label>
+                <input type="number" min={5} value={durationMinutes} onChange={(e) => setDurationMinutes(Number(e.target.value))}
+                  className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-800 dark:text-white outline-none focus:border-brand-400" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Passing Score (%)</label>
+              <input type="number" min={0} max={100} value={passingScore} onChange={(e) => setPassingScore(Number(e.target.value))}
+                className="w-40 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-800 dark:text-white outline-none focus:border-brand-400" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description</label>
+              <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2}
+                className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-800 dark:text-white outline-none focus:border-brand-400 resize-none"
+                placeholder="Optional description…" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Student Instructions</label>
+              <textarea value={instructions} onChange={(e) => setInstructions(e.target.value)} rows={2}
+                className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-800 dark:text-white outline-none focus:border-brand-400 resize-none"
+                placeholder="e.g. Read each question carefully before answering." />
+            </div>
+
+            {/* Max Attempts */}
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-gray-700">
+              <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0 text-gray-500 dark:text-gray-400 font-bold text-sm">#</div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Max Attempts</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">How many times a student can attempt this exam</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button type="button" onClick={() => setMaxAttempts((p) => Math.max(1, p - 1))}
+                  className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors font-bold text-lg leading-none">−</button>
+                <span className="w-6 text-center text-sm font-bold text-gray-900 dark:text-white">{maxAttempts}</span>
+                <button type="button" onClick={() => setMaxAttempts((p) => Math.min(10, p + 1))}
+                  className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors font-bold text-lg leading-none">+</button>
+              </div>
+            </div>
+
+            {/* Proctoring toggles */}
+            {(
+              [
+                {
+                  value: requireFaceId, set: setRequireFaceId,
+                  label: "Require Face Identification",
+                  desc: "Students must verify their identity with face recognition before starting",
+                  icon: <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />,
+                },
+                {
+                  value: requireScreenShare, set: setRequireScreenShare,
+                  label: "Require Screen Share",
+                  desc: "Students must share their screen during the entire exam — exits are flagged",
+                  icon: <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H3.75A2.25 2.25 0 0 1 1.5 15V5.25A2.25 2.25 0 0 1 3.75 3h16.5A2.25 2.25 0 0 1 21 5.25Z" />,
+                },
+                {
+                  value: enableLiveFaceCheck, set: setEnableLiveFaceCheck,
+                  label: "Live Face Recognition",
+                  desc: "Continuously verify student identity via face recognition server every 60 s",
+                  icon: <><path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></>,
+                },
+                {
+                  value: autoFailOnCheat, set: setAutoFailOnCheat,
+                  label: "Auto-Fail on Cheating",
+                  desc: "Automatically fail and expel a student after 3 high-severity violations",
+                  icon: <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />,
+                },
+              ] as const
+            ).map(({ value, set, label, desc, icon }) => (
               <button
+                key={label}
                 type="button"
-                onClick={() => setRequireFaceId((p) => !p)}
+                onClick={() => (set as React.Dispatch<React.SetStateAction<boolean>>)((p) => !p)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left ${
-                  requireFaceId
+                  value
                     ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10"
                     : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
                 }`}
               >
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${requireFaceId ? "bg-brand-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-400"}`}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-                  </svg>
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${value ? "bg-brand-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-400"}`}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>{icon}</svg>
                 </div>
                 <div className="flex-1">
-                  <p className={`text-sm font-semibold ${requireFaceId ? "text-brand-700 dark:text-brand-300" : "text-gray-700 dark:text-gray-300"}`}>
-                    Require Face Identification
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Students must verify their identity with face recognition before starting
-                  </p>
+                  <p className={`text-sm font-semibold ${value ? "text-brand-700 dark:text-brand-300" : "text-gray-700 dark:text-gray-300"}`}>{label}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{desc}</p>
                 </div>
-                <div className={`w-10 h-6 rounded-full relative transition-colors ${requireFaceId ? "bg-brand-500" : "bg-gray-200 dark:bg-gray-700"}`}>
-                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${requireFaceId ? "translate-x-5" : "translate-x-1"}`} />
+                <div className={`w-10 h-6 rounded-full relative transition-colors shrink-0 ${value ? "bg-brand-500" : "bg-gray-200 dark:bg-gray-700"}`}>
+                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${value ? "translate-x-5" : "translate-x-1"}`} />
                 </div>
               </button>
-            </>
-          )}
+            ))}
+          </div>
 
-          {/* AI Generate Tab */}
-          {tab === "ai" && (
+          {/* ── AI Generate Tab — always mounted so generated results survive tab switches ── */}
+          <div className={tab !== "ai" ? "hidden" : ""}>
             <AIQuestionGenerator onImport={handleImportAI} />
-          )}
+          </div>
 
-          {/* Questions Tab */}
-          {tab === "questions" && (
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                  {questions.length} question{questions.length !== 1 ? "s" : ""} · Total marks: {totalMarks}
-                </span>
-              </div>
-              <QuestionBuilder questions={questions} onChange={setQuestions} />
+          {/* ── Questions Tab ─────────────────────────────────────────────── */}
+          <div className={tab !== "questions" ? "hidden" : ""}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {questions.length} question{questions.length !== 1 ? "s" : ""} · Total marks: {totalMarks}
+              </span>
             </div>
-          )}
+            <QuestionBuilder questions={questions} onChange={setQuestions} />
+          </div>
 
-          {error && <p className="text-sm text-red-500">{error}</p>}
         </div>
 
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-800">
@@ -632,7 +695,7 @@ function ExamModal({ courses, initial, onSave, onClose }: ExamModalProps) {
           </button>
           <button onClick={() => handleSubmit(true)} disabled={saving}
             className="px-4 py-2 text-sm rounded-lg bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50">
-            {saving ? "Saving…" : "Publish"}
+            {saving ? "Saving…" : scheduledAt ? "Publish & Schedule" : "Publish Now"}
           </button>
         </div>
       </div>
@@ -643,7 +706,8 @@ function ExamModal({ courses, initial, onSave, onClose }: ExamModalProps) {
 // ─── Attempts Modal ────────────────────────────────────────────────────────────
 
 function AttemptsModal({ exam, onClose }: { exam: Exam; onClose: () => void }) {
-  const attempts = Object.entries(exam.studentAttempts ?? {});
+  type AttemptEntry = ExamAttempt & { attemptCount?: number; autoFailed?: boolean };
+  const attempts = Object.entries(exam.studentAttempts ?? {}) as [string, AttemptEntry][];
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
       <div className="w-full max-w-lg bg-white dark:bg-gray-900 rounded-2xl shadow-xl">
@@ -674,7 +738,11 @@ function AttemptsModal({ exam, onClose }: { exam: Exam; onClose: () => void }) {
                       <td className="py-2 text-right text-gray-800 dark:text-white">{att.score}/{att.totalMarks}</td>
                       <td className="py-2 text-right text-gray-800 dark:text-white">{pct}%</td>
                       <td className="py-2 text-right">
-                        {att.pendingEssayReview ? (
+                        {att.autoFailed ? (
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+                            Cheating Detected
+                          </span>
+                        ) : att.pendingEssayReview ? (
                           <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300">
                             Pending Review
                           </span>
@@ -853,6 +921,7 @@ export default function TeacherExamsPage() {
       {attemptsExam && (
         <AttemptsModal exam={attemptsExam} onClose={() => setAttemptsExam(null)} />
       )}
+
     </div>
   );
 }
