@@ -64,6 +64,80 @@ const SendIcon = () => (
     <path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z"/>
   </svg>
 );
+const RecordIcon = ({ recording }: { recording?: boolean }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+    {recording
+      ? <rect x="6" y="6" width="12" height="12" rx="2"/>
+      : <circle cx="12" cy="12" r="5"/>}
+  </svg>
+);
+
+// ── Recording name modal ──────────────────────────────────────────────────────
+function RecordingNameModal({
+  defaultName,
+  uploading,
+  uploadProgress,
+  onSave,
+  onDiscard,
+}: {
+  defaultName: string;
+  uploading: boolean;
+  uploadProgress: number;
+  onSave: (name: string) => void;
+  onDiscard: () => void;
+}) {
+  const [name, setName] = useState(defaultName);
+  return (
+    <div className="fixed inset-0 z-999999 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="w-full max-w-sm bg-[#2d2f31] rounded-2xl shadow-2xl p-6 border border-white/10">
+        <h2 className="text-white font-bold text-lg mb-1">Save Recording</h2>
+        <p className="text-white/50 text-sm mb-4">Give your recording a name before saving it.</p>
+
+        <input
+          autoFocus
+          disabled={uploading}
+          className="w-full bg-[#3c4043] text-white text-sm px-3 py-2.5 rounded-lg placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-[#1a73e8] mb-4 disabled:opacity-60"
+          placeholder="e.g. Algebra Session 1"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && name.trim() && !uploading) onSave(name.trim()); }}
+        />
+
+        {uploading && (
+          <div className="mb-4">
+            <div className="flex justify-between text-xs text-white/50 mb-1">
+              <span>Uploading to storage…</span>
+              <span>{uploadProgress}%</span>
+            </div>
+            <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-[#1a73e8] rounded-full transition-all duration-300"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            onClick={onDiscard}
+            disabled={uploading}
+            className="flex-1 py-2 rounded-lg border border-white/20 text-white/60 text-sm hover:bg-white/5 transition-colors disabled:opacity-50"
+          >
+            Discard
+          </button>
+          <button
+            onClick={() => { if (name.trim()) onSave(name.trim()); }}
+            disabled={!name.trim() || uploading}
+            className="flex-1 py-2 rounded-lg bg-[#1a73e8] hover:bg-[#1557b0] text-white text-sm font-medium transition-colors disabled:opacity-50"
+          >
+            {uploading ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 const MinimizeIcon = () => (
   <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
     <path d="M19 13H5v-2h14v2z"/>
@@ -312,12 +386,102 @@ function SidePanel({
   );
 }
 
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5001";
+
+function getToken(): string | null {
+  if (typeof document === "undefined") return null;
+  const m = document.cookie.match(/(^| )access_token=([^;]+)/);
+  return m ? m[2] : null;
+}
+
 // ── Main Teacher Page ─────────────────────────────────────────────────────────
 export default function TeacherClassroomPage() {
   const { instituteId, sessionId } = useParams<{ instituteId: string; sessionId: string }>();
   const router = useRouter();
   const ctx = useLiveSession();
   const localVideoRef = useRef<HTMLVideoElement>(null);
+
+  // ── Recording state ──────────────────────────────────────────────────────
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingChunksRef = useRef<Blob[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+  const [showNameModal, setShowNameModal] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startRecording = () => {
+    const stream = ctx.localStream;
+    if (!stream) return;
+    recordingChunksRef.current = [];
+    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
+      ? "video/webm;codecs=vp9,opus"
+      : "video/webm";
+    const mr = new MediaRecorder(stream, { mimeType });
+    mr.ondataavailable = (e) => { if (e.data.size > 0) recordingChunksRef.current.push(e.data); };
+    mr.onstop = () => {
+      const blob = new Blob(recordingChunksRef.current, { type: mimeType });
+      setRecordedBlob(blob);
+      setShowNameModal(true);
+    };
+    mr.start(1000);
+    mediaRecorderRef.current = mr;
+    setIsRecording(true);
+    setRecordingSeconds(0);
+    recordingTimerRef.current = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
+  };
+
+  const stopRecording = () => {
+    mediaRecorderRef.current?.stop();
+    setIsRecording(false);
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+  };
+
+  const handleSaveRecording = async (name: string) => {
+    if (!recordedBlob) return;
+    setUploading(true);
+    setUploadProgress(0);
+    try {
+      const ext = recordedBlob.type.includes("webm") ? "webm" : "mp4";
+      const fileName = `${name.replace(/\s+/g, "_")}_${Date.now()}.${ext}`;
+      const form = new FormData();
+      form.append("title", name);
+      form.append("file", recordedBlob, fileName);
+      const token = getToken();
+      const xhr = new XMLHttpRequest();
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100));
+      };
+      await new Promise<void>((resolve, reject) => {
+        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Upload failed: ${xhr.status}`)));
+        xhr.onerror = () => reject(new Error("Network error"));
+        xhr.open("POST", `${API}/api/institutes/institutes/${instituteId}/recordings`);
+        if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+        xhr.send(form);
+      });
+      setShowNameModal(false);
+      setRecordedBlob(null);
+      setUploadProgress(0);
+    } catch (err) {
+      console.error("Recording upload failed:", err);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDiscardRecording = () => {
+    setShowNameModal(false);
+    setRecordedBlob(null);
+    setUploadProgress(0);
+  };
+
+  // Format recording duration as mm:ss
+  const recDuration = `${String(Math.floor(recordingSeconds / 60)).padStart(2, "0")}:${String(recordingSeconds % 60).padStart(2, "0")}`;
 
   // Join (or re-attach to) the session in the persistent context
   useEffect(() => {
@@ -396,6 +560,17 @@ export default function TeacherClassroomPage() {
 
   return (
     <div className="fixed inset-0 z-999999 bg-[#202124] flex flex-col overflow-hidden">
+      {/* Recording name modal */}
+      {showNameModal && (
+        <RecordingNameModal
+          defaultName={`${session?.title ?? "Live Class"} – ${new Date().toLocaleDateString()}`}
+          uploading={uploading}
+          uploadProgress={uploadProgress}
+          onSave={handleSaveRecording}
+          onDiscard={handleDiscardRecording}
+        />
+      )}
+
       {/* Top bar */}
       <div className="absolute top-0 inset-x-0 z-10 flex items-center justify-between px-5 py-3 bg-linear-to-b from-black/40 to-transparent pointer-events-none">
         <div className="pointer-events-auto flex items-center gap-3">
@@ -403,6 +578,11 @@ export default function TeacherClassroomPage() {
             ● LIVE
           </span>
           <h1 className="text-white text-sm font-medium max-w-xs truncate">{session?.title ?? "Live Class"}</h1>
+          {isRecording && (
+            <span className="flex items-center gap-1.5 text-xs font-bold text-white bg-rose-700 px-2.5 py-1 rounded-full">
+              ⏺ REC {recDuration}
+            </span>
+          )}
         </div>
         <div className="pointer-events-auto flex items-center gap-3">
           <Clock />
@@ -508,6 +688,16 @@ export default function TeacherClassroomPage() {
           </RoundBtn>
           <RoundBtn onClick={() => togglePanel("chat")} label="Chat" highlight={sidePanel === "chat"} badge={unreadChat || undefined}>
             <ChatIcon />
+          </RoundBtn>
+
+          <div className="w-px h-8 bg-white/10 mx-1" />
+
+          <RoundBtn
+            onClick={isRecording ? stopRecording : startRecording}
+            label={isRecording ? "Stop Rec" : "Record"}
+            red={isRecording}
+          >
+            <RecordIcon recording={isRecording} />
           </RoundBtn>
 
           <div className="w-px h-8 bg-white/10 mx-1" />
