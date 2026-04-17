@@ -16,7 +16,7 @@ export class CourseRepository extends BaseRepository<Course> {
   async findByInstituteId(instituteId: string): Promise<Course[]> {
     return this.courseRepository.find({
       where: { instituteId },
-      relations: ['teachers', 'teachers.user'],
+      relations: ['teachers', 'teachers.user', 'modules'],
       order: { createdAt: 'DESC' },
     });
   }

@@ -5,6 +5,12 @@ import AiDescriptionField from "@/components/common/AiDescriptionField";
 
 import { createPortal } from "react-dom";
 
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: "$", EUR: "€", GBP: "£", INR: "₹", AUD: "A$", CAD: "C$",
+  SGD: "S$", AED: "د.إ", LKR: "Rs", JPY: "¥", CNY: "¥", BRL: "R$",
+  MYR: "RM", NGN: "₦", PKR: "₨", ZAR: "R",
+};
+
 interface CourseModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -26,6 +32,9 @@ const CourseModal: React.FC<CourseModalProps> = ({
     batchNumber: "",
     description: "",
     assignedTeacherId: "",
+    price: "",
+    paymentType: "fixed" as "fixed" | "monthly",
+    monthlyPrice: "",
   });
   const [teachers, setTeachers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -33,11 +42,18 @@ const CourseModal: React.FC<CourseModalProps> = ({
   const [mounted, setMounted] = useState(false);
   const [coverImage, setCoverImage] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [currencySym, setCurrencySym] = useState("$");
 
   useEffect(() => {
     setMounted(true);
     return () => setMounted(false);
   }, []);
+
+  useEffect(() => {
+    instituteService.getInstituteById(instituteId).then((inst) => {
+      if (inst?.currency) setCurrencySym(CURRENCY_SYMBOLS[inst.currency] ?? inst.currency);
+    });
+  }, [instituteId]);
 
   useEffect(() => {
     if (isOpen) {
@@ -49,6 +65,9 @@ const CourseModal: React.FC<CourseModalProps> = ({
           batchNumber: initialData.batchNumber || "",
           description: initialData.description || "",
           assignedTeacherId: initialData.assignedTeacher?.id || "",
+          price: (initialData as any).price != null ? String((initialData as any).price) : "",
+          paymentType: (initialData as any).paymentType ?? "fixed",
+          monthlyPrice: (initialData as any).monthlyPrice != null ? String((initialData as any).monthlyPrice) : "",
         });
         setCoverImage(initialData.coverImage || null);
       } else {
@@ -58,6 +77,9 @@ const CourseModal: React.FC<CourseModalProps> = ({
           batchNumber: "",
           description: "",
           assignedTeacherId: "",
+          price: "",
+          paymentType: "fixed",
+          monthlyPrice: "",
         });
         setCoverImage(null);
       }
@@ -108,7 +130,12 @@ const CourseModal: React.FC<CourseModalProps> = ({
     try {
       // In a real app, you'd upload the file here and get a URL
       // For now, we'll just pass the base64 string or the file object if the API supports it
-      const submissionData = { ...formData, coverImage }; 
+      const submissionData = {
+        ...formData,
+        coverImage,
+        price: formData.paymentType === "fixed" && formData.price !== "" ? parseFloat(formData.price) : null,
+        monthlyPrice: formData.paymentType === "monthly" && formData.monthlyPrice !== "" ? parseFloat(formData.monthlyPrice) : null,
+      };
       await onSubmit(submissionData);
       onClose();
     } catch (error) {
@@ -121,7 +148,7 @@ const CourseModal: React.FC<CourseModalProps> = ({
   if (!isOpen || !mounted) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[999999] flex items-center justify-center overflow-y-auto overflow-x-hidden bg-black/50 p-4 backdrop-blur-sm transition-all">
+    <div className="fixed inset-0 z-999999 flex items-center justify-center overflow-y-auto overflow-x-hidden bg-black/50 p-4 backdrop-blur-sm transition-all">
       <div className="relative w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-800 modal-content">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -193,6 +220,70 @@ const CourseModal: React.FC<CourseModalProps> = ({
                 placeholder="e.g. 2024-A"
               />
             </div>
+          </div>
+
+          {/* Payment type toggle */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Payment Type <span className="text-gray-400 font-normal">— leave price blank for free</span>
+            </label>
+            <div className="flex gap-2 mb-3">
+              <button
+                type="button"
+                onClick={() => setFormData((prev) => ({ ...prev, paymentType: "fixed" }))}
+                className={`flex-1 py-2 px-4 rounded-lg text-sm font-semibold border transition-colors ${
+                  formData.paymentType === "fixed"
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600"
+                }`}
+              >
+                Fixed Price
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData((prev) => ({ ...prev, paymentType: "monthly" }))}
+                className={`flex-1 py-2 px-4 rounded-lg text-sm font-semibold border transition-colors ${
+                  formData.paymentType === "monthly"
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600"
+                }`}
+              >
+                Monthly Payment
+              </button>
+            </div>
+
+            {formData.paymentType === "fixed" ? (
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">{currencySym}</span>
+                <input
+                  type="number"
+                  id="price"
+                  name="price"
+                  value={formData.price}
+                  onChange={handleChange}
+                  min="0"
+                  step="0.01"
+                  className="w-full pl-7 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  placeholder="0.00"
+                />
+              </div>
+            ) : (
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">{currencySym}</span>
+                <input
+                  type="number"
+                  id="monthlyPrice"
+                  name="monthlyPrice"
+                  value={formData.monthlyPrice}
+                  onChange={handleChange}
+                  min="0"
+                  step="0.01"
+                  className="w-full pl-7 pr-16 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  placeholder="0.00"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">/month</span>
+              </div>
+            )}
           </div>
 
           <div>

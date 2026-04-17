@@ -41,11 +41,7 @@ const navItems: NavItem[] = [
     ],
   },
  
-  {
-    icon: <DocsIcon />,
-    name: "Exams",
-    path: "/institute/exams",
-  },
+
   {
     icon: <DollarLineIcon />,
     name: "Finance",

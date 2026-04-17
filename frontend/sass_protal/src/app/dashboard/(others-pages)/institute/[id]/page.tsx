@@ -26,6 +26,7 @@ function InstituteCustomizeContent() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [primaryUseCases, setPrimaryUseCases] = useState<string[]>([]);
   const [isActive, setIsActive] = useState(false);
+  const [currency, setCurrency] = useState("USD");
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
   // Feature Gating State
@@ -84,6 +85,7 @@ function InstituteCustomizeContent() {
         setCountry(data.country || "");
         setPhoneNumber(data.phoneNumber || "");
         setIsActive(data.isActive ?? true);
+        setCurrency(data.currency || "USD");
         setPlan(data.plan || "starter");
         setEnabledFeatures(Array.isArray(data.enabledFeatures) ? data.enabledFeatures : []);
         try {
@@ -222,6 +224,7 @@ function InstituteCustomizeContent() {
         referralSource,
         country,
         phoneNumber,
+        currency,
         primaryUseCases: JSON.stringify(primaryUseCases),
       });
       alert("Changes saved successfully!");
@@ -316,7 +319,7 @@ function InstituteCustomizeContent() {
           <FormSection title="General Information" description="Basic details about your institute.">
             <div className="space-y-8">
               {/* Photo Upload Section */}
-              <div className="flex items-center gap-6 pb-8 border-b border-gray-100 dark:border-gray-800">
+              <div className="flex items-center gap-6 pb-8 border-b border-gray-100 dark:border-gray-800 relative">
                 <div className="w-24 h-24 rounded-2xl bg-gray-100 dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-700 overflow-hidden flex items-center justify-center relative group">
                   {logo ? (
                     <img src={logo} className="w-full h-full object-cover" alt="Logo preview" />
@@ -328,7 +331,7 @@ function InstituteCustomizeContent() {
                   </div>
                 </div>
                 <div className="flex flex-col gap-2">
-                  <h4 className="text-sm font-bold text-gray-800 dark:text-white">Institute Photo</h4>
+                  <h4 className="text-sm font-bold text-gray-800 dark:text-gray-200">Institute Photo</h4>
                   <div className="flex gap-3">
                     <button onClick={() => setLogo(null)} className="px-3 py-1.5 text-xs font-semibold text-red-500 bg-red-500/10 rounded-lg hover:bg-red-500/20 transition-colors">Remove</button>
                     <label className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 cursor-pointer transition-colors">
@@ -336,17 +339,15 @@ function InstituteCustomizeContent() {
                       <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
                     </label>
                   </div>
-                  <p className="text-[10px] text-gray-500">Recommended: Square, at least 500x500px.</p>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">Recommended: Square, at least 500x500px.</p>
                 </div>
               </div>
               
               {/* Overlay for uploading */}
               {isUploading && (
-                  <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 z-10 flex items-center justify-center rounded-2xl">
-                      <div className="flex flex-col items-center">
-                          <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                          <span className="text-xs font-bold text-blue-600 mt-2">Uploading...</span>
-                      </div>
+                  <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 z-10 flex flex-col items-center justify-center rounded-2xl">
+                      <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                      <span className="text-xs font-bold text-blue-600 dark:text-blue-400 mt-2">Uploading...</span>
                   </div>
               )}
 
@@ -404,6 +405,25 @@ function InstituteCustomizeContent() {
                   </Select>
                   
                   <Input label="Phone Number" value={phoneNumber} onChange={setPhoneNumber} error={errors.phoneNumber} />
+
+                  <Select label="Currency" value={currency} onChange={setCurrency}>
+                    <option value="USD">USD — US Dollar ($)</option>
+                    <option value="EUR">EUR — Euro (€)</option>
+                    <option value="GBP">GBP — British Pound (£)</option>
+                    <option value="INR">INR — Indian Rupee (₹)</option>
+                    <option value="AUD">AUD — Australian Dollar (A$)</option>
+                    <option value="CAD">CAD — Canadian Dollar (C$)</option>
+                    <option value="SGD">SGD — Singapore Dollar (S$)</option>
+                    <option value="AED">AED — UAE Dirham (د.إ)</option>
+                    <option value="LKR">LKR — Sri Lankan Rupee (₨)</option>
+                    <option value="JPY">JPY — Japanese Yen (¥)</option>
+                    <option value="CNY">CNY — Chinese Yuan (¥)</option>
+                    <option value="BRL">BRL — Brazilian Real (R$)</option>
+                    <option value="MYR">MYR — Malaysian Ringgit (RM)</option>
+                    <option value="NGN">NGN — Nigerian Naira (₦)</option>
+                    <option value="PKR">PKR — Pakistani Rupee (₨)</option>
+                    <option value="ZAR">ZAR — South African Rand (R)</option>
+                  </Select>
                 </div>
 
                 <div className="md:col-span-2 space-y-3">
@@ -421,8 +441,8 @@ function InstituteCustomizeContent() {
                         }}
                         className={`px-4 py-2 text-xs font-semibold rounded-lg border-2 cursor-pointer transition-all ${
                           primaryUseCases.includes(useCase)
-                            ? "border-blue-600 bg-blue-50/50 text-blue-600 dark:bg-blue-600/10"
-                            : "border-gray-100 dark:border-gray-800 text-gray-500 hover:border-gray-200"
+                            ? "border-blue-600 bg-blue-50/50 text-blue-600 dark:border-blue-500 dark:text-blue-400 dark:bg-blue-600/10"
+                            : "border-gray-100 dark:border-gray-800 text-gray-500 dark:text-gray-400 hover:border-gray-200 dark:hover:border-gray-700"
                         }`}
                       >
                         {useCase}
@@ -430,6 +450,23 @@ function InstituteCustomizeContent() {
                     ))}
                   </div>
                 </div>
+              </div>
+
+              <div className="flex justify-start pt-4 border-t border-gray-100 dark:border-gray-800 mt-4">
+                <button
+                  onClick={handleSave}
+                  disabled={isLoading}
+                  className={`px-8 py-2.5 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/25 flex items-center gap-2 ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                >
+                  {isLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Saving Changes...
+                    </>
+                  ) : (
+                    "Save Changes"
+                  )}
+                </button>
               </div>
             </div>
           </FormSection>
@@ -504,10 +541,10 @@ function InstituteCustomizeContent() {
                     <table className="w-full text-left border-collapse">
                       <thead className="bg-gray-50 dark:bg-gray-800/50">
                         <tr>
-                          <th className="px-4 py-3 text-[10px] font-bold text-gray-500 uppercase">User</th>
-                          <th className="px-4 py-3 text-[10px] font-bold text-gray-500 uppercase">Role</th>
-                          <th className="px-4 py-3 text-[10px] font-bold text-gray-500 uppercase">Status</th>
-                          <th className="px-4 py-3 text-[10px] font-bold text-gray-500 uppercase text-right">Actions</th>
+                          <th className="px-4 py-3 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase">User</th>
+                          <th className="px-4 py-3 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase">Role</th>
+                          <th className="px-4 py-3 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase">Status</th>
+                          <th className="px-4 py-3 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -535,8 +572,8 @@ function InstituteCustomizeContent() {
                                 disabled={togglingIds.includes(user.id)}
                                 className={`px-2 py-1 rounded-full text-[10px] font-bold transition-colors flex items-center gap-1 ${
                                   user.isActive
-                                    ? "bg-green-100 text-green-600 hover:bg-green-200"
-                                    : "bg-red-100 text-red-600 hover:bg-red-200"
+                                    ? "bg-green-100 text-green-600 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50"
+                                    : "bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50"
                                 } ${togglingIds.includes(user.id) ? "opacity-70 cursor-wait" : ""}`}
                               >
                                 {togglingIds.includes(user.id) && (
@@ -605,7 +642,7 @@ function InstituteCustomizeContent() {
                       <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">ACTIVE</span>
                     </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{currentPlan.desc}</p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">{planDefs.length} features included in this plan</p>
+                    <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">{planDefs.length} features included in this plan</p>
                   </div>
                 </div>
                 {plan !== "enterprise" && (
@@ -694,7 +731,7 @@ function InstituteCustomizeContent() {
                             >
                               <span className={`absolute top-1 left-0 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${isEnabled ? "translate-x-7" : "translate-x-1"}`} />
                             </button>
-                            <span className={`text-[9px] font-bold uppercase tracking-wide ${isEnabled ? "text-blue-500" : "text-gray-400"}`}>
+                            <span className={`text-[9px] font-bold uppercase tracking-wide ${isEnabled ? "text-blue-500 dark:text-blue-400" : "text-gray-400 dark:text-gray-500"}`}>
                               {isEnabled ? "On" : "Off"}
                             </span>
                           </div>
@@ -716,22 +753,22 @@ function InstituteCustomizeContent() {
               </div>
 
               {/* Summary + Save */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
-                <div>
+              <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800 gap-4">
+                <div className="text-center md:text-left">
                   <p className="text-sm font-bold text-gray-800 dark:text-white">Active Features: {enabledFeatures.length}</p>
                   <p className="text-xs text-gray-400 mt-0.5">{enabledFeatures.map(f => FEATURE_META[f]?.label || f).join(", ") || "None enabled"}</p>
                 </div>
                 <button
                   onClick={handleSaveFeatures}
                   disabled={isSavingFeatures}
-                  className={`px-6 py-2.5 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/25 flex items-center gap-2 ${isSavingFeatures ? "opacity-70 cursor-not-allowed" : ""}`}
+                  className={`px-6 py-2.5 w-full md:w-auto justify-center text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/25 flex items-center gap-2 ${isSavingFeatures ? "opacity-70 cursor-not-allowed" : ""}`}
                 >
                   {isSavingFeatures ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                       Saving...
                     </>
-                  ) : "Save Changes"}
+                  ) : "Save Features"}
                 </button>
               </div>
             </div>
@@ -794,13 +831,21 @@ function InstituteCustomizeContent() {
           </div>
           
           {activeTab !== "assign-users" && activeTab !== "features" && (
-            <div className="flex items-center justify-end gap-3 p-6 border border-gray-200 rounded-2xl bg-white dark:bg-gray-900 dark:border-gray-800 shadow-sm">
-              <button className="px-6 py-2.5 text-sm font-medium text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors">Discard</button>
+            <div className="flex flex-col-reverse md:flex-row items-center justify-end gap-3 p-6 border border-gray-200 rounded-2xl bg-white dark:bg-gray-900 dark:border-gray-800 shadow-sm mt-6">
+              <button className="w-full md:w-auto px-6 py-2.5 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors">Discard</button>
               <button 
                 onClick={handleSave} 
-                className="px-8 py-2.5 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/25"
+                className="w-full md:w-auto px-8 py-2.5 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2"
+                disabled={isLoading}
               >
-                Save Changes
+                {isLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Saving...
+                  </>
+                ) : (
+                  "Save Changes"
+                )}
               </button>
             </div>
           )}

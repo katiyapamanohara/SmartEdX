@@ -1,6 +1,6 @@
 import { authService } from "./authService";
 
-export type NotificationType = "message" | "email" | "reminder";
+export type NotificationType = "message" | "email" | "reminder" | "cheat_alert";
 
 export interface Notification {
   id: string;

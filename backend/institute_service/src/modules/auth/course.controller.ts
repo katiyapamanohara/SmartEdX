@@ -25,8 +25,7 @@ import { CourseService } from './course.service';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { CurrentUser } from '../../core/decorators/current-user.decorator';
-
+import { CurrentUser } from '../../core/decorators/current-user.decorator';import { Public } from '../../core/decorators/public.decorator';
 @ApiTags('Courses')
 @Controller('institutes/:id/courses')
 @UseGuards(JwtAuthGuard)
@@ -46,6 +45,7 @@ export class CourseController {
   }
 
   @Get()
+  @Public()
   @ApiOperation({ summary: 'Get all courses for an institute' })
   @ApiParam({ name: 'id', description: 'Institute ID' })
   async getCourses(@Param('id') instituteId: string) {

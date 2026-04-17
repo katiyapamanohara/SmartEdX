@@ -9,6 +9,7 @@ interface CourseListProps {
   isLoading: boolean;
   onEdit: (course: Course) => void;
   onDelete: (courseId: string) => void;
+  currencySym?: string;
 }
 
 // Deterministic gradient per course so each card has a unique but consistent colour
@@ -47,7 +48,8 @@ const CourseCard: React.FC<{
   course: Course;
   onEdit: (c: Course) => void;
   onDelete: (id: string) => void;
-}> = ({ course, onEdit, onDelete }) => {
+  currencySym: string;
+}> = ({ course, onEdit, onDelete, currencySym }) => {
   const params = useParams();
   const instituteId =
     course.instituteId ||
@@ -83,6 +85,25 @@ const CourseCard: React.FC<{
         <span className="absolute bottom-3 left-3 px-2.5 py-1 text-xs font-bold bg-white/20 text-white rounded-lg backdrop-blur-sm border border-white/30">
           {course.code}
         </span>
+        {/* Price badge overlay */}
+        {(() => {
+          const isMonthly = (course as any).paymentType === "monthly";
+          const activePrice = isMonthly ? (course as any).monthlyPrice : course.price;
+          const hasPrice = activePrice != null && activePrice > 0;
+          return (
+            <span className={`absolute bottom-3 right-3 px-2.5 py-1 text-xs font-bold rounded-lg backdrop-blur-sm border ${
+              hasPrice
+                ? "bg-green-500/80 text-white border-green-400/40"
+                : "bg-white/20 text-white border-white/30"
+            }`}>
+              {hasPrice
+                ? isMonthly
+                  ? `${currencySym}${parseFloat(String(activePrice)).toFixed(2)}/mo`
+                  : `${currencySym}${parseFloat(String(activePrice)).toFixed(2)}`
+                : "Free"}
+            </span>
+          );
+        })()}
       </div>
 
       {/* Body */}
@@ -166,6 +187,7 @@ const CourseList: React.FC<CourseListProps> = ({
   isLoading,
   onEdit,
   onDelete,
+  currencySym = "$",
 }) => {
   if (isLoading) {
     return (
@@ -194,7 +216,7 @@ const CourseList: React.FC<CourseListProps> = ({
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
       {courses.map((course) => (
-        <CourseCard key={course.id} course={course} onEdit={onEdit} onDelete={onDelete} />
+        <CourseCard key={course.id} course={course} onEdit={onEdit} onDelete={onDelete} currencySym={currencySym} />
       ))}
     </div>
   );

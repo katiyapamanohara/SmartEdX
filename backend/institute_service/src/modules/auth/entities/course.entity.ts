@@ -35,6 +35,15 @@ export class Course {
   @Column({ nullable: true })
   description: string;
 
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  price: number | null;
+
+  @Column({ type: 'varchar', length: 10, default: 'fixed' })
+  paymentType: 'fixed' | 'monthly';
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  monthlyPrice: number | null;
+
   @ManyToOne(() => Institute, (institute) => institute.courses, {
     onDelete: 'CASCADE',
   })
