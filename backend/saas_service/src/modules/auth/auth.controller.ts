@@ -33,6 +33,7 @@ import { UpdateInstituteDto } from './dto/update-institute.dto';
 import { AssignUserDto } from './dto/assign-user.dto';
 import { Public } from '../../core/decorators/public.decorator';
 import { CurrentUser } from '../../core/decorators/current-user.decorator';
+import { SkipCache } from '../../core/decorators/skip-cache.decorator';
 import { Roles } from '../../core/decorators/roles.decorator';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { SeedService } from './services/seed.service';
@@ -378,6 +379,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('institutes')
+  @SkipCache()
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get current user institutes' })
   @ApiResponse({
@@ -474,6 +476,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('institutes/:id/users')
+  @SkipCache()
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get all users assigned to an institute' })
   @ApiParam({ name: 'id', description: 'Institute ID' })

@@ -232,8 +232,20 @@ def delete_content(institute_id: str, course_id: str, content_id: str) -> None:
         logger.error(f"Failed to delete content {content_id!r} from collection {col!r}: {e}", exc_info=True)
 
 
+def collection_exists(col_name: str) -> bool:
+    """Return True if the Qdrant collection exists, False otherwise."""
+    try:
+        _qdrant_request("GET", f"/collections/{col_name}")
+        return True
+    except Exception:
+        return False
+
+
 def search_course(institute_id: str, course_id: str, query: str, limit: int = 5) -> list[dict]:
     """Semantic search within a course's dedicated Qdrant collection.
+
+    Returns an empty list (instead of raising) when the collection does not
+    exist yet — this happens when no course material has been uploaded/indexed.
 
     Args:
         institute_id: Institute UUID (part of the collection name).
@@ -245,6 +257,11 @@ def search_course(institute_id: str, course_id: str, query: str, limit: int = 5)
         List of dicts with keys: content, page, title, score.
     """
     col = collection_name(institute_id, course_id)
+
+    if not collection_exists(col):
+        logger.info(f"Collection {col!r} does not exist — no KB indexed yet, returning empty results.")
+        return []
+
     model = _get_embedding_model()
     query_vector = list(model.embed([query]))[0].tolist()
 

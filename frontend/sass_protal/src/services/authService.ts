@@ -221,7 +221,7 @@ export const authService = {
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/auth/profile`, {
+      const response = await fetch(`${API_URL}/api/auth/me`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,

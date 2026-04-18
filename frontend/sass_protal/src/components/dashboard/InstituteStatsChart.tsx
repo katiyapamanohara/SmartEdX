@@ -18,7 +18,7 @@ export default function InstituteStatsChart({ institutes }: Props) {
 
   const seriesData: Record<Tab, number[]> = {
     users: institutes.map((i) => i.userCount || 0),
-    students: institutes.map((i) => parseInt(i.studentCount || "0", 10) || 0),
+    students: institutes.map((i) => i.realStudentCount ?? 0),
     features: institutes.map((i) => (i.enabledFeatures || []).length),
   };
 

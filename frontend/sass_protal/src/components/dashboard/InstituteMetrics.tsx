@@ -16,10 +16,7 @@ export default function InstituteMetrics({ institutes }: Props) {
   const totalInstitutes = institutes.length;
   const activeInstitutes = institutes.filter((i) => i.isActive).length;
   const totalUsers = institutes.reduce((sum, i) => sum + (i.userCount || 0), 0);
-  const totalStudents = institutes.reduce((sum, i) => {
-    const n = parseInt(i.studentCount || "0", 10);
-    return sum + (isNaN(n) ? 0 : n);
-  }, 0);
+  const totalStudents = institutes.reduce((sum, i) => sum + (i.realStudentCount ?? 0), 0);
 
   const planMap = institutes.reduce<Record<string, number>>((acc, i) => {
     const p = i.plan || "starter";

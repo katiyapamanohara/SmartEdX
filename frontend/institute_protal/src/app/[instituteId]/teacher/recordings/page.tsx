@@ -80,7 +80,7 @@ function recAuthHeaders(): Record<string, string> {
 
 interface VideoQuestionsModalProps {
   instituteId: string;
-  recording: { id: string; title: string };
+  recording: { id: string; title: string; duration?: string; fileUrl?: string };
   onClose: () => void;
 }
 
@@ -105,6 +105,23 @@ function VideoQuestionsModal({ instituteId, recording, onClose }: VideoQuestions
   const [generating, setGenerating] = useState(false);
   const [genCount, setGenCount] = useState(5);
   const [genDifficulty, setGenDifficulty] = useState<"easy" | "medium" | "hard">("medium");
+
+  // Actual video duration in seconds, probed from the file via a hidden <video> element.
+  const [actualVideoDuration, setActualVideoDuration] = useState<number>(0);
+  useEffect(() => {
+    if (!recording.fileUrl) return;
+    const vid = document.createElement("video");
+    vid.preload = "metadata";
+    vid.src = recording.fileUrl;
+    const onMeta = () => {
+      if (isFinite(vid.duration) && vid.duration > 0) {
+        setActualVideoDuration(vid.duration);
+      }
+      vid.removeEventListener("loadedmetadata", onMeta);
+    };
+    vid.addEventListener("loadedmetadata", onMeta);
+    return () => vid.removeEventListener("loadedmetadata", onMeta);
+  }, [recording.fileUrl]);
 
   // Stats
   const [stats, setStats] = useState<{ studentAttempts: StudentAttemptStat[]; questionStats: QuestionStat[] } | null>(null);
@@ -173,9 +190,14 @@ function VideoQuestionsModal({ instituteId, recording, onClose }: VideoQuestions
 
   function saveForm() {
     if (!formQuestion.trim() || formOptions.some((o) => !o.trim())) return;
+    const atSec = parseTimeInput(formTimeStr);
+    if (actualVideoDuration > 0 && atSec >= actualVideoDuration) {
+      alert(`Timestamp ${formTimeStr} exceeds the video duration (${formatSeconds(Math.floor(actualVideoDuration))}). Please enter a time within the video.`);
+      return;
+    }
     const newQ: VideoQuestion = {
       id: editingQ?.id ?? crypto.randomUUID(),
-      atSeconds: parseTimeInput(formTimeStr),
+      atSeconds: atSec,
       question: formQuestion.trim(),
       options: formOptions.map((o) => o.trim()) as [string, string, string, string],
       correctAnswer: formCorrect,
@@ -231,10 +253,18 @@ function VideoQuestionsModal({ instituteId, recording, onClose }: VideoQuestions
       if (!result) { alert("AI generation failed"); return; }
       // Convert ExamQuestion[] → VideoQuestion[] with evenly spaced timestamps
       const mcqOnly = result.filter((q) => q.type === "mcq" && q.options?.length === 4);
-      const spacing = 120; // default 2 minutes apart
+      // actualVideoDuration is read from the video file's metadata (0 if not yet loaded).
+      // Divide the video evenly; cap spacing at 120 s for long videos.
+      const spacing =
+        actualVideoDuration > 0 && mcqOnly.length > 0
+          ? Math.min(120, Math.floor(actualVideoDuration / (mcqOnly.length + 1)))
+          : 120;
       const newQs: VideoQuestion[] = mcqOnly.map((q, i) => ({
         id: q.id,
-        atSeconds: (i + 1) * spacing,
+        atSeconds:
+          actualVideoDuration > 0
+            ? Math.min((i + 1) * spacing, Math.floor(actualVideoDuration) - 1)
+            : (i + 1) * spacing,
         question: q.question,
         options: q.options as [string, string, string, string],
         correctAnswer: q.correctAnswer ?? 0,

@@ -120,7 +120,7 @@ export default function RecentInstitutes({ institutes }: Props) {
 
                   {/* Students */}
                   <td className="px-5 py-3.5 hidden md:table-cell text-gray-600 dark:text-gray-300">
-                    {inst.studentCount || "—"}
+                    {inst.realStudentCount ?? "—"}
                   </td>
 
                   {/* Feature pills */}

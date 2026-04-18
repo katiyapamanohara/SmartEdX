@@ -10,6 +10,7 @@ import { Observable, of } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import Redis from 'ioredis';
 import { Reflector } from '@nestjs/core';
+import { SKIP_CACHE_KEY } from '../../core/decorators/skip-cache.decorator';
 
 @Injectable()
 export class RedisCacheInterceptor implements NestInterceptor {
@@ -24,6 +25,14 @@ export class RedisCacheInterceptor implements NestInterceptor {
     context: ExecutionContext,
     next: CallHandler,
   ): Promise<Observable<any>> {
+    const skipCache = this.reflector.getAllAndOverride<boolean>(SKIP_CACHE_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (skipCache) {
+      return next.handle();
+    }
+
     const request = context.switchToHttp().getRequest();
     const method = request.method;
     const userId = request.user?.userId || 'public';

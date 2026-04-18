@@ -374,12 +374,25 @@ export class RecordingService {
     const questions = recording.videoQuestions ?? [];
     let score = 0;
     const totalMarks = questions.reduce((s, q) => s + q.marks, 0);
-    for (const q of questions) {
-      if (answers[q.id] === q.correctAnswer) score += q.marks;
-    }
 
+    const questionResults = questions.map((q) => {
+      const chosen = answers[q.id] ?? null;
+      const correct = chosen !== null && chosen === q.correctAnswer;
+      if (correct) score += q.marks;
+      return {
+        questionId: q.id,
+        correct,
+        chosen,
+        correctAnswer: q.correctAnswer,
+        marks: q.marks,
+      };
+    });
+
+    // Merge with any prior attempt so partial submissions accumulate
+    const prior = (recording.quizAttempts ?? {})[userId];
+    const mergedAnswers = { ...(prior?.answers ?? {}), ...answers };
     const attempt: VideoQuizAttempt = {
-      answers,
+      answers: mergedAnswers,
       completedAt: new Date().toISOString(),
     };
     const updated = { ...(recording.quizAttempts ?? {}), [userId]: attempt };
@@ -387,7 +400,7 @@ export class RecordingService {
 
     const percentage =
       totalMarks > 0 ? Math.round((score / totalMarks) * 100) : 0;
-    return { score, totalMarks, percentage };
+    return { score, totalMarks, percentage, questionResults };
   }
 
   async getVideoQuizStats(instituteId: string, recordingId: string) {
