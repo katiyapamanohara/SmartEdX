@@ -123,6 +123,7 @@ All client requests go through the **API Gateway** on port `5001`. The gateway r
 | GET | `/api/institutes/:id/courses/my-enrolled-courses` | JWT (student) | Student's enrolled courses |
 | GET | `/api/institutes/:id/courses/my-assessments` | JWT (teacher) | Teacher's quiz assessments |
 | GET | `/api/institutes/:id/courses/student-assessments` | JWT (student) | Student's course quizzes |
+| GET | `/api/institutes/:id/courses/adaptive-recommendations` | JWT (student) | AI-personalized study recommendations based on performance |
 | POST | `/api/institutes/:id/courses/student-assessments/:contentId/submit` | JWT (student) | Submit quiz attempt |
 | GET | `/api/institutes/:id/courses/student-report` | JWT (teacher) | Per-student scores across courses |
 | PATCH | `/api/institutes/:id/courses/:courseId` | JWT | Update course |
@@ -271,6 +272,7 @@ All client requests go through the **API Gateway** on port `5001`. The gateway r
 |---|---|---|
 | POST | `/api/teacher-tools/lesson-plan` | Generate lesson plan (optionally with file) |
 | POST | `/api/teacher-tools/grade-essay` | AI essay grading with feedback |
+| POST | `/api/teacher-tools/grade-short-answer` | Grade short-answer questions with NLP |
 | POST | `/api/teacher-tools/class-insights` | Generate class performance insights |
 | POST | `/api/teacher-tools/at-risk-analysis` | Analyze at-risk students |
 
@@ -280,6 +282,12 @@ All client requests go through the **API Gateway** on port `5001`. The gateway r
 |---|---|---|
 | POST | `/api/voice-assessment/generate` | Generate voice assessment questions |
 | POST | `/api/voice-assessment/evaluate` | Evaluate student voice answers |
+
+### Adaptive Learning
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/ai-tools/adaptive-recommendations` | Generate personalized learning recommendations from student performance data |
 
 ### Other
 
