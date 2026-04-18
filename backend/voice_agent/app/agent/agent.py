@@ -429,7 +429,14 @@ def get_runner_for_course(
 
             results = search_course(institute_id=institute_id, course_id=course_id, query=query, limit=limit)
             if not results:
-                return {"status": "no_results", "message": "No relevant information found in the course material."}
+                return {
+                    "status": "no_results",
+                    "message": (
+                        "No course material has been indexed yet for this course, "
+                        "or no relevant content was found. "
+                        "Please ask your teacher to upload course materials."
+                    ),
+                }
             return {"status": "ok", "results": results}
         except Exception as e:
             logger.error(f"Course KB search failed for course {course_id}: {e}", exc_info=True)

@@ -33,4 +33,19 @@ export class InstituteUserRepository extends BaseRepository<InstituteUser> {
       relations: ['role', 'institute'],
     });
   }
+
+  async countStudentsByInstituteIds(ids: string[]): Promise<Record<string, number>> {
+    if (ids.length === 0) return {};
+    const rows = await this.instituteUserRepository
+      .createQueryBuilder('iu')
+      .innerJoin('iu.role', 'r')
+      .select('iu.instituteId', 'instituteId')
+      .addSelect('COUNT(*)', 'count')
+      .where('iu.instituteId IN (:...ids)', { ids })
+      .andWhere('r.name = :role', { role: 'student' })
+      .groupBy('iu.instituteId')
+      .getRawMany<{ instituteId: string; count: string }>();
+
+    return Object.fromEntries(rows.map((r) => [r.instituteId, parseInt(r.count, 10)]));
+  }
 }

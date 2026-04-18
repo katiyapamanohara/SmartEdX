@@ -429,8 +429,16 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
-    // Return institutes where this user is the owner
-    return this.instituteRepository.findBy({ ownerId: userId });
+    const institutes = await this.instituteRepository.findBy({ ownerId: userId });
+
+    // Count institute_users with role='student' per institute
+    const instituteIds = institutes.map((i) => i.id);
+    const countMap = await this.instituteUserRepository.countStudentsByInstituteIds(instituteIds);
+
+    return institutes.map((inst) => ({
+      ...inst,
+      realStudentCount: countMap[inst.id] ?? 0,
+    }));
   }
 
   async getInstituteById(id: string) {

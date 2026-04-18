@@ -32,6 +32,15 @@ type VideoQuestion = {
   // correctAnswer omitted — server strips it for students
 };
 
+type QuestionFeedback = {
+  questionId: string;
+  correct: boolean;
+  chosen: number;
+  correctAnswer: number;
+  marks: number;
+  options?: [string, string, string, string];
+};
+
 // Treat the full deadline day as active (end-of-day local time).
 // This avoids relying on the backend's computed `status` field which can be
 // affected by UTC midnight parsing of date-only strings.
@@ -64,7 +73,38 @@ export default function StudentRecordingsPage() {
   const [collectedAnswers, setCollectedAnswers] = useState<Record<string, number>>({});
   const [activeQuestion, setActiveQuestion] = useState<VideoQuestion | null>(null);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const [submittingAnswer, setSubmittingAnswer] = useState(false);
+  const [feedback, setFeedback] = useState<QuestionFeedback | null>(null);
   const [quizResult, setQuizResult] = useState<{ score: number; totalMarks: number; percentage: number } | null>(null);
+
+  // Refs written on every render (not in effects) so they are always up-to-date
+  // before any interval tick or native event fires.
+  const videoQuestionsRef = useRef<VideoQuestion[]>([]);
+  const answeredIdsRef = useRef<Set<string>>(new Set());
+  const activeQuestionRef = useRef<VideoQuestion | null>(null);
+  const feedbackRef = useRef<QuestionFeedback | null>(null);
+  const submittingAnswerRef = useRef(false);
+  videoQuestionsRef.current = videoQuestions;
+  answeredIdsRef.current = answeredIds;
+  activeQuestionRef.current = activeQuestion;
+  feedbackRef.current = feedback;
+  submittingAnswerRef.current = submittingAnswer;
+
+  // Stable handler ref — always calls the latest logic without re-attaching the listener
+  const triggerCheckRef = useRef<() => void>(() => {});
+  triggerCheckRef.current = () => {
+    if (activeQuestionRef.current || feedbackRef.current) return;
+    const v = protectedVideoRef.current;
+    if (!v) return;
+    const due = videoQuestionsRef.current.find(
+      (q) => !answeredIdsRef.current.has(q.id) && v.currentTime >= q.atSeconds
+    );
+    if (due) {
+      v.pause();
+      setActiveQuestion(due);
+      setSelectedOption(null);
+    }
+  };
 
   const protectedVideoRef = useRef<HTMLVideoElement>(null);
   const protectionTimeoutRef = useRef<number | null>(null);
@@ -201,16 +241,29 @@ export default function StudentRecordingsPage() {
     const videoEl = protectedVideoRef.current;
     document.body.style.overflow = "hidden";
 
+    const canResume = () =>
+      !activeQuestionRef.current &&
+      !feedbackRef.current &&
+      !submittingAnswerRef.current;
+
     function onWindowBlur() {
       setIsWindowFocused(false);
+      protectedVideoRef.current?.pause();
     }
 
     function onWindowFocus() {
       setIsWindowFocused(true);
+      if (canResume()) protectedVideoRef.current?.play();
     }
 
     function onVisibilityChange() {
-      setIsWindowFocused(!document.hidden);
+      const hidden = document.hidden;
+      setIsWindowFocused(!hidden);
+      if (hidden) {
+        protectedVideoRef.current?.pause();
+      } else if (canResume()) {
+        protectedVideoRef.current?.play();
+      }
     }
 
     function onKeyDown(e: KeyboardEvent) {
@@ -277,6 +330,8 @@ export default function StudentRecordingsPage() {
       setCollectedAnswers({});
       setActiveQuestion(null);
       setSelectedOption(null);
+      setSubmittingAnswer(false);
+      setFeedback(null);
       setQuizResult(null);
       return;
     }
@@ -296,70 +351,108 @@ export default function StudentRecordingsPage() {
     })();
   }, [playRecording, instituteId]);
 
-  // timeupdate handler — check if we've hit a question timestamp
-  const handleVideoTimeUpdate = useCallback(() => {
-    const video = protectedVideoRef.current;
-    if (!video || activeQuestion) return;
-    const currentTime = video.currentTime;
-    const due = videoQuestions.find(
-      (q) => !answeredIds.has(q.id) && currentTime >= q.atSeconds
-    );
-    if (due) {
-      video.pause();
-      setActiveQuestion(due);
-      setSelectedOption(null);
+  // Seeking guard — blocks scrubbing past unanswered questions.
+  // Stored in a ref so the callback ref on the video element can attach it
+  // without recreating the listener on every render.
+  const seekingGuardRef = useRef<() => void>(() => {});
+  seekingGuardRef.current = () => {
+    const v = protectedVideoRef.current;
+    if (!v || activeQuestionRef.current) return;
+    const earliest = videoQuestionsRef.current
+      .filter((q) => !answeredIdsRef.current.has(q.id))
+      .sort((a, b) => a.atSeconds - b.atSeconds)[0];
+    if (earliest && v.currentTime > earliest.atSeconds) {
+      v.currentTime = Math.max(0, earliest.atSeconds - 0.5);
     }
-  }, [videoQuestions, answeredIds, activeQuestion]);
+  };
 
-  // Submit collected answers when the player closes
-  const closePlayer = useCallback(async () => {
-    const rec = playRecording;
-    const answers = collectedAnswers;
+  // Play guard — if a question/feedback/submit is active, immediately re-pause
+  // any attempt to play the video (e.g. student clicking the play button on controls).
+  const playGuardRef = useRef<() => void>(() => {});
+  playGuardRef.current = () => {
+    if (activeQuestionRef.current || feedbackRef.current || submittingAnswerRef.current) {
+      protectedVideoRef.current?.pause();
+    }
+  };
+
+  // Stable listener wrappers — same object reference for add/removeEventListener.
+  const onTimeUpdateStable = useRef(() => triggerCheckRef.current());
+  const onSeekingStable    = useRef(() => seekingGuardRef.current());
+  const onPlayStable       = useRef(() => playGuardRef.current());
+
+  // Callback ref — attaches native listeners the instant the video element
+  // enters the DOM (before any useEffect, no timing race possible).
+  const videoCallbackRef = useCallback((el: HTMLVideoElement | null) => {
+    if (protectedVideoRef.current) {
+      protectedVideoRef.current.removeEventListener("timeupdate", onTimeUpdateStable.current);
+      protectedVideoRef.current.removeEventListener("seeking",    onSeekingStable.current);
+      protectedVideoRef.current.removeEventListener("play",       onPlayStable.current);
+    }
+    protectedVideoRef.current = el;
+    if (!el) return;
+    el.addEventListener("timeupdate", onTimeUpdateStable.current);
+    el.addEventListener("seeking",    onSeekingStable.current);
+    el.addEventListener("play",       onPlayStable.current);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Close player — final score already submitted per-answer; just show last result
+  const closePlayer = useCallback(() => {
     setPlayRecording(null);
     setActiveQuestion(null);
     setSelectedOption(null);
+    setFeedback(null);
+  }, []);
 
-    if (rec && Object.keys(answers).length > 0 && instituteId) {
-      try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/institutes/institutes/${instituteId}/recordings/${rec.id}/video-attempt`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${authService.getToken()}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ answers }),
-          }
-        );
-        if (res.ok) {
-          const result = await res.json();
-          setQuizResult(result);
-        }
-      } catch {
-        // fire and forget
-      }
-    }
-  }, [playRecording, collectedAnswers, instituteId]);
-
-  function submitAnswer() {
-    if (!activeQuestion || selectedOption === null) return;
-    const qId = activeQuestion.id;
-    setCollectedAnswers((prev) => ({ ...prev, [qId]: selectedOption }));
-    setAnsweredIds((prev) => new Set([...prev, qId]));
-    setActiveQuestion(null);
-    setSelectedOption(null);
-    // Resume video
-    protectedVideoRef.current?.play();
-  }
-
-  function skipQuestion() {
-    if (!activeQuestion) return;
+  const submitAnswer = useCallback(async () => {
+    if (!activeQuestion || selectedOption === null || !playRecording || !instituteId) return;
+    protectedVideoRef.current?.pause();
+    setSubmittingAnswer(true);
+    const newAnswers = { ...collectedAnswers, [activeQuestion.id]: selectedOption };
+    setCollectedAnswers(newAnswers);
     setAnsweredIds((prev) => new Set([...prev, activeQuestion.id]));
+    // Keep activeQuestion set so the overlay stays visible with a loading state
+
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/institutes/institutes/${instituteId}/recordings/${playRecording.id}/video-attempt`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${authService.getToken()}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ answers: newAnswers }),
+        }
+      );
+      if (res.ok) {
+        const result = await res.json();
+        // Find the feedback for this specific question
+        const qFeedback = (result.questionResults ?? []).find(
+          (r: QuestionFeedback) => r.questionId === activeQuestion.id
+        );
+        if (qFeedback) {
+          setActiveQuestion(null);
+          setFeedback({ ...qFeedback, options: activeQuestion.options });
+          setQuizResult({ score: result.score, totalMarks: result.totalMarks, percentage: result.percentage });
+          // Show feedback briefly then resume
+          setTimeout(() => {
+            setFeedback(null);
+            setSelectedOption(null);
+            protectedVideoRef.current?.play();
+          }, 2500);
+          return;
+        }
+      }
+    } catch {
+      // non-blocking
+    } finally {
+      setSubmittingAnswer(false);
+    }
+    // Fallback: resume without feedback
     setActiveQuestion(null);
     setSelectedOption(null);
     protectedVideoRef.current?.play();
-  }
+  }, [activeQuestion, selectedOption, playRecording, instituteId, collectedAnswers]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -569,10 +662,15 @@ export default function StudentRecordingsPage() {
             </div>
           )}
 
-          <div className="relative mx-4 w-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
+          {/* ── Side-by-side container ── */}
+          <div
+            className="relative mx-4 flex w-full max-w-5xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
             <button
               onClick={() => closePlayer()}
-              className="absolute -top-10 right-0 flex items-center gap-1.5 text-sm text-white/70 transition-colors hover:text-white"
+              className="absolute -top-10 right-0 flex items-center gap-1.5 text-sm text-white/70 transition-colors hover:text-white z-10"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -580,104 +678,193 @@ export default function StudentRecordingsPage() {
               Close
             </button>
 
-            <div className="relative">
-              <video
-                key={playRecording.id}
-                ref={protectedVideoRef}
-                src={playRecording.fileUrl}
-                controls
-                autoPlay
-                playsInline
-                controlsList="nodownload noremoteplayback"
-                disablePictureInPicture
-                onContextMenu={(e) => e.preventDefault()}
-                onTimeUpdate={handleVideoTimeUpdate}
-                className={`max-h-[70vh] w-full rounded-xl bg-black transition-all ${!isWindowFocused ? "blur-xl" : ""}`}
-                style={{ outline: "none" }}
-              />
+            {/* ── Video column (always full width) ── */}
+            <div className="flex w-full flex-col gap-2">
+              <div className="relative">
+                <video
+                  key={playRecording.id}
+                  ref={videoCallbackRef}
+                  src={playRecording.fileUrl}
+                  controls
+                  autoPlay
+                  playsInline
+                  controlsList="nodownload noremoteplayback"
+                  disablePictureInPicture
+                  onContextMenu={(e) => e.preventDefault()}
+                  className={`w-full rounded-xl bg-black transition-all ${!isWindowFocused ? "blur-xl" : ""} ${activeQuestion || feedback ? "brightness-40" : ""}`}
+                  style={{ outline: "none", maxHeight: "70vh" }}
+                />
 
-              {/* Timed question overlay */}
-              {activeQuestion && (
-                <div className="absolute inset-0 z-30 flex items-center justify-center rounded-xl bg-black/75 backdrop-blur-sm p-4">
-                  <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-gray-800 p-6 shadow-2xl">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="text-xs font-semibold text-white bg-brand-500 px-2 py-0.5 rounded-full">
-                        {activeQuestion.marks} mark{activeQuestion.marks !== 1 ? "s" : ""}
-                      </span>
-                      <span className="text-xs text-gray-400 dark:text-gray-500">Video paused</span>
-                    </div>
-                    <p className="text-base font-semibold text-gray-900 dark:text-white mb-4">{activeQuestion.question}</p>
-                    <div className="flex flex-col gap-2 mb-5">
-                      {activeQuestion.options.map((opt, i) => (
-                        <button
-                          key={i}
-                          onClick={() => setSelectedOption(i)}
-                          className={`text-left px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
-                            selectedOption === i
-                              ? "border-brand-500 bg-brand-50 dark:bg-brand-500/20 text-brand-700 dark:text-brand-300"
-                              : "border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-500/10"
-                          }`}
-                        >
-                          <span className="font-bold mr-2">{String.fromCharCode(65 + i)}.</span>
-                          {opt}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex gap-3 justify-end">
-                      <button onClick={skipQuestion} className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
-                        Skip
-                      </button>
-                      <button
-                        onClick={submitAnswer}
-                        disabled={selectedOption === null}
-                        className="px-5 py-2 text-sm font-semibold rounded-xl bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
-                      >
-                        Submit &amp; Continue
-                      </button>
-                    </div>
+                {/* Watermark */}
+                <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
+                  <div
+                    className="absolute -left-40 top-10 whitespace-nowrap text-xs font-bold tracking-widest text-red-300/55"
+                    style={{ animation: "student-watermark-a 14s linear infinite" }}
+                  >
+                    {watermarkIdentity} • {watermarkTime} • PROTECTED CONTENT
+                  </div>
+                  <div
+                    className="absolute -right-52 top-1/2 whitespace-nowrap text-xs font-bold tracking-widest text-red-300/50"
+                    style={{ animation: "student-watermark-b 16s linear infinite" }}
+                  >
+                    {watermarkIdentity} • {watermarkTime} • PROTECTED CONTENT
                   </div>
                 </div>
-              )}
 
-              <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
-                <div
-                  className="absolute -left-40 top-10 whitespace-nowrap text-xs font-bold tracking-widest text-red-300/55"
-                  style={{ animation: "student-watermark-a 14s linear infinite" }}
-                >
-                  {watermarkIdentity} • {watermarkTime} • PROTECTED CONTENT
-                </div>
-                <div
-                  className="absolute -right-52 top-1/2 whitespace-nowrap text-xs font-bold tracking-widest text-red-300/50"
-                  style={{ animation: "student-watermark-b 16s linear infinite" }}
-                >
-                  {watermarkIdentity} • {watermarkTime} • PROTECTED CONTENT
-                </div>
-              </div>
-
-              {!isWindowFocused && (
-                <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/80 backdrop-blur-md">
-                  <div className="rounded-xl border border-red-300/30 bg-red-900/45 px-4 py-3 text-center">
-                    <p className="text-sm font-bold text-white">Playback hidden while window is inactive</p>
-                    <p className="mt-1 text-xs text-red-100">Return to this tab to resume playback.</p>
+                {!isWindowFocused && (
+                  <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/80 backdrop-blur-md">
+                    <div className="rounded-xl border border-red-300/30 bg-red-900/45 px-4 py-3 text-center">
+                      <p className="text-sm font-bold text-white">Playback hidden while window is inactive</p>
+                      <p className="mt-1 text-xs text-red-100">Return to this tab to resume playback.</p>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-
-            <div className="mt-3 flex items-center justify-between px-1">
-              <div>
-                <h3 className="text-sm font-semibold text-white">{playRecording.title}</h3>
-                <p className="mt-0.5 text-xs text-white/50">
-                  {new Date(playRecording.uploadDate).toLocaleDateString()}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                {videoQuestions.length > 0 && (
-                  <span className="text-xs text-purple-300 font-medium">
-                    {answeredIds.size}/{videoQuestions.length} questions
-                  </span>
                 )}
-                <span className="text-xs text-white/50">{playRecording.duration ?? ""}</span>
+
+                {/* ── Question / feedback popup overlay ── */}
+                {(activeQuestion || feedback) && (() => {
+                  const qIndex = activeQuestion
+                    ? videoQuestions.findIndex((q) => q.id === activeQuestion.id)
+                    : videoQuestions.findIndex((q) => q.id === feedback!.questionId);
+
+                  return (
+                    <div className="absolute inset-0 flex items-center justify-center rounded-xl p-4">
+                      <div
+                        className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-900 shadow-2xl overflow-hidden"
+                        style={{ maxHeight: "90%", overflowY: "auto" }}
+                      >
+                        {/* Header */}
+                        <div className={`flex items-center justify-between px-4 py-3 ${feedback ? (feedback.correct ? "bg-green-600" : "bg-red-600") : submittingAnswer ? "bg-gray-600" : "bg-brand-500"}`}>
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-white/80 animate-pulse" />
+                            <span className="text-xs font-bold text-white uppercase tracking-wide">
+                              {feedback ? (feedback.correct ? "Correct!" : "Incorrect") : submittingAnswer ? "Checking…" : "Question"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-white/80">
+                              Q{qIndex + 1} / {videoQuestions.length}
+                            </span>
+                            {activeQuestion && (
+                              <span className="text-xs font-semibold text-white bg-white/20 px-2 py-0.5 rounded-full">
+                                {activeQuestion.marks} mark{activeQuestion.marks !== 1 ? "s" : ""}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Progress bar */}
+                        <div className="flex gap-1 px-4 pt-3">
+                          {videoQuestions.map((q, i) => (
+                            <div
+                              key={q.id}
+                              className={`h-1 flex-1 rounded-full transition-colors ${
+                                answeredIds.has(q.id)
+                                  ? "bg-green-400"
+                                  : i === qIndex
+                                  ? "bg-brand-500"
+                                  : "bg-gray-200 dark:bg-gray-700"
+                              }`}
+                            />
+                          ))}
+                        </div>
+
+                        {/* Body */}
+                        {submittingAnswer && !feedback ? (
+                          <div className="flex flex-col items-center justify-center gap-3 p-8 text-center">
+                            <svg className="h-10 w-10 animate-spin text-brand-500" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                            </svg>
+                            <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Checking your answer…</p>
+                          </div>
+                        ) : feedback ? (
+                          <div className="flex flex-col items-center justify-center gap-3 p-6 text-center">
+                            <div className={`w-16 h-16 rounded-full flex items-center justify-center text-3xl font-bold ${
+                              feedback.correct ? "bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-400" : "bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400"
+                            }`}>
+                              {feedback.correct ? "✓" : "✗"}
+                            </div>
+                            <div>
+                              <p className={`text-base font-bold ${feedback.correct ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                                {feedback.correct ? "Well done!" : "Not quite right"}
+                              </p>
+                              {!feedback.correct && (
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                  Correct answer:{" "}
+                                  <span className="font-semibold text-gray-800 dark:text-white">
+                                    {String.fromCharCode(65 + feedback.correctAnswer)}. {feedback.options?.[feedback.correctAnswer] ?? ""}
+                                  </span>
+                                </p>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-400 mt-1">Video resuming in a moment…</p>
+                          </div>
+                        ) : activeQuestion ? (
+                          <div className="p-4 flex flex-col gap-4">
+                            <p className="text-sm font-semibold text-gray-900 dark:text-white leading-snug">
+                              {activeQuestion.question}
+                            </p>
+
+                            <div className="flex flex-col gap-2">
+                              {activeQuestion.options.map((opt, i) => (
+                                <button
+                                  key={i}
+                                  onClick={() => setSelectedOption(i)}
+                                  disabled={submittingAnswer}
+                                  className={`text-left px-3 py-2.5 rounded-xl border text-sm font-medium transition-all disabled:opacity-60 ${
+                                    selectedOption === i
+                                      ? "border-brand-500 bg-brand-50 dark:bg-brand-500/20 text-brand-700 dark:text-brand-300 shadow-sm"
+                                      : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:border-brand-400 hover:bg-brand-50/50 dark:hover:bg-brand-500/10"
+                                  }`}
+                                >
+                                  <span className={`inline-flex w-6 h-6 rounded-full items-center justify-center text-xs font-bold mr-2 shrink-0 ${
+                                    selectedOption === i
+                                      ? "bg-brand-500 text-white"
+                                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                                  }`}>
+                                    {String.fromCharCode(65 + i)}
+                                  </span>
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+
+                            <div>
+                              <button
+                                onClick={submitAnswer}
+                                disabled={selectedOption === null || submittingAnswer}
+                                className="w-full py-2.5 text-sm font-semibold rounded-xl bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
+                              >
+                                {submittingAnswer ? "Submitting…" : "Submit & Continue"}
+                              </button>
+                              <p className="text-xs text-center text-gray-400 dark:text-gray-500 mt-2">
+                                Answer to resume the video
+                              </p>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Video meta row */}
+              <div className="flex items-center justify-between px-1">
+                <div>
+                  <h3 className="text-sm font-semibold text-white">{playRecording.title}</h3>
+                  <p className="mt-0.5 text-xs text-white/50">
+                    {new Date(playRecording.uploadDate).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {videoQuestions.length > 0 && (
+                    <span className="text-xs text-purple-300 font-medium">
+                      {answeredIds.size}/{videoQuestions.length} answered
+                    </span>
+                  )}
+                  <span className="text-xs text-white/50">{playRecording.duration ?? ""}</span>
+                </div>
               </div>
             </div>
           </div>

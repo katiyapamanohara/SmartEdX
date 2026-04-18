@@ -16,6 +16,7 @@ export interface InstituteData {
   category?: string;
   country?: string;
   studentCount?: string;
+  realStudentCount?: number;
   plan: string;
   enabledFeatures: string[];
   isActive: boolean;
