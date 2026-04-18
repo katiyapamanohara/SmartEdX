@@ -2,304 +2,273 @@
 
 ## Overview
 
-SmartEdX is a **microservices monorepo**. All services are developed independently, communicate over HTTP (REST + WebSocket), and are unified behind a single API Gateway. Infrastructure services (database, cache, object storage, vector DB) run via Docker Compose.
+SmartEdX is a **multi-tenant SaaS LMS (Learning Management System)** built as a microservices monorepo. All services are developed independently, communicate over HTTP (REST + WebSocket), and are unified behind a single API Gateway. Infrastructure services (PostgreSQL, Redis, MinIO, Qdrant) run via Docker Compose.
 
 ---
 
-## System Diagram
+## High-Level System Diagram
 
 ```
-                        ┌──────────────────────────────────────┐
-                        │           Client Browsers            │
-                        │                                      │
-                        │  Institute Portal   SaaS Portal      │
-                        │     Next.js :3001    Next.js :3000   │
-                        └──────────────┬───────────────────────┘
-                                       │
-                              HTTP / WebSocket
-                                       │
-                        ┌──────────────▼───────────────────────┐
-                        │          API Gateway  :5001           │
-                        │                                       │
-                        │  /api/auth        → SaaS Svc  :5002  │
-                        │  /api/institutes  → Inst Svc  :5003  │
-                        │  /api/ai          → AI Core   :8001  │
-                        │  /api/voice-agent → Voice WS  :8002  │
-                        │  /voice-agent WS  → Voice WS  :8002  │
-                        └──┬──────┬──────┬──────────────┬──────┘
-                           │      │      │              │
-               ┌───────────▼┐  ┌──▼──────▼──┐  ┌──────▼──────────┐
-               │ SaaS Svc   │  │ Inst Svc   │  │  AI Core        │
-               │ NestJS     │  │ NestJS     │  │  FastAPI/Agno   │
-               │ :5002      │  │ :5003      │  │  :8001          │
-               │            │  │            │  │                 │
-               │ - Auth     │  │ - Courses  │  │ - Quiz Gen      │
-               │ - Users    │  │ - Exams    │  │ - Transcription │
-               │ - Institutes│  │ - Live Ses │  │ - Chat agents   │
-               │ - Roles    │  │ - Recordings│  │ - Voice assess  │
-               └─────┬──────┘  └────┬───────┘  └──────────┬──────┘
-                     │              │                      │
-                     └──────┬───────┘            LLM APIs (Claude
-                            │                     / GPT / Gemini)
-                            ▼
-                     ┌─────────────┐
-                     │ PostgreSQL  │
-                     │   :5432     │
-                     │  (shared)   │
-                     └─────────────┘
+                    ┌──────────────────────────────────────────┐
+                    │              Client Browsers              │
+                    │                                          │
+                    │   Institute Portal       SaaS Portal     │
+                    │   Next.js :3001          Next.js :3000   │
+                    └──────────────────┬───────────────────────┘
+                                       │  HTTP / WebSocket
+                    ┌──────────────────▼───────────────────────┐
+                    │            API Gateway  :5001             │
+                    │       (NestJS — http-proxy-middleware)    │
+                    │                                          │
+                    │  /api/auth/*       → SaaS Svc    :5002  │
+                    │  /api/institutes/* → Inst Svc    :5003  │
+                    │  /api/ai/*         → AI Core     :8001  │
+                    │  /api/voice-agent/ → Voice Agent :8002  │
+                    │  WS /voice-agent/  → Voice WS    :8002  │
+                    └──┬──────────┬──────────────┬────────────┘
+                       │          │              │
+         ┌─────────────▼──┐  ┌────▼──────────┐  │
+         │  SaaS Service  │  │ Inst. Service │  │
+         │  NestJS :5002  │  │ NestJS :5003  │  │
+         │                │  │               │  │
+         │ · Auth/JWT     │  │ · Courses     │  │
+         │ · Firebase     │  │ · Exams       │  │
+         │ · Institutes   │  │ · Recordings  │  │
+         │ · Subscriptions│  │ · Live Classes│  │
+         │ · Payments     │  │ · Messages    │  │
+         │ · Users/Roles  │  │ · Notifications│  │
+         └────────┬───────┘  └───────┬───────┘  │
+                  │                  │           │
+                  └────────┬─────────┘           │
+                           │                     │
+                ┌──────────▼──────────┐          │
+                │   PostgreSQL :5432  │          │
+                │  (shared instance)  │          │
+                │  db: saas_service   │          │
+                │  db: institute_svc  │          │
+                └─────────────────────┘          │
+                                                 │
+                ┌──────────────────┐   ┌─────────▼──────────┐
+                │  AI Core :8001   │   │  Voice Agent :8002 │
+                │  FastAPI + Agno  │   │  FastAPI+Gemini Live│
+                │                  │   │                    │
+                │ · Quiz Gen       │   │ · Institute AI     │
+                │ · Chat Agents    │   │ · Teacher AI       │
+                │ · Transcription  │   │ · Course Q&A       │
+                │ · Teacher Tools  │   │ · SIP/VoIP support │
+                │ · Screen Monitor │   └──────────┬─────────┘
+                │ · Essay Grading  │              │
+                └──────────┬───────┘              │
+                           │                      │
+                ┌──────────▼──────────────────────▼──────────┐
+                │            LLM Provider APIs                │
+                │  Anthropic Claude · OpenAI GPT · Gemini     │
+                └─────────────────────────────────────────────┘
 
-          ┌───────────────────┐        ┌────────────────────────┐
-          │  Voice Agent      │        │  Facial Recognition    │
-          │  FastAPI + ADK    │        │  FastAPI + DeepFace    │
-          │  :8002            │        │  :8003                 │
-          │                   │        │                        │
-          │  - Gemini Live    │        │  - Face enrollment     │
-          │  - Qdrant search  │        │  - Exam verification   │
-          │  - SIP / WS       │        │  - Descriptor storage  │
-          │  - KB retrieval   │        │                        │
-          └────────┬──────────┘        └────────────────────────┘
-                   │
-      ┌────────────┼─────────────────────────┐
-      │            │                         │
-      ▼            ▼                         ▼
-  ┌───────┐   ┌─────────┐           ┌────────────┐
-  │ MinIO │   │ Qdrant  │           │   Redis    │
-  │ :9000 │   │ :6333   │           │  :6379     │
-  │       │   │         │           │            │
-  │ Files │   │ Vectors │           │ Sessions   │
-  │ PDFs  │   │ Course  │           │ Cache      │
-  │ Videos│   │   KB    │           │            │
-  └───────┘   └─────────┘           └────────────┘
+     ┌─────────────────────────────────────────────────────────┐
+     │               Infrastructure (Docker Compose)           │
+     │                                                         │
+     │  MinIO :9000      Redis :6379      Qdrant :6333         │
+     │  (S3 Object       (Response        (Vector DB           │
+     │   Storage)         Cache)           for KB search)      │
+     └─────────────────────────────────────────────────────────┘
+
+     ┌────────────────────────────────┐
+     │  Face Recognition Server :8003 │
+     │  FastAPI + DeepFace            │
+     │  (Facenet512, cosine ≤ 0.30)   │
+     └────────────────────────────────┘
 ```
 
 ---
 
-## Services
+## Service Communication Matrix
 
-### API Gateway (`/api-gateway`)
-
-The single entry point for all client traffic.
-
-- **Port:** 5001
-- **Tech:** NestJS 11, TypeScript
-- **Responsibilities:**
-  - Routes HTTP requests to the appropriate backend service
-  - Proxies WebSocket connections to the Voice Agent
-  - Provides a unified Swagger docs interface at `/docs`
-  - Enforces gateway-level authentication secrets
-
-**Routing table:**
-
-| Path prefix | Target service |
-|-------------|----------------|
-| `/api/auth` | SaaS Service :5002 |
-| `/api/institutes` | Institute Service :5003 |
-| `/api/ai` | AI Core :8001 |
-| `/api/voice-agent` (HTTP + WS) | Voice Agent :8002 |
+| Caller | Calls | Via |
+|---|---|---|
+| Frontend portals | API Gateway | HTTP/WebSocket |
+| API Gateway | SaaS Service | HTTP reverse proxy |
+| API Gateway | Institute Service | HTTP reverse proxy |
+| API Gateway | AI Core | HTTP reverse proxy |
+| API Gateway | Voice Agent | HTTP + WS reverse proxy |
+| Institute Service | AI Core | Internal HTTP (`AI_CORE_URL`) |
+| Institute Service | Face Recognition Server | Internal HTTP (`FACE_REC_URL`) |
+| Institute Service | Voice Agent | Internal HTTP (`VOICE_AGENT_URL`) |
+| Voice Agent | Institute Service | Internal HTTP |
+| Voice Agent | AI Core | Internal HTTP |
+| Voice Agent | Qdrant | TCP :6333 |
+| AI Core / Inst. Service | MinIO | S3 API :9000 |
+| SaaS / Inst. Service | PostgreSQL | TypeORM TCP :5432 |
+| SaaS / Inst. Service | Redis | ioredis TCP :6379 |
 
 ---
 
-### SaaS Service (`/backend/saas_service`)
-
-Manages global system state: users, institutes, and tenancy.
-
-- **Port:** 5002
-- **Tech:** NestJS 11, TypeScript, TypeORM, PostgreSQL
-- **Responsibilities:**
-  - User registration and authentication (email/password + Firebase)
-  - JWT token issuance and validation
-  - Institute creation and configuration
-  - Role management (global + institute-scoped)
-  - User assignment to institutes
-
-**Key entities:** `User`, `Institute`, `InstituteUser`, `InstituteRole`, `Role`
-
----
-
-### Institute Service (`/backend/institute_service`)
-
-The core educational platform logic. This is the most feature-rich service.
-
-- **Port:** 5003
-- **Tech:** NestJS 11, TypeScript, TypeORM, PostgreSQL, Socket.IO
-- **Responsibilities:**
-  - Course, module, and content management
-  - Student and teacher management
-  - Exam lifecycle: creation, scheduling, submission, grading
-  - Exam integrity monitoring and violation tracking
-  - Live session management (Socket.IO)
-  - Video recording management with category and course assignment
-  - Notification system
-  - Reporting: student performance across quizzes and exams
-
-**Key entities:** `Course`, `CourseModule`, `ModuleContent`, `Student`, `Teacher`, `Exam`, `Recording`, `LiveSession`, `LiveParticipant`, `Message`, `Notification`
-
-**Voice endpoints** (bypass gateway, called directly by Voice Agent):
-- `POST /api/session/voice/start`
-- `POST /api/session/voice/end`
-
----
-
-### AI Core (`/backend/ai_core`)
-
-AI-powered content generation service built on the Agno agent framework.
-
-- **Port:** 8001
-- **Tech:** FastAPI, Python 3.11+, Agno
-- **LLM Providers:** Anthropic Claude, OpenAI GPT, Google Gemini (switchable via env)
-- **Responsibilities:**
-  - Generate MCQ and essay quiz questions from uploaded documents or raw text
-  - Provide chat assistance (teacher-mode and student-mode)
-  - Transcription endpoint for audio/speech input
-  - Voice assessment scoring
-
-**Supported input formats:** PDF, DOCX, PPTX, plain text
-
----
-
-### Voice Agent (`/backend/voice_agent`)
-
-Real-time voice learning using Google Gemini Live and vector retrieval.
-
-- **Port:** 8002
-- **Tech:** FastAPI, Python 3.13+, Google ADK, Gemini Live API, Qdrant
-- **Responsibilities:**
-  - Host real-time voice conversations for students
-  - Retrieve relevant context from course knowledge base (Qdrant)
-  - Index course documents (PDF/DOCX from MinIO) into Qdrant on demand
-  - Evaluate voice answers and return structured scores
-  - Manage voice sessions (start/end lifecycle via Institute Service)
-- **Transport protocols:** WebSocket (browser), SIP/UDP (VoIP)
-
----
-
-### Facial Recognition Server (`/backend/facial_recognition_server`)
-
-Standalone face verification microservice for exam proctoring.
-
-- **Port:** 8003
-- **Tech:** FastAPI, Python, DeepFace
-- **Model:** Facenet512 (default), ArcFace, VGG-Face
-- **Detector:** OpenCV (default), retinaface, mtcnn
-- **Responsibilities:**
-  - Enroll student faces before exams (extract 512-d descriptors)
-  - Verify identity at exam entry using cosine distance (threshold: 0.30)
-  - Return match/no-match with confidence distance
-
----
-
-## Data Flow Examples
-
-### Student Takes an Exam
+## Authentication Flow
 
 ```
-Student browser
-    │ POST /api/institutes/institutes/:id/exams/:examId/submit
-    ▼
-API Gateway :5001
-    │ forward → Institute Service :5003
-    ▼
+Browser             API Gateway       SaaS/Inst Service      Firebase
+  │                     │                   │                    │
+  │─ POST /auth/login ──▶│                   │                    │
+  │                     │── forward ────────▶│                    │
+  │                     │                   │── verifyIdToken ───▶│
+  │                     │                   │◀── UID + claims ────│
+  │                     │                   │── lookup DB user    │
+  │                     │                   │── sign JWT          │
+  │◀── { accessToken } ─│◀── JWT ───────────│                    │
+  │                     │                   │                    │
+  │─ GET /api/... ───────▶│  (Bearer: JWT)   │                    │
+  │                     │── proxy + JWT ────▶│                    │
+  │                     │                   │── JwtAuthGuard      │
+  │                     │                   │── verify + attach   │
+```
+
+---
+
+## File Upload → Knowledge Base Flow
+
+```
+Teacher uploads PDF/DOCX/PPTX
+        │
+        ▼
 Institute Service
-    │ Validate JWT, check enrollment, record attempt
-    │ Save score + answers in exam.studentAttempts JSONB
-    ▼
-PostgreSQL
-```
+  POST .../contents/upload-file
+        │
+        ├── Store binary in MinIO → return URL
+        │
+        └── Call Voice Agent to index content
+                  │
+                  ├── Extract text from document
+                  ├── Generate embeddings (FastEmbed all-MiniLM-L6-v2)
+                  └── Upsert vectors into Qdrant (collection: course_kb)
 
-### Face Verification at Exam Start
-
-```
-Student browser
-    │ Capture webcam frame (Base64)
-    │ POST /api/institutes/institutes/:id/exams/:examId/verify-face
-    ▼
-API Gateway :5001
-    │ forward → Institute Service :5003
-    ▼
-Institute Service
-    │ Has stored faceDescriptor? → call Face Rec service
-    │ POST http://localhost:8003/verify { descriptor1, descriptor2 }
-    ▼
-Facial Recognition :8003
-    │ Cosine distance < 0.30? → { match: true, distance: 0.18 }
-    ▼
-Institute Service → response to browser
-```
-
-### AI Quiz Generation
-
-```
-Teacher browser
-    │ POST /api/ai/quiz/generate-from-text { text, numQuestions, difficulty }
-    ▼
-API Gateway :5001
-    │ forward → AI Core :8001
-    ▼
-AI Core (Agno agent)
-    │ Call Claude / GPT / Gemini → structured MCQ list
-    ▼
-Browser ← JSON: [{ question, options, correctAnswer, marks }]
-```
-
-### Voice Learning Session
-
-```
-Student browser (WebSocket)
-    │ Connect ws://localhost:5001/voice-agent
-    ▼
-API Gateway :5001
-    │ Proxy WS → Voice Agent :8002
-    ▼
-Voice Agent
-    │ Open Gemini Live session
-    │ Query Qdrant for course KB context
-    │ Stream audio ↔ Gemini Live
-    │ POST Institute Svc /api/session/voice/start (direct, no gateway)
-    ▼
-Gemini Live ↔ Student mic/speaker in real time
+Student searches:
+  POST .../kb-search { query }
+        │
+        └── Qdrant ANN search → top-k chunks → returned to student
 ```
 
 ---
 
-## Database Schema (high level)
+## Exam Proctoring Flow
 
 ```
-institutes
-  └── institute_users  (role-scoped users)
-  └── courses
-        └── teacher_courses  (join: course ↔ teacher)
-        └── student_courses  (join: course ↔ student)
-        └── course_modules
-              └── module_contents  (videos, PDFs, quizzes)
-                    └── studentAttempts  (JSONB: per-student quiz scores)
-  └── exams
-        └── studentAttempts  (JSONB: per-student exam scores)
-        └── integrityFlags   (JSONB: violation events per student)
-  └── recordings
-        └── recording_categories
-        └── recording_course_assignments
-        └── videoQuestions   (JSONB: timed questions)
-        └── quizAttempts     (JSONB: per-student video quiz scores)
-  └── live_sessions
-        └── live_participants
-  └── teachers
-  └── students
-  └── notifications
-  └── messages
+Student starts exam
+        │
+        ├── [requireFaceId] POST /auth/me/face/verify
+        │         └── webcam → DeepFace Facenet512 → pass/fail
+        │
+        ├── [requireScreenShare] browser getDisplayMedia()
+        │
+        │  During exam (polling)
+        │
+        ├── [enableLiveFaceCheck, ~60s interval]
+        │         POST /exams/:id/live-face-check
+        │         └── Frame → Face Rec Server → flag if mismatch
+        │
+        ├── [requireScreenShare, periodic]
+        │         POST /exams/:id/screen-check
+        │         └── Screenshot → AI Core vision → flag if dishonesty
+        │
+        ├── Browser events (tab_switch, fullscreen_exit, copy_attempt)
+        │         POST /exams/:id/integrity-flag
+        │
+        └── [autoFailOnCheat && high-severity flags ≥ 3]
+                  Exam auto-failed
 ```
 
 ---
 
-## Infrastructure
+## Monorepo Structure
 
-| Service | Image | Port | Purpose |
-|---------|-------|------|---------|
-| PostgreSQL | postgres:15 | 5432 | Primary relational DB (shared by SaaS + Institute) |
-| MinIO | minio/minio | 9000 / 9001 | Object storage for uploads (bucket: `smartedx-bucket`) |
-| Redis | redis:7 | 6379 | Session cache, real-time state |
-| Qdrant | qdrant/qdrant | 6333 / 6334 | Vector DB for course knowledge base |
-
-Start all with:
-```bash
-docker-compose up -d
 ```
+SmartEdX/
+├── api-gateway/                   # NestJS — HTTP/WS entry point
+│   └── src/modules/
+│       ├── proxy/                 # Route proxying rules
+│       ├── student/               # Student proxy module
+│       └── teacher/               # Teacher proxy module
+│
+├── backend/
+│   ├── saas_service/              # NestJS — SaaS platform management
+│   │   └── src/modules/
+│   │       ├── auth/              # Users, institutes, roles, JWT
+│   │       ├── subscription/      # Plan/billing management
+│   │       └── payhere/           # Payment gateway integration
+│   │
+│   ├── institute_service/         # NestJS — all LMS features
+│   │   └── src/modules/
+│   │       ├── auth/              # Institute users, roles, face ID
+│   │       ├── courses/           # Courses, modules, content
+│   │       ├── exams/             # Exams, proctoring, integrity
+│   │       ├── recordings/        # Video management, video quiz
+│   │       ├── live/              # Live class sessions
+│   │       ├── messages/          # Direct messaging
+│   │       ├── notifications/     # Push notifications
+│   │       └── gateway/           # Socket.IO gateways
+│   │
+│   ├── ai_core/                   # FastAPI + Agno — AI features
+│   │   └── routers/
+│   │       ├── quiz.py            # Quiz generation
+│   │       ├── chat.py            # AI chat agents
+│   │       ├── screen.py          # Screen analysis
+│   │       ├── teacher_tools.py   # Lesson plans, grading, insights
+│   │       ├── transcription.py   # Audio → text
+│   │       └── voice_assessment.py
+│   │
+│   ├── facial_recognition_server/ # FastAPI + DeepFace
+│   │   └── routers/face.py
+│   │
+│   └── voice_agent/               # FastAPI + Google ADK + Gemini Live
+│       └── app/
+│           ├── agents/            # General, teacher, course-qa configs
+│           └── routers/           # KB search, course-kb, session
+│
+├── frontend/
+│   ├── institute_protal/          # Next.js 16 — teachers, students, admins
+│   │   └── src/
+│   │       ├── app/[instituteId]/ # Role-based route groups
+│   │       ├── components/        # Shared UI components
+│   │       └── context/           # Auth, socket, notifications
+│   │
+│   └── sass_protal/               # Next.js 16 — SaaS operator/admin
+│       └── src/app/
+│
+├── docs/                          # Project documentation
+│   ├── ARCHITECTURE.md            # This file
+│   ├── DATABASE.md                # Full DB schema + ER diagrams
+│   ├── API.md                     # All REST/WS endpoints
+│   ├── FEATURES.md                # Feature catalogue
+│   ├── SERVICES.md                # Per-service reference
+│   ├── ENVIRONMENT.md             # Environment variables
+│   ├── PORTS.md                   # Port assignments
+│   └── GETTING_STARTED.md         # Local dev setup
+│
+└── docker-compose.yml             # MinIO, Redis, Qdrant
+```
+
+---
+
+## Technology Stack
+
+| Layer | Technology |
+|---|---|
+| API Gateway | NestJS 11 + TypeScript |
+| SaaS Backend | NestJS 11 + TypeScript + TypeORM |
+| Institute Backend | NestJS 11 + TypeScript + TypeORM |
+| AI Core | Python 3.11 + FastAPI + Agno |
+| Voice Agent | Python 3.11 + FastAPI + Google ADK |
+| Face Recognition | Python 3.11 + FastAPI + DeepFace |
+| Primary Database | PostgreSQL 15 |
+| Cache | Redis Alpine (maxmem 100MB, allkeys-lru) |
+| Object Storage | MinIO (S3-compatible, `smartedx-bucket`) |
+| Vector Database | Qdrant (collection: `course_kb`) |
+| Frontend (both) | Next.js 16 + React 19 + TypeScript + TailwindCSS 4 |
+| Auth — Identity | Firebase (Google Identity Platform) |
+| Auth — Service | JWT / Passport.js (RS256) |
+| Real-time | Socket.IO (NestJS gateways) |
+| AI Providers | Anthropic Claude · OpenAI GPT · Google Gemini |
+| Face Model | DeepFace Facenet512 (512-d embeddings) |
+| Embeddings | FastEmbed all-MiniLM-L6-v2-onnx |
+| Payments | PayHere (Sri Lanka) |
+| Charts | ApexCharts + react-apexcharts |
+| Calendar | FullCalendar 6 |

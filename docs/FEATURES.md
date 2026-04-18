@@ -4,359 +4,375 @@ Detailed breakdown of every major feature in the platform, where it lives in the
 
 ---
 
-## Course Management
+## 1. Multi-Tenant SaaS Architecture
 
-### What it does
-Teachers create courses, divide them into modules, and add learning materials (videos, PDFs, DOCX, quizzes). Content is ordered and browsable by enrolled students.
+**What it does:** Multiple independent institutes share one platform. Each institute is fully isolated by `instituteId`. The SaaS operator manages institutes, plans, and billing from the SaaS portal.
 
-### How it works
+**Roles:**
+- **Super Admin** — SaaS platform operator, manages all institutes and subscriptions
+- **Institute Admin** — manages users, courses, exams, and settings for their institute
+- **Teacher** — creates/manages courses, exams, recordings, and live sessions
+- **Student** — enrolls in courses, takes exams, watches recordings, joins live classes
 
-1. Institute admin creates a course and assigns a teacher.
-2. Teacher creates modules and adds content items within each module.
-3. For file-based content (PDF, DOCX), the file is uploaded to **MinIO** and the text is auto-extracted and indexed into **Qdrant** for the course knowledge base.
-4. Students enrolled in the course can browse modules and open content.
+**Institute Plans:** `starter`, `pro`, `enterprise`
 
-### Key endpoints
-```
-GET    /api/institutes/:id/courses                         → list all courses
-GET    /api/institutes/:id/courses/my-courses              → teacher's assigned courses
-GET    /api/institutes/:id/courses/:courseId/for-teacher   → course detail with modules
-POST   /api/institutes/:id/courses/:courseId/teacher-modules              → create module
-POST   /api/institutes/:id/courses/:courseId/teacher-modules/:moduleId/contents → add content
-POST   /api/institutes/:id/courses/:courseId/teacher-modules/:moduleId/contents/upload-file → upload file
-```
+Each plan controls which features are enabled via the `enabledFeatures` JSONB array:
+- `virtual_labs` — access to virtual lab tools
+- `ai_tools` — quiz generation, teacher AI tools, AI chat
+- `voice_agent` — Gemini Live voice assistant
 
----
-
-## Quiz Assessments
-
-### What it does
-Teachers create quiz assessments inside course modules. Students take quizzes, scores are recorded per attempt, and teachers can view performance analytics.
-
-### How it works
-
-1. Teacher creates a quiz (manually or AI-generated) via `POST .../teacher-assessment`.
-2. Quiz data (questions, options, correct answers, marks) is stored in `module_contents.quizData` as JSONB.
-3. Student submits answers → `POST .../student-assessments/:contentId/submit`.
-4. Score is calculated and stored in `module_contents.studentAttempts[userId]`.
-5. Max attempts per student is enforced (`quizData.maxAttempts`).
-
-### AI-generated quizzes
-Teachers can auto-generate questions by sending course text to the AI Core:
-```
-POST /api/ai/quiz/generate-from-text
-{ "text": "...", "numQuestions": 10, "difficulty": "medium", "questionType": "mcq" }
-```
-
-### Key endpoints
-```
-GET  /api/institutes/:id/courses/my-assessments                           → teacher's quizzes
-GET  /api/institutes/:id/courses/student-assessments                      → student's quizzes
-POST /api/institutes/:id/courses/student-assessments/:contentId/submit    → submit attempt
-```
+**Key Files:**
+- `backend/saas_service/src/modules/auth/` — institutes, users, roles
+- `frontend/sass_protal/` — SaaS operator/admin dashboard
+- `backend/institute_service/src/modules/auth/entities/institute.entity.ts`
 
 ---
 
-## Exams
+## 2. Authentication & Identity
 
-### What it does
-Structured timed assessments with MCQ and essay questions. Exams support face verification at entry, integrity monitoring throughout, and per-student attempt tracking.
+**What it does:** Dual authentication — Firebase handles Google identity; JWT carries role and institute context for all subsequent requests.
 
-### How it works
+**Flow:**
+1. User authenticates with Firebase (Google OAuth or email/password via Firebase Auth)
+2. Frontend sends Firebase ID token to `/auth/firebase/login`
+3. Backend verifies token via Firebase Admin SDK, looks up user in PostgreSQL, signs a JWT
+4. All subsequent requests include `Authorization: Bearer <jwt>` header
 
-1. Teacher creates an exam with questions (MCQ or essay) and settings (time limit, face ID requirement, max attempts).
-2. Student opens the exam — if face ID is required, webcam capture is sent to the **Facial Recognition Service** for verification.
-3. During the exam, the frontend monitors:
-   - Tab/window focus loss
-   - Face detection (present, multiple, absent)
-   - Fullscreen exits
-   - Camera disable
-4. Each violation is POSTed to the backend and stored in `exam.integrityFlags[userId]`.
-5. On submit, answers and score are stored in `exam.studentAttempts[userId]`.
-6. Teacher views the integrity monitor dashboard to review flagged students.
+**Face Identity:**
+- Students enroll a face descriptor by uploading a photo → stored as 512-d JSONB array
+- Before entering a proctored exam, webcam frame is verified against stored descriptor via DeepFace Facenet512 (cosine distance ≤ 0.30)
 
-### Data shape (stored as JSONB)
-```json
-studentAttempts: {
-  "userId": {
-    "score": 85,
-    "totalMarks": 100,
-    "passed": true,
-    "submittedAt": "2026-04-11T09:00:00Z",
-    "answers": { "q1": 2, "q2": 0 }
-  }
-}
-
-integrityFlags: {
-  "userId": [
-    { "type": "tab_switch", "severity": "medium", "timestamp": "...", "reviewed": false }
-  ]
-}
-```
+**Key Files:**
+- `backend/saas_service/src/modules/auth/auth.service.ts`
+- `backend/institute_service/src/modules/auth/auth.service.ts`
+- `backend/facial_recognition_server/routers/face.py`
 
 ---
 
-## Face Verification (Exam Proctoring)
+## 3. Course Management
 
-### What it does
-Verifies student identity before allowing exam access using face recognition.
+**What it does:** Full LMS course hierarchy. Teachers create and manage courses; students enroll and access content.
 
-### How it works
-
-1. **Enrollment:** Student uploads a clear face photo. The Institute Service calls the Facial Recognition Server to extract a 512-dimensional face descriptor (Facenet512 model). The descriptor is stored on `student.faceDescriptor` in PostgreSQL.
-2. **Verification:** At exam start, a webcam frame is captured client-side. The Institute Service:
-   - Retrieves the stored descriptor from the student record
-   - Sends both descriptors to `POST http://facial-rec:8003/face/verify`
-   - If cosine distance < 0.30 → identity confirmed
-   - If no match → exam access denied, violation logged
-
-### Facial Recognition Service endpoints
+**Structure:**
 ```
-POST /face/enroll   { "image": "<base64>" }          → returns descriptor[]
-POST /face/verify   { "desc1": [], "desc2": [] }     → { match: bool, distance: float }
+Institute
+  └── Course (has teachers M2M, students M2M)
+        └── CourseModule (ordered)
+              └── ModuleContent (ordered)
+                    types: pdf | video | document | quiz | link | simulation
 ```
+
+**Content Types:**
+- **PDF / Document / Video / Link** — reference materials stored in MinIO or external URL
+- **Simulation** — interactive virtual lab content
+- **Quiz** — embedded assessment within a module (MCQ/essay, AI-generatable)
+
+**Course Knowledge Base:** Every file uploaded to a module content is auto-indexed into Qdrant (vector DB). Students and the voice agent can then run semantic search against course content.
+
+**Key Files:**
+- `backend/institute_service/src/modules/courses/` — course, module, content services
+- `frontend/institute_protal/src/app/[instituteId]/teacher/courses/` — teacher course management
+- `frontend/institute_protal/src/app/[instituteId]/student/my-courses/` — student course view
 
 ---
 
-## Exam Integrity Monitor
+## 4. AI-Powered Quiz Generation
 
-### What it does
-A teacher-facing dashboard showing all integrity violation events across their exams. Teachers can filter by status (pending/reviewed) and mark events as reviewed.
+**What it does:** Teachers generate quiz questions from uploaded documents or plain text. Supports MCQ, essay, and mixed formats with configurable difficulty.
 
-### Violation types tracked
+**Flow:**
+1. Teacher uploads PDF/DOCX/PPTX or pastes text
+2. AI Core extracts content → sends to LLM (Claude/GPT/Gemini)
+3. Returns structured `ExamQuestion[]` — teacher reviews and saves
+
+**Providers:** Configurable via `AI_PROVIDER` env var — `anthropic`, `openai`, or `gemini`
+
+**Key Files:**
+- `backend/ai_core/routers/quiz.py`
+- `frontend/institute_protal/src/app/[instituteId]/teacher/assessments/`
+
+---
+
+## 5. Exam System & Proctoring
+
+**What it does:** Full-featured proctored exam engine. Each exam has configurable integrity controls. Results tracked per student with JSONB storage.
+
+### Exam Configuration
+| Setting | Description |
+|---|---|
+| `requireFaceId` | Student must verify identity before entering |
+| `requireScreenShare` | Student must share screen during exam |
+| `enableLiveFaceCheck` | Periodic webcam verification during exam (~60s) |
+| `autoFailOnCheat` | Auto-fail when 3+ high-severity violations detected |
+| `durationMinutes` | Exam time limit |
+| `passingScore` | Pass threshold (percentage) |
+| `maxAttempts` | How many attempts allowed |
+
+### Integrity Violation Types
 | Type | Severity | Trigger |
-|------|----------|---------|
-| `tab_switch` | medium | Browser tab lost focus |
-| `window_blur` | low | Window lost focus |
-| `face_not_detected` | high | Face absent for 5+ seconds |
-| `multiple_faces` | high | More than one face detected |
-| `camera_disabled` | high | Camera access revoked |
-| `fullscreen_exit` | medium | Exam fullscreen exited |
-| `face_verify_failed` | critical | Identity mismatch at start |
+|---|---|---|
+| `tab_switch` | medium | Student switches browser tab |
+| `fullscreen_exit` | medium | Student exits fullscreen mode |
+| `copy_attempt` | low | Student tries to copy text |
+| `face_absent` | high | No face detected in webcam |
+| `multiple_faces` | high | Multiple faces detected |
+| `face_verify_failed` | high | Face doesn't match enrolled descriptor |
+| `live_face_mismatch` | high | Live check face mismatch |
+| `camera_disabled` | high | Camera turned off |
+| `screen_share_disabled` | high | Screen share stopped |
+| `suspicious_screen` | high | AI detected cheating on screen |
 
-### Key endpoints
-```
-GET   /api/institutes/:id/exams/integrity-flags          → all flags for teacher's exams
-PATCH /api/institutes/:id/exams/:examId/integrity-flags/:studentId/review → mark reviewed
-```
+### Essay Grading
+- AI-assisted grading via `/api/teacher-tools/grade-essay`
+- Teacher reviews AI-suggested grade and saves final score
 
----
-
-## Video Recordings
-
-### What it does
-Teachers upload and manage video lecture recordings, assign them to courses, and set student access deadlines. Students watch recordings through an integrated player.
-
-### How it works
-
-1. Teacher uploads a recording (URL or file), assigns a category and optionally a course + deadline.
-2. Students can only access recordings assigned to their enrolled courses and within the active deadline.
-3. Backend enforces this at the query level — expired recordings are excluded from student responses.
-
-### Key endpoints
-```
-GET  /api/institutes/:id/recordings           → all recordings (teacher/admin)
-GET  /api/institutes/:id/recordings/student   → student's active, enrolled recordings only
-POST /api/institutes/:id/recordings           → create recording
-```
+**Key Files:**
+- `backend/institute_service/src/modules/exams/` — exam service + entity
+- `frontend/institute_protal/src/app/[instituteId]/student/exams/` — student exam UI
+- `frontend/institute_protal/src/app/[instituteId]/teacher/integrity-monitor/` — teacher dashboard
+- `backend/ai_core/routers/screen.py` — screen analysis
 
 ---
 
-## Timed Video Questions
+## 6. Video Recordings & Video Quiz
 
-### What it does
-Teachers embed quiz questions at specific timestamps in a recording. When a student watches the video and reaches that timestamp, playback pauses and the question appears. Answers are collected and submitted when the player closes. Teachers see per-question accuracy and per-student scores.
+**What it does:** Teachers upload video recordings; students watch them. Teachers can embed timed quiz questions that appear as overlays at specific timestamps during playback.
 
-### How it works
+### Recording Management
+- Upload videos to MinIO (multipart upload)
+- Organize into categories
+- Assign to courses with a deadline date
+- Students only see recordings from courses they're enrolled in with active deadlines
 
-1. Teacher opens the question manager for a recording, adds questions with an `atSeconds` value (e.g., 120 = 2:00 into the video).
-2. Questions are stored in `recording.videoQuestions` as JSONB, sorted by `atSeconds`.
-3. When the student plays the video, the frontend polls `currentTime` on every `timeupdate` event.
-4. When `currentTime >= question.atSeconds` and the question hasn't been answered, video pauses and the question overlay appears.
-5. Student answers (or skips) each question; answers are collected client-side.
-6. When the player closes, all collected answers are submitted in a single batch to `/video-attempt`.
-7. Scores are stored in `recording.quizAttempts[userId]` as JSONB.
+### Video Quiz
+- Teacher adds `VideoQuestion` objects at specific `atSeconds` timestamps
+- During playback, question overlay appears — student must answer before video continues
+- Answers tracked per student with score and timestamp
 
-### Auto-generation
-Teachers can generate questions automatically — the AI Core is called with the recording title as context, and questions are distributed at 2-minute intervals. Teachers adjust timestamps manually as needed.
-
-### Key endpoints
-```
-GET  /api/institutes/:id/recordings/:recordingId/video-questions  → questions (correct answers hidden for students)
-PUT  /api/institutes/:id/recordings/:recordingId/video-questions  → save question set (teacher)
-POST /api/institutes/:id/recordings/:recordingId/video-attempt    → submit batch answers (student)
-GET  /api/institutes/:id/recordings/:recordingId/video-stats      → per-question + per-student stats (teacher)
-```
-
-### Data shape
-```json
-videoQuestions: [
-  {
-    "id": "uuid",
-    "atSeconds": 120,
-    "question": "What is the time complexity of binary search?",
-    "options": ["O(n)", "O(log n)", "O(n²)", "O(1)"],
-    "correctAnswer": 1,
-    "marks": 2
-  }
-]
-
-quizAttempts: {
-  "userId": {
-    "answers": { "questionId": 1 },
-    "completedAt": "2026-04-11T10:00:00Z"
-  }
-}
-```
+**Key Files:**
+- `backend/institute_service/src/modules/recordings/` — recording service
+- `backend/institute_service/src/modules/recordings/recordings.entity.ts`
+- `frontend/institute_protal/src/app/[instituteId]/student/recordings/` — student view
+- `frontend/institute_protal/src/app/[instituteId]/teacher/recordings/` — teacher management
 
 ---
 
-## Voice Learning Agent
+## 7. Live Classes
 
-### What it does
-Students can have a real-time spoken conversation with an AI tutor powered by Google Gemini Live. The agent answers questions grounded in the course's knowledge base (indexed PDFs and documents).
+**What it does:** Real-time live class sessions. Teachers create, start, and end sessions; students join and participate. Uses Socket.IO for real-time signaling.
 
-### How it works
+**Session Lifecycle:** `scheduled` → `live` → `ended`
 
-1. Student opens the voice agent session from a course page.
-2. Frontend connects via WebSocket to the API Gateway, which proxies to the Voice Agent.
-3. Voice Agent initialises a Gemini Live session with course context.
-4. Student speaks → audio streams to Gemini → response audio streams back in real time.
-5. When the student asks a content question, the agent queries **Qdrant** for semantically relevant chunks from the course's indexed documents.
-6. Session start/end is recorded in the Institute Service.
+**Real-time Events (Socket.IO `/live` namespace):**
+- `join_session` / `leave_session` — room management
+- `signal` — WebRTC peer signal relay (for audio/video streaming)
+- `session_started` / `session_ended` / `participant_update` — broadcast events
 
-### Course Knowledge Base
-Documents are indexed when a teacher uploads a PDF or DOCX:
-1. Text is extracted from the file.
-2. Text is chunked and embedded using FastEmbed.
-3. Embeddings are stored in Qdrant under a collection keyed to the course ID.
-4. During voice sessions, student queries are embedded and matched against stored chunks.
+**Key Files:**
+- `backend/institute_service/src/modules/live/` — live session service
+- `backend/institute_service/src/modules/gateway/live.gateway.ts` — Socket.IO gateway
+- `frontend/institute_protal/src/app/[instituteId]/teacher/live-classes/`
+- `frontend/institute_protal/src/app/[instituteId]/student/live-classes/`
+- `frontend/institute_protal/src/components/videos/LivePipWidget.tsx` — PiP widget
 
 ---
 
-## AI Quiz Generation
+## 8. Direct Messaging
 
-### What it does
-Generates complete MCQ or essay quiz questions from any text or document. Used by teachers when creating assessments or adding questions to video recordings.
+**What it does:** Real-time direct messaging between teachers and students within an institute.
 
-### Input sources
-- Raw text (paste from anywhere)
-- Uploaded PDF / DOCX / PPTX
-- Video recording title (for timed video questions)
+**Features:**
+- Conversation threads (one-to-one)
+- Unread count tracking per contact
+- Real-time delivery via Socket.IO `/messages` namespace
+- Multi-tab sync (sender gets `message_sent` event)
 
-### Configuration options
-| Parameter | Options |
-|-----------|---------|
-| `numQuestions` | 1–20 |
-| `difficulty` | `easy`, `medium`, `hard` |
-| `questionType` | `mcq`, `essay`, `mixed` |
-
-### LLM provider selection
-Set `AI_PROVIDER` in AI Core's `.env` to switch between Anthropic, OpenAI, and Google Gemini without code changes.
+**Key Files:**
+- `backend/institute_service/src/modules/messages/` — message service + entity
+- `backend/institute_service/src/modules/gateway/message.gateway.ts`
+- `frontend/institute_protal/src/app/[instituteId]/teacher/messages/`
+- `frontend/institute_protal/src/app/[instituteId]/student/messages/`
 
 ---
 
-## Live Sessions
+## 9. Notifications
 
-### What it does
-Real-time virtual class sessions where teachers broadcast and students participate. Powered by Socket.IO.
+**What it does:** In-app push notifications for messages, exam alerts, cheat alerts, and reminders. Delivered via Socket.IO.
 
-### How it works
+**Notification Types:**
+- `message` — new direct message received
+- `email` — email-related notifications
+- `reminder` — user-created reminders
+- `cheat_alert` — exam integrity violation alert (for teachers)
 
-1. Teacher creates and starts a live session.
-2. Students join and appear in the participant list.
-3. Messages, reactions, and events are broadcast over Socket.IO to all participants.
-4. Session end is recorded with participant counts and duration.
-
-### Key endpoints
-```
-POST /api/institutes/:id/live-sessions        → create session
-PATCH /api/institutes/:id/live-sessions/:id   → start/end session
-GET  /api/institutes/:id/live-sessions        → list sessions
-```
+**Key Files:**
+- `backend/institute_service/src/modules/notifications/` — notification service + entity
+- `backend/institute_service/src/modules/gateway/notification.gateway.ts`
+- `frontend/institute_protal/src/context/` — notification context
 
 ---
 
-## Student Reporting
+## 10. Voice Agent (AI Tutor)
 
-### What it does
-Teachers see a consolidated performance report for every student across all their courses. Includes quiz averages, exam averages, overall grade, and per-student breakdowns.
+**What it does:** Real-time voice AI assistant powered by Google Gemini Live. Students and teachers have spoken conversations with an AI tutor that knows the course content.
 
-### How it works
+**Three Agent Modes:**
+1. **General Institute Assistant** — answers general institute-level questions
+2. **Teacher Assistant** — teacher-scoped AI with course knowledge base access
+3. **Course Q&A** — student asks questions about a specific course; agent retrieves relevant content from Qdrant vector DB (RAG)
 
-1. Backend aggregates: for each student enrolled in the teacher's courses, collect all quiz attempt scores from `module_contents.studentAttempts` and all exam scores from `exam.studentAttempts`.
-2. Frontend combines quiz data (from `/courses/student-report`) and exam data (from `/exams/my`) in a `useMemo`.
-3. Scores are averaged, graded (A–F), and displayed in a sortable, filterable table.
+**Transport Options:**
+- Browser WebSocket — `ws://.../ws/{institute_id}/{user_id}/{session_id}`
+- SIP/UDP — VoIP phone integration for telephony access
 
-### Export options
-- **CSV (per student):** Downloads a CSV with that student's quiz and exam rows.
-- **CSV (all students):** Bulk export of the filtered student list with aggregate scores.
-- **PDF (per student):** Opens a print-ready HTML page with the student's full report and triggers `window.print()`.
+**Knowledge Base RAG:**
+- Course documents indexed with FastEmbed (all-MiniLM-L6-v2-onnx)
+- Qdrant stores vectors in `course_kb` collection
+- At query time: embed query → ANN search → inject top-k chunks into agent context
 
-### Key endpoint
-```
-GET /api/institutes/:id/courses/student-report   → all students with quiz scores across teacher's courses
-```
+**Custom per-institute config:**
+- `voiceInstructions` — custom system prompt for the voice agent
+- `voiceGreeting` — custom greeting message
 
----
-
-## Multi-Tenancy & Role Management
-
-### What it does
-Multiple independent institutes can operate on a single SmartEdX deployment, each with their own users, courses, and data.
-
-### Roles
-
-| Role | Scope | Capabilities |
-|------|-------|-------------|
-| Super Admin | Global | Full system access, institute management |
-| Institute Admin | Institute | Manage users, courses, settings within their institute |
-| Teacher | Institute | Manage assigned courses, create content, view reports |
-| Student | Institute | Enroll in courses, take quizzes and exams, watch recordings |
-
-### Authentication flow
-
-1. User logs in via Firebase (email/password or social) or directly with credentials.
-2. SaaS Service validates credentials and issues a JWT containing `userId`, `instituteId`, and `role`.
-3. JWT is included in all subsequent requests as a `Bearer` token.
-4. Institute Service and SaaS Service both validate the JWT using the shared `JWT_SECRET`.
-5. The `@CurrentUser()` decorator extracts the user context from the verified token in any controller.
+**Key Files:**
+- `backend/voice_agent/app/` — full voice agent
+- `backend/voice_agent/app/agents/` — agent configurations
+- `frontend/institute_protal/src/components/student/CourseVoiceAssistant.tsx`
+- `frontend/institute_protal/src/components/teacher/TeacherVoiceAgent.tsx`
 
 ---
 
-## Notifications
+## 11. AI Chat Assistants
 
-### What it does
-Real-time in-app notifications delivered to users via Socket.IO as events occur (e.g., new assignment, exam reminder, live session start).
+**What it does:** Text-based AI chat for students, teachers, and institute admins. Each has a different context and available tools.
 
-### Key endpoints
-```
-GET   /api/institutes/:id/notifications          → user's notifications
-PATCH /api/institutes/:id/notifications/:id/read → mark as read
-```
+**Chat Modes:**
+- **Student Chat** — general learning assistant; supports file attachment for homework help
+- **Teacher Chat** — teaching assistant; can help with lesson planning, grading, content creation
+- **Institute Chat** — admin assistant; supports tool calls to create courses, fetch analytics, etc.
+
+**Key Files:**
+- `backend/ai_core/routers/chat.py`
+- `frontend/institute_protal/src/components/student/StudentFloatingAiChat.tsx`
+- `frontend/institute_protal/src/components/teacher/TeacherFloatingAiChat.tsx`
+- `frontend/institute_protal/src/components/live/FloatingAiChat.tsx`
 
 ---
 
-## File Storage (MinIO)
+## 12. Teacher AI Tools
 
-### What it does
-All uploaded files — profile pictures, course PDFs, DOCX files, videos — are stored in MinIO, an S3-compatible object store.
+**What it does:** A suite of AI-powered productivity tools for teachers.
 
-### Bucket structure
-```
-smartedx-bucket/
-  institutes/
-    [instituteId]/
-      courses/
-        [courseId]/
-          [filename]         ← course content files
-      recordings/
-        [recordingId]/
-          [filename]         ← video files
-      profiles/
-        [userId]/
-          [filename]         ← profile pictures
-```
+| Tool | Description | Endpoint |
+|---|---|---|
+| Lesson Plan Generator | Generate structured lesson plans by topic, subject, grade, duration | `POST /api/teacher-tools/lesson-plan` |
+| Essay Grader | AI grades student essays with feedback and suggested score | `POST /api/teacher-tools/grade-essay` |
+| Class Insights | Analyze class performance data and generate narrative insights | `POST /api/teacher-tools/class-insights` |
+| At-Risk Analysis | Identify struggling students based on performance data | `POST /api/teacher-tools/at-risk-analysis` |
+| Quiz Generator | Generate quizzes from documents or text | `POST /api/quiz/generate-from-file` |
+| Transcription | Transcribe audio/video content to text | `POST /api/transcription/transcribe` |
 
-### Access
-Files are served publicly from the `smartedx-bucket` bucket. Presigned URLs are generated for private files when needed.
+**Key Files:**
+- `backend/ai_core/routers/teacher_tools.py`
+- `frontend/institute_protal/src/app/[instituteId]/teacher/ai-tools/`
+
+---
+
+## 13. Voice Assessments
+
+**What it does:** Oral/voice-based assessments. Teacher generates spoken questions; student records spoken answers; AI evaluates responses.
+
+**Flow:**
+1. Teacher generates voice assessment questions from document/text
+2. Student receives questions as audio
+3. Student speaks answers (audio recorded in browser)
+4. Audio transcribed by Gemini transcription service
+5. AI evaluates transcribed answers against sample answers
+
+**Key Files:**
+- `backend/ai_core/routers/voice_assessment.py`
+- `frontend/institute_protal/src/components/student/VoiceAssessmentPlayer.tsx`
+- `frontend/institute_protal/src/components/teacher/VoiceAssessmentModal.tsx`
+
+---
+
+## 14. Student Reports & Analytics
+
+**What it does:** Performance tracking and reporting for teachers and students.
+
+**Teacher Reports:**
+- Per-student quiz and exam scores across all teacher courses
+- CSV export and PDF print
+- Individual student detail modal
+
+**Student Performance:**
+- Progress across enrolled courses
+- Quiz attempt history
+- Exam result history
+
+**Platform Analytics (Admin):**
+- Total institutes, users, subscriptions
+- Revenue metrics
+- Growth trends via ApexCharts
+
+**Key Files:**
+- `backend/institute_service/src/modules/courses/courses.service.ts` — `getStudentReport()`
+- `frontend/institute_protal/src/app/[instituteId]/teacher/reports/`
+- `frontend/institute_protal/src/app/[instituteId]/student/performance/`
+- `frontend/sass_protal/src/app/admin/` — platform analytics
+
+---
+
+## 15. Payments & Subscriptions
+
+**What it does:** PayHere payment gateway integration for subscription billing. SaaS admin manages institute subscriptions.
+
+**Subscription Fields:** `plan`, `status`, `price`, `billingCycle`, `paymentMethod`, `startDate`, `endDate`, `nextBillingDate`, `payhereOrderId`, `payherePaymentId`
+
+**Subscription Plans:** `starter`, `pro`, `enterprise`
+
+**Billing Cycles:** `monthly`, `yearly`
+
+**Payment Statuses:** `active`, `inactive`, `cancelled`, `trial`
+
+**Key Files:**
+- `backend/saas_service/src/modules/payhere/` — PayHere integration
+- `backend/saas_service/src/modules/subscription/` — subscription management
+- `frontend/sass_protal/src/app/dashboard/(others-pages)/billing/`
+
+---
+
+## 16. Object Storage (MinIO)
+
+**What it does:** All user-uploaded files are stored in MinIO, an S3-compatible object store.
+
+**Bucket:** `smartedx-bucket` (configured as public access)
+
+**Stored content:**
+- User and institute profile pictures / logos
+- Course cover images
+- Module content files (PDFs, videos, documents)
+- Video recordings
+- Any uploaded documents for AI processing
+
+**Key config:** `MINIO_ENDPOINT`, `MINIO_PORT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`
+
+---
+
+## 17. Redis Cache
+
+**What it does:** Response caching for GET endpoints to reduce database load.
+
+**Implementation:** Custom `RedisCacheInterceptor` in Institute Service applied globally. Routes decorated with `@SkipCache()` bypass the cache (e.g., real-time data like institute user lists).
+
+**Config:** max memory 100MB, `allkeys-lru` eviction policy
+
+---
+
+## 18. Virtual Labs
+
+**What it does:** Interactive virtual lab environment for hands-on learning simulations. Available as a plan feature (`virtual_labs`).
+
+**Key Files:**
+- `frontend/institute_protal/src/app/[instituteId]/student/virtual-labs/`
+- `frontend/institute_protal/src/app/[instituteId]/teacher/virtual-labs/`
