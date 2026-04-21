@@ -1,4 +1,4 @@
-"use client";
+  "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { authService } from "@/services/authService";
@@ -218,18 +218,24 @@ export default function AIToolsPage() {
 
       {/* Content */}
       <div>
-        {activeTab === "chat" && (
+        <div className={activeTab === "chat" ? "" : "hidden"}>
           <AIChatTab instituteId={instituteId} selectedCourse={chatCourse} onCourseSelect={setChatCourse} />
-        )}
+        </div>
 
-        {activeTab !== "chat" && (
-          <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3">
-            {activeTab === "lesson"   && <LessonPlanTab   instituteId={instituteId} />}
-            {activeTab === "essay"    && <EssayGraderTab  instituteId={instituteId} />}
-            {activeTab === "insights" && <ClassInsightsTab instituteId={instituteId} />}
-            {activeTab === "atrisk"   && <AtRiskTab        instituteId={instituteId} />}
+        <div className={activeTab !== "chat" ? "rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3" : "hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3"}>
+            <div className={activeTab === "lesson" ? "" : "hidden"}>
+              <LessonPlanTab instituteId={instituteId} />
+            </div>
+            <div className={activeTab === "essay" ? "" : "hidden"}>
+              <EssayGraderTab instituteId={instituteId} />
+            </div>
+            <div className={activeTab === "insights" ? "" : "hidden"}>
+              <ClassInsightsTab instituteId={instituteId} />
+            </div>
+            <div className={activeTab === "atrisk" ? "" : "hidden"}>
+              <AtRiskTab instituteId={instituteId} />
+            </div>
           </div>
-        )}
       </div>
     </div>
   );
