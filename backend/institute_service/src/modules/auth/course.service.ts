@@ -84,6 +84,15 @@ export class CourseService {
       teachers,
     });
 
+    // Pre-create the Qdrant collection so it exists before any content is uploaded
+    this.voiceAgentClient
+      .ensureCourseCollection(instituteId, savedCourse.id)
+      .catch((err) =>
+        this.logger.error(
+          `Failed to pre-create Qdrant collection for course ${savedCourse.id}: ${err}`,
+        ),
+      );
+
     return this.mapCourseToResponse(savedCourse);
   }
 
@@ -577,7 +586,20 @@ export class CourseService {
   }
 
   async deleteCourse(instituteId: string, courseId: string) {
-    const course = await this.getCourseById(instituteId, courseId);
+    // Load with both many-to-many relations so we can clear their join tables
+    const course = await this.courseRepository.findOne({
+      where: { id: courseId, instituteId } as any,
+      relations: ['teachers', 'students'],
+    });
+    if (!course) throw new NotFoundException('Course not found');
+
+    // Clear join-table rows (teacher_courses + student_courses) before the
+    // DELETE so FK constraints don't block it.
+    let dirty = false;
+    if (course.teachers?.length) { course.teachers = []; dirty = true; }
+    if (course.students?.length) { course.students = []; dirty = true; }
+    if (dirty) await this.courseRepository.save(course);
+
     await this.courseRepository.delete(course.id);
     return { message: 'Course deleted successfully' };
   }

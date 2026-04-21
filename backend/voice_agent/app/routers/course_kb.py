@@ -14,7 +14,7 @@ import logging
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
-from app.qdrant.course_kb import delete_content, index_content, search_course
+from app.qdrant.course_kb import delete_content, ensure_collection, collection_name, index_content, search_course
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,18 @@ def _run_index(req: IndexRequest) -> None:
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────
+
+
+@router.post("/{institute_id}/{course_id}/ensure-collection", status_code=200)
+async def ensure_course_collection(institute_id: str, course_id: str):
+    """Pre-create the Qdrant collection for a course (idempotent, safe to call repeatedly)."""
+    try:
+        col = collection_name(institute_id, course_id)
+        ensure_collection(col)
+        return {"status": "ok", "collection": col}
+    except Exception as e:
+        logger.error(f"[course-kb] ensure-collection failed for {institute_id}/{course_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/index", status_code=202)
