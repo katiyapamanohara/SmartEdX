@@ -152,7 +152,26 @@ export class CourseService {
       where: { id: moduleId, courseId } as any,
     });
     if (!module) throw new NotFoundException('Module not found');
+
+    // Fetch indexable contents before cascade-delete removes them from DB
+    const contents =
+      await this.moduleContentRepository.findByModuleId(moduleId);
+
     await this.courseModuleRepository.delete(module.id);
+
+    // Clean up Qdrant vectors for any indexed content in this module
+    for (const content of contents) {
+      if (isIndexable(content.type, content.url)) {
+        this.voiceAgentClient
+          .deleteContent(instituteId, courseId, content.id)
+          .catch((err) =>
+            this.logger.error(
+              `KB delete failed for content ${content.id} on module delete: ${err}`,
+            ),
+          );
+      }
+    }
+
     return { message: 'Module deleted successfully' };
   }
 
