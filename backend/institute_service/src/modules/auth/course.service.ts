@@ -12,6 +12,7 @@ import {
 import { ModuleContentRepository } from '../../infra/database/repositories/module-content.repository';
 import { CourseModuleRepository } from '../../infra/database/repositories/course-module.repository';
 import { VoiceAgentClient } from '../../infra/http/voice-agent.client';
+import { AiCoreClient } from '../../infra/http/ai-core.client';
 import { MinioService } from '../../infra/storage/minio.service';
 
 import { CreateCourseDto } from './dto/create-course.dto';
@@ -40,6 +41,7 @@ export class CourseService {
     private readonly moduleContentRepository: ModuleContentRepository,
     private readonly courseModuleRepository: CourseModuleRepository,
     private readonly voiceAgentClient: VoiceAgentClient,
+    private readonly aiCoreClient: AiCoreClient,
     private readonly minioService: MinioService,
   ) {}
 
@@ -81,6 +83,15 @@ export class CourseService {
       instituteId,
       teachers,
     });
+
+    // Pre-create the Qdrant collection so it exists before any content is uploaded
+    this.voiceAgentClient
+      .ensureCourseCollection(instituteId, savedCourse.id)
+      .catch((err) =>
+        this.logger.error(
+          `Failed to pre-create Qdrant collection for course ${savedCourse.id}: ${err}`,
+        ),
+      );
 
     return this.mapCourseToResponse(savedCourse);
   }
@@ -150,7 +161,26 @@ export class CourseService {
       where: { id: moduleId, courseId } as any,
     });
     if (!module) throw new NotFoundException('Module not found');
+
+    // Fetch indexable contents before cascade-delete removes them from DB
+    const contents =
+      await this.moduleContentRepository.findByModuleId(moduleId);
+
     await this.courseModuleRepository.delete(module.id);
+
+    // Clean up Qdrant vectors for any indexed content in this module
+    for (const content of contents) {
+      if (isIndexable(content.type, content.url)) {
+        this.voiceAgentClient
+          .deleteContent(instituteId, courseId, content.id)
+          .catch((err) =>
+            this.logger.error(
+              `KB delete failed for content ${content.id} on module delete: ${err}`,
+            ),
+          );
+      }
+    }
+
     return { message: 'Module deleted successfully' };
   }
 
@@ -556,7 +586,20 @@ export class CourseService {
   }
 
   async deleteCourse(instituteId: string, courseId: string) {
-    const course = await this.getCourseById(instituteId, courseId);
+    // Load with both many-to-many relations so we can clear their join tables
+    const course = await this.courseRepository.findOne({
+      where: { id: courseId, instituteId } as any,
+      relations: ['teachers', 'students'],
+    });
+    if (!course) throw new NotFoundException('Course not found');
+
+    // Clear join-table rows (teacher_courses + student_courses) before the
+    // DELETE so FK constraints don't block it.
+    let dirty = false;
+    if (course.teachers?.length) { course.teachers = []; dirty = true; }
+    if (course.students?.length) { course.students = []; dirty = true; }
+    if (dirty) await this.courseRepository.save(course);
+
     await this.courseRepository.delete(course.id);
     return { message: 'Course deleted successfully' };
   }
@@ -728,5 +771,104 @@ export class CourseService {
     }
 
     return Array.from(studentMap.values());
+  }
+
+  // ── Adaptive Learning Recommendations ─────────────────────────────────────
+
+  async getAdaptiveRecommendations(instituteId: string, userId: string) {
+    const courses = await this.courseRepository.findCoursesWithQuizzesByStudent(
+      userId,
+      instituteId,
+    );
+
+    const weakTopics: Array<{ topic: string; score: number; maxScore: number }> =
+      [];
+    const strongTopics: Array<{
+      topic: string;
+      score: number;
+      maxScore: number;
+    }> = [];
+    let totalScore = 0;
+    let totalMax = 0;
+    const contentResults: Array<{
+      contentId: string;
+      title: string;
+      courseId: string;
+      courseName: string;
+      score: number;
+      maxScore: number;
+      percentage: number;
+    }> = [];
+
+    for (const course of courses) {
+      const modules = (course as any).modules ?? [];
+      for (const mod of modules) {
+        for (const content of mod.contents ?? []) {
+          const questions = content.quizData?.questions ?? [];
+          const maxScore = questions.reduce(
+            (s: number, q: any) => s + (q.marks ?? 1),
+            0,
+          );
+          if (maxScore === 0) continue;
+          const attempt = content.studentAttempts?.[userId];
+          if (!attempt) continue;
+          const score =
+            attempt.score ?? attempt.totalScore ?? 0;
+          const percentage = Math.round((score / maxScore) * 100);
+          totalScore += score;
+          totalMax += maxScore;
+          const entry = {
+            topic: content.title,
+            score,
+            maxScore,
+          };
+          if (percentage < 70) {
+            weakTopics.push(entry);
+          } else {
+            strongTopics.push(entry);
+          }
+          contentResults.push({
+            contentId: content.id,
+            title: content.title,
+            courseId: course.id,
+            courseName: course.name,
+            score,
+            maxScore,
+            percentage,
+          });
+        }
+      }
+    }
+
+    const overallAverage =
+      totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : 0;
+
+    // Sort weak topics worst-first for prioritised recommendations
+    weakTopics.sort((a, b) => a.score / a.maxScore - b.score / b.maxScore);
+
+    let aiRecommendations: string[] = [];
+    let studyPlan = '';
+
+    if (weakTopics.length > 0 || strongTopics.length > 0) {
+      const aiResult = await this.aiCoreClient.getAdaptiveRecommendations({
+        studentId: userId,
+        weakTopics,
+        strongTopics,
+        overallAverage,
+      });
+      if (aiResult) {
+        aiRecommendations = aiResult.recommendations;
+        studyPlan = aiResult.studyPlan;
+      }
+    }
+
+    return {
+      overallAverage,
+      weakTopics,
+      strongTopics,
+      contentResults,
+      recommendations: aiRecommendations,
+      studyPlan,
+    };
   }
 }

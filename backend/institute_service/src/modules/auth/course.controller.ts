@@ -140,6 +140,18 @@ export class CourseController {
     return this.courseService.getMyCoursesForStudent(instituteId, userId);
   }
 
+  @Get('adaptive-recommendations')
+  @ApiOperation({
+    summary: 'Get AI-personalised study recommendations for the logged-in student',
+  })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  async getAdaptiveRecommendations(
+    @Param('id') instituteId: string,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.courseService.getAdaptiveRecommendations(instituteId, userId);
+  }
+
   // ─── Teacher module CRUD ─────────────────────────────────────────
   @Post(':courseId/teacher-modules')
   @HttpCode(HttpStatus.CREATED)

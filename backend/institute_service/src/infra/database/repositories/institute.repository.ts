@@ -16,4 +16,29 @@ export class InstituteRepository extends BaseRepository<Institute> {
   async findByName(name: string): Promise<Institute | null> {
     return this.instituteRepo.findOne({ where: { name } });
   }
+
+  async findPublicInfoById(
+    id: string,
+  ): Promise<Pick<Institute, 'id' | 'name' | 'logo' | 'phoneNumber'> | null> {
+    const institute = await this.instituteRepo.findOne({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        logo: true,
+        phoneNumber: true,
+      },
+    });
+
+    if (!institute) {
+      return null;
+    }
+
+    return {
+      id: institute.id,
+      name: institute.name,
+      logo: institute.logo,
+      phoneNumber: institute.phoneNumber,
+    };
+  }
 }

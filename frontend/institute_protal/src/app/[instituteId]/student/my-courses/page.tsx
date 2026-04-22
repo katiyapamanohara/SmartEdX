@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { instituteService, Course } from "@/services/instituteService";
 import { BoxIconLine } from "@/icons";
 import { useFeatures } from "@/context/InstituteFeatureContext";
+import AdaptiveLearningPanel from "@/components/student/AdaptiveLearningPanel";
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: "$", EUR: "€", GBP: "£", INR: "₹", AUD: "A$", CAD: "C$",
@@ -49,116 +50,123 @@ export default function StudentMyCoursesPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <main className="flex flex-col gap-6">
       <div className="py-4">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">My Courses</h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">View all courses you are enrolled in</p>
       </div>
 
       {/* Stat bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4" role="region" aria-label="Course summary statistics">
         <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/3 p-5">
-          <span className="text-sm text-gray-500 dark:text-gray-400">Enrolled</span>
-          <p className="mt-1 text-2xl font-bold text-gray-800 dark:text-white">
+          <span className="text-sm text-gray-500 dark:text-gray-400" id="stat-enrolled">Enrolled</span>
+          <p className="mt-1 text-2xl font-bold text-gray-800 dark:text-white" aria-labelledby="stat-enrolled">
             {loading ? "—" : courses.length}
           </p>
         </div>
         <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/3 p-5">
-          <span className="text-sm text-gray-500 dark:text-gray-400">Total Modules</span>
-          <p className="mt-1 text-2xl font-bold text-gray-800 dark:text-white">
+          <span className="text-sm text-gray-500 dark:text-gray-400" id="stat-modules">Total Modules</span>
+          <p className="mt-1 text-2xl font-bold text-gray-800 dark:text-white" aria-labelledby="stat-modules">
             {loading ? "—" : courses.reduce((sum, c) => sum + (c.moduleCount ?? 0), 0)}
           </p>
         </div>
         <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/3 p-5">
-          <span className="text-sm text-gray-500 dark:text-gray-400">Instructors</span>
-          <p className="mt-1 text-2xl font-bold text-gray-800 dark:text-white">
+          <span className="text-sm text-gray-500 dark:text-gray-400" id="stat-instructors">Instructors</span>
+          <p className="mt-1 text-2xl font-bold text-gray-800 dark:text-white" aria-labelledby="stat-instructors">
             {loading ? "—" : new Set(courses.filter(c => c.assignedTeacher).map(c => c.assignedTeacher!.id)).size}
           </p>
         </div>
       </div>
 
+      {/* Adaptive Learning Panel */}
+      <AdaptiveLearningPanel instituteId={instituteId} />
+
       {/* Course grid */}
-      {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="animate-pulse rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 p-5 space-y-3">
-              <div className="h-32 bg-gray-200 dark:bg-gray-700 rounded-xl" />
-              <div className="h-4 w-2/3 bg-gray-200 dark:bg-gray-700 rounded" />
-              <div className="h-3 w-1/2 bg-gray-100 dark:bg-gray-800 rounded" />
-            </div>
-          ))}
-        </div>
-      ) : courses.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 text-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-            <BoxIconLine className="w-8 h-8 text-gray-400" />
-          </div>
-          <div>
-            <p className="font-semibold text-gray-700 dark:text-gray-300">No courses yet</p>
-            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Your enrolled courses will appear here once assigned by your institute.</p>
-          </div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {courses.map((course) => (
-            <div
-              key={course.id}
-              className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 overflow-hidden hover:shadow-md transition-shadow"
-            >
-              <div className="relative">
-                {course.coverImage ? (
-                  <img src={course.coverImage} alt={course.name} className="w-full h-36 object-cover" />
-                ) : (
-                  <div className="w-full h-36 bg-linear-to-br from-brand-500 to-purple-500" />
-                )}
-                <span className={`absolute bottom-2 right-2 px-2.5 py-1 text-xs font-bold rounded-lg backdrop-blur-sm border ${
-                  course.price
-                    ? "bg-green-500/80 text-white border-green-400/40"
-                    : "bg-white/20 text-white border-white/30"
-                }`}>
-                  {course.price ? `${currencySym}${parseFloat(String(course.price)).toFixed(2)}` : "Free"}
-                </span>
+      <section aria-label="Enrolled courses">
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5" aria-label="Loading courses" aria-busy="true">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="animate-pulse rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 p-5 space-y-3" aria-hidden="true">
+                <div className="h-32 bg-gray-200 dark:bg-gray-700 rounded-xl" />
+                <div className="h-4 w-2/3 bg-gray-200 dark:bg-gray-700 rounded" />
+                <div className="h-3 w-1/2 bg-gray-100 dark:bg-gray-800 rounded" />
               </div>
-              <div className="p-5">
-                <h3 className="font-semibold text-gray-800 dark:text-white text-base leading-snug">{course.name}</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Code: {course.code}</p>
-                {course.assignedTeacher && (
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                    Instructor: {course.assignedTeacher.firstName} {course.assignedTeacher.lastName}
-                  </p>
-                )}
-                {course.description && (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 line-clamp-2">{course.description}</p>
-                )}
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
-                    {course.moduleCount ?? 0} module{(course.moduleCount ?? 0) !== 1 ? "s" : ""}
+            ))}
+          </div>
+        ) : courses.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 text-center gap-4" role="status">
+            <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center" aria-hidden="true">
+              <BoxIconLine className="w-8 h-8 text-gray-400" />
+            </div>
+            <div>
+              <p className="font-semibold text-gray-700 dark:text-gray-300">No courses yet</p>
+              <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Your enrolled courses will appear here once assigned by your institute.</p>
+            </div>
+          </div>
+        ) : (
+          <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5" role="list" aria-label="Course list">
+            {courses.map((course) => (
+              <li
+                key={course.id}
+                className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 overflow-hidden hover:shadow-md transition-shadow"
+              >
+                <div className="relative">
+                  {course.coverImage ? (
+                    <img src={course.coverImage} alt={`Cover image for ${course.name}`} className="w-full h-36 object-cover" />
+                  ) : (
+                    <div className="w-full h-36 bg-linear-to-br from-brand-500 to-purple-500" role="img" aria-label={`${course.name} cover`} />
+                  )}
+                  <span className={`absolute bottom-2 right-2 px-2.5 py-1 text-xs font-bold rounded-lg backdrop-blur-sm border ${
+                    course.price
+                      ? "bg-green-500/80 text-white border-green-400/40"
+                      : "bg-white/20 text-white border-white/30"
+                  }`} aria-label={course.price ? `Price: ${currencySym}${parseFloat(String(course.price)).toFixed(2)}` : "Free course"}>
+                    {course.price ? `${currencySym}${parseFloat(String(course.price)).toFixed(2)}` : "Free"}
                   </span>
-                  <div className="flex items-center gap-2">
-                    {hasFeature("ai_tutor") && (
-                    <button
-                      onClick={() => openAiTutor(course)}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-white bg-brand-500 hover:bg-brand-600 px-2.5 py-1 rounded-lg transition-colors"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
-                      </svg>
-                      AI Tutor
-                    </button>
-                    )}
-                    <a
-                      href={`/${instituteId}/student/my-courses/${course.id}/modules`}
-                      className="inline-flex items-center gap-1 text-sm font-medium text-brand-500 hover:underline"
-                    >
-                      View →
-                    </a>
+                </div>
+                <div className="p-5">
+                  <h3 className="font-semibold text-gray-800 dark:text-white text-base leading-snug">{course.name}</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Code: {course.code}</p>
+                  {course.assignedTeacher && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      Instructor: {course.assignedTeacher.firstName} {course.assignedTeacher.lastName}
+                    </p>
+                  )}
+                  {course.description && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 line-clamp-2">{course.description}</p>
+                  )}
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
+                      {course.moduleCount ?? 0} module{(course.moduleCount ?? 0) !== 1 ? "s" : ""}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {hasFeature("ai_tutor") && (
+                        <button
+                          onClick={() => openAiTutor(course)}
+                          aria-label={`Open AI Tutor for ${course.name}`}
+                          className="inline-flex items-center gap-1 text-xs font-medium text-white bg-brand-500 hover:bg-brand-600 px-2.5 py-1 rounded-lg transition-colors"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+                          </svg>
+                          AI Tutor
+                        </button>
+                      )}
+                      <a
+                        href={`/${instituteId}/student/my-courses/${course.id}/modules`}
+                        aria-label={`View modules for ${course.name}`}
+                        className="inline-flex items-center gap-1 text-sm font-medium text-brand-500 hover:underline"
+                      >
+                        View →
+                      </a>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </main>
   );
 }

@@ -117,52 +117,65 @@ function FaceVerifyModal({
   const retry = () => { setStatus("ready"); setErrorMsg(""); };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="face-verify-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
+    >
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <div>
-            <h2 className="font-bold text-gray-900 dark:text-white">Face Verification Required</h2>
+            <h2 id="face-verify-title" className="font-bold text-gray-900 dark:text-white">Face Verification Required</h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{exam.title}</p>
           </div>
-          <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1">✕</button>
+          <button
+            onClick={handleClose}
+            aria-label="Close face verification dialog"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
+          >
+            <span aria-hidden="true">✕</span>
+          </button>
         </div>
 
         <div className="p-6 flex flex-col items-center gap-5">
           {/* Camera feed */}
-          <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black">
-            <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
+          <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black" role="img" aria-label="Camera feed for face verification">
+            <video ref={videoRef} className="w-full h-full object-cover" muted playsInline aria-hidden="true" />
             {/* Oval guide overlay */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
               <div className="w-36 h-44 rounded-full border-4 border-white/60" style={{ boxShadow: "0 0 0 9999px rgba(0,0,0,0.45)" }} />
             </div>
             {status === "success" && (
-              <div className="absolute inset-0 flex items-center justify-center bg-green-500/80">
+              <div className="absolute inset-0 flex items-center justify-center bg-green-500/80" aria-hidden="true">
                 <span className="text-white text-5xl">✓</span>
               </div>
             )}
           </div>
 
-          {/* Status / error */}
-          {status === "loading" && (
-            <p className="text-sm text-gray-500 dark:text-gray-400 text-center">Starting camera…</p>
-          )}
-          {status === "ready" && (
-            <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
-              Position your face within the oval and click <strong>Verify</strong>.
-            </p>
-          )}
-          {status === "verifying" && (
-            <p className="text-sm text-blue-600 dark:text-blue-400 text-center animate-pulse">Verifying identity…</p>
-          )}
-          {status === "success" && (
-            <p className="text-sm font-semibold text-green-600 dark:text-green-400 text-center">Identity verified! Starting exam…</p>
-          )}
-          {status === "failed" && (
-            <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300 text-center w-full">
-              {errorMsg || "Verification failed."}
-            </div>
-          )}
+          {/* Status / error — live region so screen readers announce changes */}
+          <div aria-live="polite" aria-atomic="true" className="w-full text-center">
+            {status === "loading" && (
+              <p className="text-sm text-gray-500 dark:text-gray-400">Starting camera…</p>
+            )}
+            {status === "ready" && (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Position your face within the oval and click <strong>Verify</strong>.
+              </p>
+            )}
+            {status === "verifying" && (
+              <p className="text-sm text-blue-600 dark:text-blue-400 animate-pulse">Verifying identity…</p>
+            )}
+            {status === "success" && (
+              <p className="text-sm font-semibold text-green-600 dark:text-green-400">Identity verified! Starting exam…</p>
+            )}
+            {status === "failed" && (
+              <div role="alert" className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+                {errorMsg || "Verification failed."}
+              </div>
+            )}
+          </div>
 
           {/* Actions */}
           <div className="flex gap-3 w-full">
@@ -177,6 +190,7 @@ function FaceVerifyModal({
               <button
                 onClick={handleVerify}
                 disabled={status !== "ready"}
+                aria-disabled={status !== "ready"}
                 className="flex-1 py-2.5 rounded-xl bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 disabled:opacity-40"
               >
                 {status === "verifying" ? "Verifying…" : "Verify Identity"}
@@ -221,7 +235,7 @@ function ScreenShareGate({
       const surface = (track?.getSettings() as MediaTrackSettings & { displaySurface?: string })?.displaySurface;
 
       if (surface && surface !== "monitor") {
-        stream.getTracks().forEach((t) => t.stop());
+        stream.getTracks().forEach((t: MediaStreamTrack) => t.stop());
         const what = surface === "browser" ? "a browser tab" : "an application window";
         setError(
           `You shared ${what} instead of your entire screen. ` +
@@ -240,17 +254,28 @@ function ScreenShareGate({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="screen-share-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
+    >
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <div>
-            <h2 className="font-bold text-gray-900 dark:text-white">Screen Share Required</h2>
+            <h2 id="screen-share-title" className="font-bold text-gray-900 dark:text-white">Screen Share Required</h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{exam.title}</p>
           </div>
-          <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1">✕</button>
+          <button
+            onClick={onCancel}
+            aria-label="Cancel screen share and close dialog"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
+          >
+            <span aria-hidden="true">✕</span>
+          </button>
         </div>
         <div className="p-6 flex flex-col items-center gap-5 text-center">
-          <div className="w-16 h-16 rounded-full bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center">
+          <div className="w-16 h-16 rounded-full bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center" aria-hidden="true">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="text-blue-500">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H3.75A2.25 2.25 0 0 1 1.5 15V5.25A2.25 2.25 0 0 1 3.75 3h16.5A2.25 2.25 0 0 1 21 5.25Z" />
             </svg>
@@ -261,17 +286,17 @@ function ScreenShareGate({
               This exam requires full-screen sharing for proctoring. Your screen will be monitored throughout the exam.
             </p>
             {/* Step-by-step guide */}
-            <ol className="text-left text-xs text-gray-500 dark:text-gray-400 space-y-1.5 bg-gray-50 dark:bg-gray-800 rounded-xl px-4 py-3">
+            <ol className="text-left text-xs text-gray-500 dark:text-gray-400 space-y-1.5 bg-gray-50 dark:bg-gray-800 rounded-xl px-4 py-3" aria-label="Steps to share your screen">
               <li className="flex items-start gap-2">
-                <span className="w-4 h-4 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">1</span>
+                <span className="w-4 h-4 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5" aria-hidden="true">1</span>
                 Click <strong className="text-gray-700 dark:text-gray-200 mx-1">"Share Screen &amp; Start"</strong> below
               </li>
               <li className="flex items-start gap-2">
-                <span className="w-4 h-4 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">2</span>
+                <span className="w-4 h-4 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5" aria-hidden="true">2</span>
                 In the browser picker, select the <strong className="text-gray-700 dark:text-gray-200 mx-1">"Entire Screen"</strong> or <strong className="text-gray-700 dark:text-gray-200 mx-1">"Screen"</strong> tab — <span className="text-red-500 font-medium">not a Window or Tab</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="w-4 h-4 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">3</span>
+                <span className="w-4 h-4 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5" aria-hidden="true">3</span>
                 Click your monitor thumbnail, then click <strong className="text-gray-700 dark:text-gray-200 mx-1">"Share"</strong>
               </li>
             </ol>
@@ -280,7 +305,7 @@ function ScreenShareGate({
             </p>
           </div>
           {error && (
-            <div className="w-full rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+            <div role="alert" className="w-full rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300">
               {error}
             </div>
           )}
@@ -291,6 +316,7 @@ function ScreenShareGate({
             <button
               onClick={requestShare}
               disabled={status === "sharing"}
+              aria-disabled={status === "sharing"}
               className="flex-1 py-2.5 rounded-xl bg-blue-500 text-white text-sm font-semibold hover:bg-blue-600 disabled:opacity-50"
             >
               {status === "sharing" ? "Sharing…" : "Share Screen & Start"}
@@ -306,15 +332,22 @@ function ScreenShareGate({
 
 function AutoFailBanner({ onClose }: { onClose: () => void }) {
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/80 px-4" style={{ zIndex: 1000000 }}>
+    <div
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="autofail-title"
+      aria-describedby="autofail-desc"
+      className="fixed inset-0 flex items-center justify-center bg-black/80 px-4"
+      style={{ zIndex: 1000000 }}
+    >
       <div className="bg-white dark:bg-gray-900 rounded-2xl p-8 w-full max-w-sm shadow-2xl text-center">
-        <div className="w-20 h-20 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center mx-auto mb-4">
+        <div className="w-20 h-20 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center mx-auto mb-4" aria-hidden="true">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="text-red-500">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
           </svg>
         </div>
-        <p className="text-2xl font-bold text-red-600 dark:text-red-400 mb-2">Exam Terminated</p>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+        <p id="autofail-title" className="text-2xl font-bold text-red-600 dark:text-red-400 mb-2">Exam Terminated</p>
+        <p id="autofail-desc" className="text-sm text-gray-500 dark:text-gray-400 mb-6">
           Multiple cheating violations were detected. Your exam has been automatically failed and your teacher has been notified.
         </p>
         <button onClick={onClose} className="w-full py-2.5 rounded-xl bg-red-500 text-white font-semibold hover:bg-red-600">
@@ -779,9 +812,12 @@ function TakeExamModal({
         <div className="h-1 bg-brand-500 transition-all" style={{ width: `${progress}%` }} />
       </div>
 
-      {/* Integrity warning toast */}
+      {/* Integrity warning toast — aria-live so screen readers announce violations */}
+      <div aria-live="assertive" aria-atomic="true" className="sr-only">
+        {flagWarning}
+      </div>
       {flagWarning && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-amber-500 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-lg">
+        <div role="alert" className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-amber-500 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-lg">
           {flagWarning}
         </div>
       )}
@@ -816,8 +852,14 @@ function TakeExamModal({
         <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/3 p-6 select-none">
           <div className="flex items-start justify-between gap-4 mb-5">
             <div className="flex items-center gap-2 min-w-0">
-              <span className={`text-xs px-1.5 py-0.5 rounded font-semibold shrink-0 ${q.type === "essay" ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300" : "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"}`}>
-                {(q.type ?? "mcq").toUpperCase()}
+              <span className={`text-xs px-1.5 py-0.5 rounded font-semibold shrink-0 ${
+                q.type === "essay"
+                  ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
+                  : q.type === "short_answer"
+                  ? "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"
+                  : "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+              }`} aria-label={`Question type: ${q.type ?? "mcq"}`}>
+                {(q.type ?? "mcq").replace("_", " ").toUpperCase()}
               </span>
               <p className="text-gray-900 dark:text-white font-medium leading-relaxed">{q.question}</p>
             </div>
@@ -854,10 +896,28 @@ function TakeExamModal({
             <div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Write your answer below. Your response will be reviewed by the teacher.</p>
               <textarea
+                id={`answer-${q.id}`}
+                aria-label={`Essay answer for question ${currentQ + 1}`}
                 value={(answers[q.id] as string) ?? ""}
                 onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
                 placeholder="Type your answer here…"
                 rows={8}
+                className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3 text-sm text-gray-800 dark:text-white placeholder-gray-400 outline-none focus:border-brand-400 resize-none"
+              />
+            </div>
+          )}
+
+          {/* Short Answer (NLP auto-graded) */}
+          {q.type === "short_answer" && (
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Write a concise answer. This will be automatically graded.</p>
+              <textarea
+                id={`answer-${q.id}`}
+                aria-label={`Short answer for question ${currentQ + 1}`}
+                value={(answers[q.id] as string) ?? ""}
+                onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                placeholder="Type your answer here…"
+                rows={4}
                 className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3 text-sm text-gray-800 dark:text-white placeholder-gray-400 outline-none focus:border-brand-400 resize-none"
               />
             </div>
@@ -893,20 +953,25 @@ function TakeExamModal({
         </div>
 
         {confirmed && (
-          <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 px-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="submit-confirm-title"
+            className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 px-4"
+          >
             <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-sm shadow-xl text-center">
-              <p className="text-lg font-bold text-gray-900 dark:text-white mb-2">Submit exam?</p>
+              <p id="submit-confirm-title" className="text-lg font-bold text-gray-900 dark:text-white mb-2">Submit exam?</p>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
                 You have answered {answered} of {total} questions. You cannot change answers after submitting.
               </p>
               {submitError && (
-                <div className="mb-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300 text-left">
+                <div role="alert" className="mb-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300 text-left">
                   {submitError}
                 </div>
               )}
               <div className="flex gap-3 justify-center">
                 <button onClick={() => { setConfirmed(false); setSubmitError(null); }} className="px-4 py-2 text-sm text-gray-500 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-white/5">Go back</button>
-                <button onClick={handleSubmit} disabled={submitting} className="px-5 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 font-semibold disabled:opacity-50">{submitting ? "Submitting…" : "Yes, submit"}</button>
+                <button onClick={handleSubmit} disabled={submitting} aria-disabled={submitting} className="px-5 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 font-semibold disabled:opacity-50">{submitting ? "Submitting…" : "Yes, submit"}</button>
               </div>
             </div>
           </div>
@@ -927,7 +992,12 @@ function ResultModal({
 }) {
   const pending = result.pendingEssayReview;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="result-modal-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+    >
       <div className="bg-white dark:bg-gray-900 rounded-2xl p-8 w-full max-w-sm shadow-xl text-center">
         {pending ? (
           <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 bg-yellow-100 dark:bg-yellow-900/40">
@@ -942,7 +1012,7 @@ function ResultModal({
             )}
           </div>
         )}
-        <p className={`text-2xl font-bold mb-1 ${pending ? "text-yellow-600 dark:text-yellow-400" : result.passed ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>
+        <p id="result-modal-title" className={`text-2xl font-bold mb-1 ${pending ? "text-yellow-600 dark:text-yellow-400" : result.passed ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>
           {pending ? "Submitted!" : result.passed ? "Congratulations!" : "Better luck next time"}
         </p>
         <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">

@@ -35,25 +35,36 @@ export interface IntegrityFlag {
 
 export interface ExamQuestion {
   id: string;
-  type: 'mcq' | 'essay';
+  type: 'mcq' | 'essay' | 'short_answer';
   question: string;
   // MCQ only
   options?: [string, string, string, string];
   correctAnswer?: number; // 0-3
   explanation?: string;
-  // Essay only
+  // Essay / short_answer
   sampleAnswer?: string;
+  // Short answer NLP keywords for alignment scoring
+  keywords?: string[];
   marks: number;
 }
 
+export interface EssayGrade {
+  score: number;
+  feedback: string;
+  gradedAt: string;
+  aiSuggestedScore?: number; // AI-suggested score before teacher confirmation
+}
+
 export interface ExamAttempt {
-  answers: Record<string, number | string>; // questionId -> option index (MCQ) or text (essay)
+  answers: Record<string, number | string>; // questionId -> option index (MCQ) or text
   score: number;
   totalMarks: number;
   passed: boolean;
   submittedAt: string;
   pendingEssayReview?: boolean;
-  autoFailed?: boolean; // true when student was auto-failed due to cheating
+  autoFailed?: boolean;
+  essayGrades?: Record<string, EssayGrade>;
+  attemptCount?: number;
 }
 
 @Entity('exams')

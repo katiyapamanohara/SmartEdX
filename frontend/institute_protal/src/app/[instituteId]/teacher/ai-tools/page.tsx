@@ -1,8 +1,9 @@
-"use client";
+  "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { authService } from "@/services/authService";
 import { examService, Exam } from "@/services/examService";
+import { instituteService } from "@/services/instituteService";
 import { useInstituteFeatures } from "@/hooks/useInstituteFeatures";
 import { useFeatures } from "@/context/InstituteFeatureContext";
 import VoiceModal from "../ai-tools/VoiceModal";
@@ -217,18 +218,24 @@ export default function AIToolsPage() {
 
       {/* Content */}
       <div>
-        {activeTab === "chat" && (
+        <div className={activeTab === "chat" ? "" : "hidden"}>
           <AIChatTab instituteId={instituteId} selectedCourse={chatCourse} onCourseSelect={setChatCourse} />
-        )}
+        </div>
 
-        {activeTab !== "chat" && (
-          <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3">
-            {activeTab === "lesson"   && <LessonPlanTab   instituteId={instituteId} />}
-            {activeTab === "essay"    && <EssayGraderTab  instituteId={instituteId} />}
-            {activeTab === "insights" && <ClassInsightsTab instituteId={instituteId} />}
-            {activeTab === "atrisk"   && <AtRiskTab        instituteId={instituteId} />}
+        <div className={activeTab !== "chat" ? "rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3" : "hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3"}>
+            <div className={activeTab === "lesson" ? "" : "hidden"}>
+              <LessonPlanTab instituteId={instituteId} />
+            </div>
+            <div className={activeTab === "essay" ? "" : "hidden"}>
+              <EssayGraderTab instituteId={instituteId} />
+            </div>
+            <div className={activeTab === "insights" ? "" : "hidden"}>
+              <ClassInsightsTab instituteId={instituteId} />
+            </div>
+            <div className={activeTab === "atrisk" ? "" : "hidden"}>
+              <AtRiskTab instituteId={instituteId} />
+            </div>
           </div>
-        )}
       </div>
     </div>
   );
@@ -270,17 +277,11 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
     return () => obs.disconnect();
   }, []);
 
-  // Load teacher courses from student-report (derives which courses this teacher has)
+  // Load all courses assigned to this teacher
   useEffect(() => {
-    const token = getToken();
-    fetch(`${API}/api/institutes/institutes/${instituteId}/courses/student-report`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.ok ? r.json() : [])
-      .then((rows: StudentRow[]) => {
-        const map = new Map<string, string>();
-        rows.forEach(s => s.courses.forEach(c => map.set(c.courseId, c.courseName)));
-        setCourses(Array.from(map.entries()).map(([id, name]) => ({ id, name })));
+    instituteService.getMyTeacherCourses(instituteId)
+      .then(courses => {
+        setCourses(courses.map(c => ({ id: c.id, name: c.name })));
         setCoursesLoading(false);
       })
       .catch(() => { setCourses([]); setCoursesLoading(false); });
@@ -589,16 +590,8 @@ function LessonPlanTab({ instituteId }: { instituteId: string }) {
   const [courses, setCourses] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
-    const token = getToken();
-    fetch(`${API}/api/institutes/institutes/${instituteId}/courses/student-report`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.ok ? r.json() : [])
-      .then((rows: StudentRow[]) => {
-        const map = new Map<string, string>();
-        rows.forEach(s => s.courses.forEach(c => map.set(c.courseId, c.courseName)));
-        setCourses(Array.from(map.entries()).map(([id, name]) => ({ id, name })));
-      })
+    instituteService.getMyTeacherCourses(instituteId)
+      .then(courses => setCourses(courses.map(c => ({ id: c.id, name: c.name }))))
       .catch(() => {});
   }, [instituteId]);
   const [context, setContext] = useState("");
@@ -1054,6 +1047,7 @@ function EssayGraderTab({ instituteId }: { instituteId: string }) {
 function ClassInsightsTab({ instituteId }: { instituteId: string }) {
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
+  const [allCourses, setAllCourses] = useState<{ id: string; name: string }[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [selectedCourse, setSelectedCourse] = useState("");
   const [insights, setInsights] = useState<ClassInsights | null>(null);
@@ -1067,14 +1061,21 @@ function ClassInsightsTab({ instituteId }: { instituteId: string }) {
         headers: { Authorization: `Bearer ${token}` },
       }).then(r => r.ok ? r.json() : []),
       examService.getMyExams(instituteId),
-    ]).then(([s, e]) => { setStudents(s); setExams(e); setLoadingData(false); });
+      instituteService.getMyTeacherCourses(instituteId),
+    ]).then(([s, e, c]) => {
+      setStudents(s);
+      setExams(e);
+      setAllCourses(c.map((course: any) => ({ id: course.id, name: course.name })));
+      setLoadingData(false);
+    });
   }, [instituteId]);
 
   const courses = useMemo(() => {
     const map = new Map<string, string>();
+    allCourses.forEach(c => map.set(c.id, c.name));
     students.forEach(s => s.courses.forEach(c => map.set(c.courseId, c.courseName)));
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [students]);
+  }, [students, allCourses]);
 
   async function generateInsights() {
     if (!selectedCourse) return;
@@ -1231,6 +1232,7 @@ function ClassInsightsTab({ instituteId }: { instituteId: string }) {
 function AtRiskTab({ instituteId }: { instituteId: string }) {
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
+  const [allCourses, setAllCourses] = useState<{ id: string; name: string }[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [selectedCourse, setSelectedCourse] = useState("");
   const [analysis, setAnalysis] = useState<AtRiskAnalysis | null>(null);
@@ -1245,14 +1247,21 @@ function AtRiskTab({ instituteId }: { instituteId: string }) {
         headers: { Authorization: `Bearer ${token}` },
       }).then(r => r.ok ? r.json() : []),
       examService.getMyExams(instituteId),
-    ]).then(([s, e]) => { setStudents(s); setExams(e); setLoadingData(false); });
+      instituteService.getMyTeacherCourses(instituteId),
+    ]).then(([s, e, c]) => {
+      setStudents(s);
+      setExams(e);
+      setAllCourses(c.map((course: any) => ({ id: course.id, name: course.name })));
+      setLoadingData(false);
+    });
   }, [instituteId]);
 
   const courses = useMemo(() => {
     const map = new Map<string, string>();
+    allCourses.forEach(c => map.set(c.id, c.name));
     students.forEach(s => s.courses.forEach(c => map.set(c.courseId, c.courseName)));
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [students]);
+  }, [students, allCourses]);
 
   async function runAnalysis() {
     if (!selectedCourse) return;
