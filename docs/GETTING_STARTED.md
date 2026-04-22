@@ -6,254 +6,257 @@ This guide walks you through setting up the full SmartEdX stack locally from scr
 
 ## Prerequisites
 
-| Tool | Minimum Version | Check |
-|------|----------------|-------|
-| Node.js | 20.x | `node -v` |
-| npm | 10.x | `npm -v` |
-| Python | 3.11+ | `python --version` |
-| Docker | 24.x | `docker -v` |
-| Docker Compose | 2.x | `docker compose version` |
-| PostgreSQL | 15+ | `psql --version` (or run via Docker) |
-| Git | any | `git --version` |
+| Tool | Version | Notes |
+|---|---|---|
+| Node.js | ≥ 20 | For NestJS services and Next.js frontends |
+| Python | 3.11 | For FastAPI services |
+| Docker + Docker Compose | Latest | For PostgreSQL, Redis, MinIO, Qdrant |
+| pnpm or npm | ≥ 8 | Package manager |
+| Git | — | |
 
 ---
 
-## 1. Clone the repository
+## 1. Clone the Repository
 
 ```bash
-git clone <repo-url> SmartEdX
+git clone <repository-url>
 cd SmartEdX
 ```
 
 ---
 
-## 2. Start infrastructure services
+## 2. Start Infrastructure Services
+
+Start PostgreSQL, Redis, MinIO, and Qdrant with Docker Compose:
 
 ```bash
 docker compose up -d
 ```
 
-This starts:
-- **PostgreSQL** on port 5432
-- **MinIO** on ports 9000 (API) and 9001 (console)
-- **Redis** on port 6379
-- **Qdrant** on port 6333
-
-Verify they are running:
+Verify all containers are running:
 ```bash
 docker compose ps
 ```
 
-### Create the MinIO bucket
+**MinIO console:** http://localhost:9001 (default credentials: `minioadmin` / `minioadmin`)
 
-Open the MinIO console at http://localhost:9001  
-Login: `minioadmin` / `minioadmin`  
-Create a bucket named `smartedx-bucket` and set its access policy to **public**.
+**Qdrant dashboard:** http://localhost:6333/dashboard
 
 ---
 
-## 3. Set up PostgreSQL
+## 3. Create Databases
 
-If PostgreSQL is running inside Docker, connect and create the database:
+Connect to PostgreSQL and create the two databases:
 
 ```bash
 docker exec -it smartedx-postgres psql -U postgres
 ```
 
 ```sql
-CREATE DATABASE dev;
+CREATE DATABASE saas_service;
+CREATE DATABASE institute_service;
 \q
 ```
 
-If PostgreSQL is running locally, just ensure a database named `dev` exists with a `postgres` user.
-
 ---
 
-## 4. Configure environment variables
+## 4. Configure Environment Variables
 
-Each service has a `.env.example`. Copy and fill in each one:
+Copy and fill in environment files for each service. See [ENVIRONMENT.md](ENVIRONMENT.md) for all variables.
 
 ```bash
 # API Gateway
 cp api-gateway/.env.example api-gateway/.env
 
-# Backend services
+# SaaS Service
 cp backend/saas_service/.env.example backend/saas_service/.env
+
+# Institute Service
 cp backend/institute_service/.env.example backend/institute_service/.env
+
+# AI Core
 cp backend/ai_core/.env.example backend/ai_core/.env
+
+# Voice Agent
 cp backend/voice_agent/.env.example backend/voice_agent/.env
+
+# Facial Recognition Server
 cp backend/facial_recognition_server/.env.example backend/facial_recognition_server/.env
 
-# Frontend portals
-cp frontend/institute_protal/.env.example frontend/institute_protal/.env
-cp frontend/sass_protal/.env.example frontend/sass_protal/.env
+# Institute Portal
+cp frontend/institute_protal/.env.example frontend/institute_protal/.env.local
+
+# SaaS Portal
+cp frontend/sass_protal/.env.example frontend/sass_protal/.env.local
 ```
 
-Minimum required changes in each `.env`:
-
-| File | Variable | What to set |
-|------|----------|-------------|
-| `saas_service/.env` | `DB_PASSWORD` | Your PostgreSQL password |
-| `saas_service/.env` | `JWT_SECRET` | Long random string |
-| `institute_service/.env` | `DB_PASSWORD` | Same as above |
-| `institute_service/.env` | `JWT_SECRET` | **Same** as saas_service |
-| `ai_core/.env` | `ANTHROPIC_API_KEY` | Your Anthropic API key (or switch provider) |
-| `voice_agent/.env` | `GOOGLE_API_KEY` | Your Google AI API key |
-| All frontends | `NEXT_PUBLIC_API_URL` | `http://localhost:5001` |
-
-See [ENVIRONMENT.md](ENVIRONMENT.md) for the full variable reference.
+**Critical shared values** (must be the same across services):
+- `JWT_SECRET` — set the same value in both `saas_service/.env` and `institute_service/.env`
+- `GATEWAY_SECRET` — set the same value in `api-gateway/.env`, `saas_service/.env`, and `institute_service/.env`
+- `MINIO_*` credentials — same in all services that use file storage
 
 ---
 
-## 5. Install dependencies
+## 5. Install Dependencies
+
+### NestJS Services
 
 ```bash
-npm run install:all
-```
+# From repo root — installs all NestJS service dependencies
+npm install
 
-This installs Node.js packages for all services and Python dependencies for the AI services.
-
-To install individually:
-```bash
-# Node services
+# Or install individually:
 cd api-gateway && npm install
 cd backend/saas_service && npm install
 cd backend/institute_service && npm install
+```
+
+### Python Services
+
+```bash
+# AI Core
+cd backend/ai_core
+python -m venv venv
+source venv/bin/activate       # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+
+# Voice Agent
+cd backend/voice_agent
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# Facial Recognition Server
+cd backend/facial_recognition_server
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Frontend Portals
+
+```bash
 cd frontend/institute_protal && npm install
 cd frontend/sass_protal && npm install
-
-# Python services
-cd backend/ai_core && pip install -r requirements.txt
-cd backend/voice_agent && pip install -r requirements.txt
-cd backend/facial_recognition_server && pip install -r requirements.txt
 ```
 
 ---
 
-## 6. Build Node.js backend services
+## 6. Start All Services
+
+### Option A: Start Everything from Root
+
+The root `package.json` has a `concurrently` script to start all services:
 
 ```bash
-cd backend/saas_service && npm run build
-cd backend/institute_service && npm run build
-cd api-gateway && npm run build
+npm run dev
 ```
 
-TypeORM will automatically sync the database schema on first run (`synchronize: true` in development).
+### Option B: Start Services Individually
 
----
-
-## 7. Start all services
-
-### All at once (recommended for development)
-
-```bash
-npm start
-```
-
-### Or start individually in separate terminals
+Open separate terminals for each service:
 
 ```bash
 # Terminal 1 — API Gateway
-npm run dev:api
+cd api-gateway && npm run start:dev
 
 # Terminal 2 — SaaS Service
-npm run dev:saas
+cd backend/saas_service && npm run start:dev
 
 # Terminal 3 — Institute Service
-npm run dev:institute
+cd backend/institute_service && npm run start:dev
 
 # Terminal 4 — AI Core
-npm run dev:ai_core
+cd backend/ai_core
+source venv/bin/activate
+uvicorn main:app --host 0.0.0.0 --port 8001 --reload
 
 # Terminal 5 — Voice Agent
-npm run dev:voice_agent
+cd backend/voice_agent
+source venv/bin/activate
+uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
 
-# Terminal 6 — Facial Recognition
-npm run dev:face_rec
+# Terminal 6 — Facial Recognition Server
+cd backend/facial_recognition_server
+source venv/bin/activate
+uvicorn main:app --host 0.0.0.0 --port 8003 --reload
 
 # Terminal 7 — Institute Portal
-npm run dev:inst_portal
+cd frontend/institute_protal && npm run dev
 
 # Terminal 8 — SaaS Portal
-npm run dev:sass_portal
+cd frontend/sass_protal && npm run dev
 ```
 
 ---
 
-## 8. Verify everything is running
+## 7. Verify Services Are Running
 
-| Service | URL | Expected response |
-|---------|-----|------------------|
-| API Gateway | http://localhost:5001/docs | Swagger UI |
-| SaaS Service | http://localhost:5002/docs | Swagger UI |
-| Institute Service | http://localhost:5003/docs | Swagger UI |
-| AI Core | http://localhost:8001/docs | Swagger UI |
-| Voice Agent | http://localhost:8002/docs | Swagger UI |
-| Facial Rec | http://localhost:8003/docs | Swagger UI |
-| Institute Portal | http://localhost:3001 | Login page |
-| SaaS Portal | http://localhost:3000 | Landing page |
-| MinIO Console | http://localhost:9001 | MinIO dashboard |
-| Qdrant Dashboard | http://localhost:6333/dashboard | Qdrant UI |
+| Service | Health Check URL |
+|---|---|
+| API Gateway | `http://localhost:5001` |
+| SaaS Service | `http://localhost:5002` |
+| Institute Service | `http://localhost:5003` |
+| AI Core | `http://localhost:8001/health` |
+| Voice Agent | `http://localhost:8002/health` |
+| Facial Recognition | `http://localhost:8003/health` |
+| Institute Portal | `http://localhost:3001` |
+| SaaS Portal | `http://localhost:3000` |
 
 ---
 
-## 9. First-time setup
+## 8. Initial Setup (First Run)
 
-### Create a Super Admin account
+On first startup, the NestJS services automatically:
+1. Run TypeORM migrations to create all database tables
+2. Seed default admin users and roles via `SeedService.seedAdminUsers()`
 
-Use the SaaS Portal at http://localhost:3000 to register the first admin account, or use the default credentials:
-
-```
-Email:    admin@example.com
-Password: Admin@123
-```
-
-### Create an Institute
-
-1. Log in to the SaaS Portal.
-2. Navigate to **Institutes → Create Institute**.
-3. Fill in the institute name and settings.
-4. Copy the `instituteId` from the URL — you'll use this to access the Institute Portal.
-
-### Access the Institute Portal
-
-Navigate to:
-```
-http://localhost:3001/[instituteId]
-```
-
-### Create users
-
-In the Institute Portal under **Admin → Users**:
-1. Create a teacher account and assign the Teacher role.
-2. Create student accounts and assign the Student role.
+**Default admin credentials** are set in the seed configuration. Check `backend/saas_service/src/modules/auth/seed/` for defaults and update before production deployment.
 
 ---
 
-## Troubleshooting
+## 9. MinIO Bucket Setup
 
-### Service won't start — port already in use
-```bash
-# Find what's using the port
-lsof -i :5003
+The MinIO bucket `smartedx-bucket` is created automatically by the SaaS Service on first startup. If it isn't, create it manually via the MinIO console at `http://localhost:9001`:
 
-# Kill it
-kill <PID>
-```
+1. Login with `minioadmin` / `minioadmin`
+2. Create bucket: `smartedx-bucket`
+3. Set access policy to `public` (for file URL access without signed URLs)
 
-### Database connection refused
-- Ensure Docker containers are running: `docker compose ps`
-- Verify the `DB_*` variables in the service's `.env` match your PostgreSQL setup.
+---
 
-### JWT errors between services
-- `SaaS Service` and `Institute Service` must share the exact same `JWT_SECRET` value.
+## 10. Firebase Setup
 
-### MinIO bucket not found
-- Open http://localhost:9001 and create a bucket named `smartedx-bucket` with public access.
+1. Create a Firebase project at https://console.firebase.google.com
+2. Enable **Authentication** → sign-in providers: **Email/Password** and **Google**
+3. Generate a service account key: Project Settings → Service Accounts → Generate new private key
+4. Copy values into the `FIREBASE_*` env vars for both backend services
+5. Copy Firebase web config into `NEXT_PUBLIC_FIREBASE_*` env vars for both frontend portals
 
-### AI Core returns errors
-- Verify your API key is correct in `ai_core/.env`.
-- Check `AI_PROVIDER` matches the key you provided (`anthropic`, `openai`, or `gemini`).
+---
 
-### Face recognition model download (first run)
-- DeepFace downloads model weights on first use (~300MB for Facenet512). This is normal — subsequent starts are instant.
+## Common Issues
+
+### TypeORM synchronize vs migrations
+NestJS services use `synchronize: true` in development, which auto-creates/alters tables. Do not use `synchronize: true` in production — generate and run migrations instead.
+
+### Python service startup time
+The Facial Recognition Server and Voice Agent download model weights on first run. Allow a few minutes on first startup (Facenet512 model ~90MB, FastEmbed model ~23MB).
+
+### Port conflicts
+If a port is already in use, update the `PORT` env var in the relevant service and update the corresponding `*_SERVICE_URL` in the API Gateway and any service that calls it.
+
+### CORS errors
+Ensure `CORS_ORIGIN` in the API Gateway `.env` includes all frontend URLs (including port numbers).
+
+---
+
+## Project URLs Summary
+
+| Portal | URL |
+|---|---|
+| SaaS Operator Portal | http://localhost:3000 |
+| Institute Portal | http://localhost:3001 |
+| API Gateway | http://localhost:5001 |
+| MinIO Console | http://localhost:9001 |
+| Qdrant Dashboard | http://localhost:6333/dashboard |

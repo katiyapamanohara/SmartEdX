@@ -10,6 +10,8 @@ from agents.teacher_tools_agent import (
     generate_class_insights,
     generate_lesson_plan,
     grade_essay,
+    grade_short_answer,
+    get_adaptive_recommendations,
 )
 from utils.document_extractor import extract_text
 
@@ -107,6 +109,72 @@ async def grade_essay_endpoint(body: EssayGradeRequest):
         return result.model_dump()
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Essay grading failed: {exc}")
+
+
+# ── Short-answer NLP grader ────────────────────────────────────────────────────
+
+
+class ShortAnswerGradeRequest(BaseModel):
+    question: str
+    studentAnswer: str
+    maxMarks: int
+    sampleAnswer: str = ""
+    keywords: list[str] = []
+
+
+@router.post("/grade-short-answer")
+async def grade_short_answer_endpoint(body: ShortAnswerGradeRequest):
+    if not body.studentAnswer.strip():
+        raise HTTPException(status_code=400, detail="studentAnswer is required.")
+    if not body.question.strip():
+        raise HTTPException(status_code=400, detail="question is required.")
+    if body.maxMarks < 1:
+        raise HTTPException(status_code=400, detail="maxMarks must be at least 1.")
+    try:
+        result = await grade_short_answer(
+            question=body.question,
+            student_answer=body.studentAnswer,
+            max_marks=body.maxMarks,
+            sample_answer=body.sampleAnswer,
+            keywords=body.keywords,
+        )
+        return result.model_dump()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Short-answer grading failed: {exc}")
+
+
+# ── Adaptive learning recommendations ─────────────────────────────────────────
+
+
+class WeakStrongTopic(BaseModel):
+    topic: str
+    score: float
+    maxScore: float
+
+
+class AdaptiveRecommendationsRequest(BaseModel):
+    studentId: str
+    weakTopics: list[WeakStrongTopic] = []
+    strongTopics: list[WeakStrongTopic] = []
+    overallAverage: float = 0.0
+
+
+router_ai_tools = APIRouter(prefix="/api/ai-tools", tags=["ai-tools"])
+
+
+@router_ai_tools.post("/adaptive-recommendations")
+async def adaptive_recommendations_endpoint(body: AdaptiveRecommendationsRequest):
+    if not body.weakTopics and not body.strongTopics:
+        raise HTTPException(status_code=400, detail="At least one topic entry is required.")
+    try:
+        result = await get_adaptive_recommendations(
+            weak_topics=[t.model_dump() for t in body.weakTopics],
+            strong_topics=[t.model_dump() for t in body.strongTopics],
+            overall_average=body.overallAverage,
+        )
+        return result.model_dump()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Adaptive recommendations failed: {exc}")
 
 
 # ── Class insights ─────────────────────────────────────────────────────────────

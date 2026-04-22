@@ -1,7 +1,7 @@
 import { authService } from "./authService";
 
 export type ExamStatus = "draft" | "scheduled" | "active" | "completed";
-export type QuestionType = "mcq" | "essay";
+export type QuestionType = "mcq" | "essay" | "short_answer";
 
 export interface ExamQuestion {
   id: string;
@@ -11,8 +11,9 @@ export interface ExamQuestion {
   options?: [string, string, string, string];
   correctAnswer?: number; // hidden for active exams on student side
   explanation?: string;
-  // Essay only
+  // Essay / short_answer
   sampleAnswer?: string;
+  keywords?: string[];
   marks: number;
 }
 

@@ -21,7 +21,9 @@ Point payload schema:
 import io
 import logging
 import uuid
+from pathlib import PurePosixPath
 from typing import Optional
+from urllib.parse import urlparse
 
 import httpx
 from fastembed import TextEmbedding
@@ -111,6 +113,43 @@ def _extract_text_docx(data: bytes) -> list[dict]:
     return [{"page": 1, "text": full_text}] if full_text else []
 
 
+def _extract_text_pptx(data: bytes) -> list[dict]:
+    """Return [{page, text}] from PPTX bytes — one entry per slide."""
+    from pptx import Presentation
+
+    prs = Presentation(io.BytesIO(data))
+    pages = []
+    for slide_num, slide in enumerate(prs.slides, start=1):
+        lines = []
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                for para in shape.text_frame.paragraphs:
+                    line = " ".join(run.text for run in para.runs if run.text.strip())
+                    if line.strip():
+                        lines.append(line.strip())
+        if lines:
+            pages.append({"page": slide_num, "text": "\n".join(lines)})
+    return pages
+
+
+def _extract_text_xlsx(data: bytes) -> list[dict]:
+    """Return [{page, text}] from XLSX bytes — one entry per sheet."""
+    import openpyxl
+
+    wb = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+    pages = []
+    for sheet_num, sheet in enumerate(wb.worksheets, start=1):
+        lines = []
+        for row in sheet.iter_rows(values_only=True):
+            cells = [str(c) for c in row if c is not None and str(c).strip()]
+            if cells:
+                lines.append("\t".join(cells))
+        if lines:
+            pages.append({"page": sheet_num, "text": "\n".join(lines)})
+    wb.close()
+    return pages
+
+
 def _chunk_text(pages: list[dict]) -> list[dict]:
     """Split page text into overlapping fixed-size chunks."""
     chunks = []
@@ -157,14 +196,19 @@ def index_content(
         resp.raise_for_status()
         file_bytes = resp.content
 
-    # 2. Extract text
+    # 2. Extract text — derive actual format from the URL file extension
     ft = file_type.lower()
-    if ft == "pdf":
+    url_ext = PurePosixPath(urlparse(file_url).path).suffix.lstrip(".").lower()
+    if ft == "pdf" or url_ext == "pdf":
         pages = _extract_text_pdf(file_bytes)
-    elif ft in ("document", "docx", "word"):
+    elif url_ext in ("pptx", "ppt"):
+        pages = _extract_text_pptx(file_bytes)
+    elif url_ext in ("xlsx", "xls", "ods"):
+        pages = _extract_text_xlsx(file_bytes)
+    elif ft in ("document", "docx", "word") or url_ext in ("docx", "doc", "odt"):
         pages = _extract_text_docx(file_bytes)
     else:
-        logger.warning(f"Unsupported file type for KB indexing: {file_type!r}")
+        logger.warning(f"Unsupported file type for KB indexing: {file_type!r} (ext: {url_ext!r})")
         return 0
 
     if not pages:

@@ -121,7 +121,125 @@ async def generate_lesson_plan(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 2. ESSAY GRADER
+# 2. SHORT-ANSWER NLP GRADER  (auto-graded at submission; measures alignment)
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class ShortAnswerGradeOut(_GeminiSafe):
+    score: int                    # marks awarded (0 – maxMarks)
+    maxMarks: int
+    percentage: float             # (score / maxMarks) * 100
+    alignmentScore: int           # 0-100 semantic similarity to model answer
+    feedback: str                 # 1-2 sentence constructive comment
+    keywordsMatched: list[str]    # expected keywords present in student answer
+    keywordsMissed: list[str]     # expected keywords absent from student answer
+
+
+def _build_short_answer_grader_agent() -> Agent:
+    return Agent(
+        model=_make_model(),
+        description=(
+            "You are an expert teacher grading short-answer exam questions. "
+            "You assess semantic alignment between the student answer and the model answer, "
+            "award marks proportionally, and provide brief, constructive feedback."
+        ),
+        instructions=[
+            "Grade the student's short answer against the model/sample answer and any provided keywords.",
+            "alignmentScore: 0-100 representing semantic similarity (100 = identical meaning, 0 = completely off-topic).",
+            "score must be proportional to alignmentScore and between 0 and maxMarks (inclusive).",
+            "Full marks (score == maxMarks) only when alignmentScore >= 85.",
+            "keywordsMatched: list of provided keywords (or synonyms) present in the student answer.",
+            "keywordsMissed: list of provided keywords clearly absent from the student answer.",
+            "feedback: 1-2 sentences, specific and constructive. Acknowledge what was correct.",
+            "percentage = (score / maxMarks) * 100, rounded to 1 decimal.",
+            "Return ONLY valid JSON matching the schema exactly.",
+        ],
+        response_model=ShortAnswerGradeOut,
+        structured_outputs=True,
+    )
+
+
+async def grade_short_answer(
+    question: str,
+    student_answer: str,
+    max_marks: int,
+    sample_answer: str = "",
+    keywords: list[str] | None = None,
+) -> ShortAnswerGradeOut:
+    agent = _build_short_answer_grader_agent()
+    prompt = (
+        f"Grade the following short-answer response:\n\n"
+        f"QUESTION:\n{question}\n\n"
+        f"STUDENT ANSWER:\n{student_answer}\n\n"
+        f"MAX MARKS: {max_marks}\n"
+    )
+    if sample_answer:
+        prompt += f"\nMODEL ANSWER:\n{sample_answer}\n"
+    if keywords:
+        prompt += f"\nEXPECTED KEYWORDS: {', '.join(keywords)}\n"
+
+    result = await agent.arun(prompt)
+    if isinstance(result.content, ShortAnswerGradeOut):
+        return result.content
+    raise ValueError(f"Unexpected response type: {type(result.content)}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 3. ADAPTIVE LEARNING RECOMMENDATIONS
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class AdaptiveRecommendationOut(_GeminiSafe):
+    recommendations: list[str]   # 3-5 specific, actionable study recommendations
+    studyPlan: str                # short paragraph personalised study plan
+
+
+def _build_adaptive_agent() -> Agent:
+    return Agent(
+        model=_make_model(),
+        description=(
+            "You are a personalised learning coach. Based on a student's performance data "
+            "you generate targeted study recommendations and a brief personalised study plan."
+        ),
+        instructions=[
+            "Analyse the student's weak and strong topics provided.",
+            "Generate 3-5 specific, actionable recommendations addressing the weakest topics first.",
+            "Each recommendation should name the topic and suggest a concrete study action.",
+            "studyPlan: 2-3 sentence personalised paragraph using encouraging, growth-mindset language.",
+            "Do not repeat the same recommendation twice.",
+            "Return ONLY valid JSON matching the schema exactly.",
+        ],
+        response_model=AdaptiveRecommendationOut,
+        structured_outputs=True,
+    )
+
+
+async def get_adaptive_recommendations(
+    weak_topics: list[dict],
+    strong_topics: list[dict],
+    overall_average: float,
+) -> AdaptiveRecommendationOut:
+    agent = _build_adaptive_agent()
+    prompt = (
+        f"Student overall average: {overall_average:.1f}%\n\n"
+        f"WEAK TOPICS (need improvement):\n"
+    )
+    for t in weak_topics:
+        pct = round(t['score'] / t['maxScore'] * 100, 1) if t['maxScore'] else 0
+        prompt += f"  - {t['topic']}: {pct}% ({t['score']}/{t['maxScore']})\n"
+    prompt += "\nSTRONG TOPICS:\n"
+    for t in strong_topics:
+        pct = round(t['score'] / t['maxScore'] * 100, 1) if t['maxScore'] else 0
+        prompt += f"  - {t['topic']}: {pct}% ({t['score']}/{t['maxScore']})\n"
+
+    result = await agent.arun(prompt)
+    if isinstance(result.content, AdaptiveRecommendationOut):
+        return result.content
+    raise ValueError(f"Unexpected response type: {type(result.content)}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 4. ESSAY GRADER
 # ══════════════════════════════════════════════════════════════════════════════
 
 

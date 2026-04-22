@@ -41,6 +41,36 @@ export class VoiceAgentClient {
   }
 
   /**
+   * Pre-create the Qdrant collection for a course (idempotent).
+   * Called when a course is created so the collection exists before any content is uploaded.
+   */
+  async ensureCourseCollection(
+    instituteId: string,
+    courseId: string,
+  ): Promise<void> {
+    const url = `${this.baseUrl}/api/course-kb/${encodeURIComponent(instituteId)}/${encodeURIComponent(courseId)}/ensure-collection`;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) {
+        this.logger.warn(
+          `[voice-agent] ensure-collection returned ${response.status} for course ${courseId}`,
+        );
+      } else {
+        this.logger.log(
+          `[voice-agent] Ensured Qdrant collection for course ${courseId} (institute: ${instituteId})`,
+        );
+      }
+    } catch (err) {
+      this.logger.error(
+        `[voice-agent] Failed to ensure collection for course ${courseId}: ${err}`,
+      );
+    }
+  }
+
+  /**
    * Queue a PDF or Word document for embedding into the course's dedicated
    * Qdrant collection (kb_{institute_id}_{course_id}).
    * Returns immediately — the voice agent indexes asynchronously.

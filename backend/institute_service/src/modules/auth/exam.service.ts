@@ -9,6 +9,7 @@ import { CourseRepository } from '../../infra/database/repositories/course.repos
 import { StudentRepository } from '../../infra/database/repositories/student.repository';
 import { InstituteUserRepository } from '../../infra/database/repositories/institute-user.repository';
 import { FaceRecClient } from '../../infra/http/face-rec.client';
+import { AiCoreClient } from '../../infra/http/ai-core.client';
 import { NotificationGateway } from './notification.gateway';
 import { CreateExamDto } from './dto/create-exam.dto';
 import { UpdateExamDto } from './dto/update-exam.dto';
@@ -16,6 +17,7 @@ import { SubmitExamDto } from './dto/submit-exam.dto';
 import {
   Exam,
   ExamAttempt,
+  EssayGrade,
   ExamStatus,
   IntegrityFlag,
   IntegrityViolationType,
@@ -46,6 +48,7 @@ export class ExamService {
     private readonly studentRepository: StudentRepository,
     private readonly instituteUserRepository: InstituteUserRepository,
     private readonly faceRecClient: FaceRecClient,
+    private readonly aiCoreClient: AiCoreClient,
     private readonly notificationGateway: NotificationGateway,
   ) {}
 
@@ -301,27 +304,45 @@ export class ExamService {
       );
     }
 
-    // Score calculation (MCQ auto-graded, essay pending review)
+    // Score calculation: MCQ auto-graded, short_answer NLP-graded, essay pending review
     let score = 0;
     let hasPendingEssay = false;
+    const shortAnswerGrades: Record<string, any> = {};
     const totalMarks = exam.questions.reduce((s, q) => s + q.marks, 0);
+
     for (const q of exam.questions) {
-      if (q.type === 'essay' || !q.type) {
-        // Essay answers stored as text; score pending teacher review
-        if (dto.answers[q.id] !== undefined && dto.answers[q.id] !== '') {
+      const studentAnswer = dto.answers[q.id];
+      if (q.type === 'essay') {
+        if (studentAnswer !== undefined && studentAnswer !== '') {
           hasPendingEssay = true;
         }
-      } else if (dto.answers[q.id] === q.correctAnswer) {
+      } else if (q.type === 'short_answer') {
+        if (studentAnswer !== undefined && studentAnswer !== '') {
+          const gradeResult = await this.aiCoreClient.gradeShortAnswer(
+            q.question,
+            String(studentAnswer),
+            q.marks,
+            q.sampleAnswer ?? '',
+            q.keywords ?? [],
+          );
+          if (gradeResult) {
+            score += gradeResult.score;
+            shortAnswerGrades[q.id] = {
+              score: gradeResult.score,
+              feedback: gradeResult.feedback,
+              gradedAt: new Date().toISOString(),
+              aiSuggestedScore: gradeResult.score,
+              alignmentScore: gradeResult.alignmentScore,
+              keywordsMatched: gradeResult.keywordsMatched,
+            };
+          }
+        }
+      } else if (studentAnswer === q.correctAnswer) {
         score += q.marks;
       }
     }
 
-    // For mixed exams: MCQ portion graded, essay portion pending
-    const mcqTotal = exam.questions
-      .filter((q) => q.type === 'mcq' || (q.type !== 'essay' && q.options))
-      .reduce((s, q) => s + q.marks, 0);
-    const percentage =
-      mcqTotal > 0 ? Math.round((score / totalMarks) * 100) : 0;
+    const percentage = Math.round((score / totalMarks) * 100);
     const passed = !hasPendingEssay && percentage >= exam.passingScore;
 
     const attempt: ExamAttempt & { attemptCount: number } = {
@@ -332,6 +353,9 @@ export class ExamService {
       submittedAt: new Date().toISOString(),
       pendingEssayReview: hasPendingEssay,
       attemptCount: usedAttempts + 1,
+      ...(Object.keys(shortAnswerGrades).length > 0 && {
+        essayGrades: shortAnswerGrades,
+      }),
     };
 
     const updatedAttempts = {
@@ -392,12 +416,13 @@ export class ExamService {
       passed,
       pendingEssayReview: false,
       essayGrades: {
-        ...(attempt as any).essayGrades,
+        ...(attempt.essayGrades ?? {}),
         [body.questionId]: {
           score: clampedScore,
           feedback: body.feedback,
           gradedAt: new Date().toISOString(),
-        },
+          aiSuggestedScore: (attempt.essayGrades?.[body.questionId] as EssayGrade | undefined)?.aiSuggestedScore,
+        } satisfies EssayGrade,
       },
     };
 

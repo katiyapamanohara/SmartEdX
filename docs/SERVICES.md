@@ -1,376 +1,488 @@
 # SmartEdX — Service Reference
 
-Each service is an independently deployable unit. This document describes what each service does, its key API surface, and its dependencies.
+Each service is an independently deployable unit. This document describes what each service does, its tech stack, key responsibilities, dependencies, and how to run it.
 
 ---
 
-## API Gateway
+## 1. API Gateway
 
-**Path:** `/api-gateway`  
-**Port:** 5001  
-**Tech:** NestJS 11, TypeScript
+| Property | Value |
+|---|---|
+| Location | `api-gateway/` |
+| Framework | NestJS 11 + TypeScript |
+| Port | `5001` |
+| Role | Single HTTP/WebSocket entry point for all client requests |
 
-The API Gateway is the only service exposed to clients. It routes all incoming requests to the correct backend service and proxies WebSocket connections to the Voice Agent.
+### Responsibilities
+- Reverse-proxy all client HTTP requests to downstream services using `http-proxy-middleware`
+- Proxy WebSocket connections (Voice Agent WS, Socket.IO)
+- CORS management for frontend portals
+- Route prefix mapping: `/api/auth` → SaaS Service, `/api/institutes` → Institute Service, `/api/ai` → AI Core, `/api/voice-agent` → Voice Agent
 
-### Routing
+### Routing Rules
+```
+/api/auth/*          → http://saas-service:5002
+/api/institutes/*    → http://institute-service:5003
+/api/ai/*            → http://ai-core:8001
+/api/voice-agent/*   → http://voice-agent:8002
+WS /voice-agent/*    → ws://voice-agent:8002
+```
 
-| Incoming path | Forwarded to |
-|---------------|-------------|
-| `/api/auth/**` | SaaS Service :5002 |
-| `/api/institutes/**` | Institute Service :5003 |
-| `/api/ai/**` | AI Core :8001 |
-| `/api/voice-agent/**` | Voice Agent :8002 |
-| WS `/voice-agent` | Voice Agent :8002 |
+### Dependencies
+- SaaS Service (HTTP)
+- Institute Service (HTTP + WebSocket)
+- AI Core (HTTP)
+- Voice Agent (HTTP + WebSocket)
 
-### Configuration
-
-```env
+### Environment Variables
+```
 PORT=5001
 SAAS_SERVICE_URL=http://localhost:5002
 INSTITUTE_SERVICE_URL=http://localhost:5003
 AI_CORE_URL=http://localhost:8001
-GATEWAY_SECRET=your-secret
+VOICE_AGENT_URL=http://localhost:8002
+GATEWAY_SECRET=<shared-secret>
 CORS_ORIGIN=http://localhost:3000,http://localhost:3001
 ```
 
 ---
 
-## SaaS Service
+## 2. SaaS Service
 
-**Path:** `/backend/saas_service`  
-**Port:** 5002  
-**Tech:** NestJS 11, TypeScript, TypeORM, PostgreSQL
-
-Handles global system state — all tenants, users, and authentication live here.
+| Property | Value |
+|---|---|
+| Location | `backend/saas_service/` |
+| Framework | NestJS 11 + TypeScript |
+| ORM | TypeORM |
+| Port | `5002` |
+| Database | PostgreSQL (`saas_service` DB) |
+| Role | Global platform management — tenants, users, billing |
 
 ### Responsibilities
+- SaaS user registration and login (email/password + Firebase)
+- Institute CRUD — create, update, delete, manage plan/features
+- Institute user management (assign users to institutes, roles)
+- Subscription management — plan, billing cycle, payment status
+- PayHere payment gateway integration
+- Admin analytics (platform-wide stats)
+- JWT token issuance (shared secret with Institute Service)
+- Auto-seed admin users and roles on startup
 
-- User registration (email/password and Firebase)
-- JWT token issuance (`1d` expiry by default)
-- Institute creation and configuration
-- Global and institute-scoped role management
-- Assigning users to institutes with a role
+### Key Modules
+| Module | Purpose |
+|---|---|
+| `auth` | Users, institutes, roles, JWT, Firebase verification |
+| `subscription` | Subscription CRUD and status management |
+| `payhere` | PayHere hash generation, checkout, webhook handler |
 
-### Key Entities
+### Dependencies
+- PostgreSQL
+- Redis
+- MinIO (logo uploads)
+- Firebase Admin SDK
+- JWT (shared with Institute Service)
 
-| Entity | Table | Description |
-|--------|-------|-------------|
-| User | `users` | System-level user accounts |
-| Institute | `institutes` | Tenant organizations |
-| InstituteUser | `institute_users` | User ↔ institute assignment with role |
-| InstituteRole | `institute_roles` | Per-institute role definitions |
-| Role | `roles` | Global system roles |
-
-### Configuration
-
-```env
+### Environment Variables
+```
 PORT=5002
 DB_HOST=localhost
 DB_PORT=5432
 DB_USERNAME=postgres
-DB_PASSWORD=your-password
-DB_DATABASE=dev
-JWT_SECRET=your-jwt-secret
+DB_PASSWORD=<password>
+DB_DATABASE=saas_service
+JWT_SECRET=<shared-secret>
 JWT_EXPIRATION=1d
 MINIO_ENDPOINT=localhost
 MINIO_PORT=9000
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin
+MINIO_ACCESS_KEY=<key>
+MINIO_SECRET_KEY=<secret>
 MINIO_BUCKET=smartedx-bucket
-REDIS_HOST=127.0.0.1
+REDIS_HOST=localhost
 REDIS_PORT=6379
-GATEWAY_SECRET=your-gateway-secret
+GATEWAY_SECRET=<shared-secret>
+FIREBASE_PROJECT_ID=<project>
+FIREBASE_PRIVATE_KEY=<key>
+FIREBASE_CLIENT_EMAIL=<email>
+PAYHERE_MERCHANT_ID=<id>
+PAYHERE_SECRET=<secret>
 ```
 
 ---
 
-## Institute Service
+## 3. Institute Service
 
-**Path:** `/backend/institute_service`  
-**Port:** 5003  
-**Tech:** NestJS 11, TypeScript, TypeORM, PostgreSQL, Socket.IO
-
-The largest and most feature-rich service. All educational operations happen here.
+| Property | Value |
+|---|---|
+| Location | `backend/institute_service/` |
+| Framework | NestJS 11 + TypeScript |
+| ORM | TypeORM |
+| Port | `5003` |
+| Database | PostgreSQL (`institute_service` DB) |
+| Role | All LMS domain features — courses, exams, recordings, live classes, messaging |
 
 ### Responsibilities
+- Institute user management and authentication
+- Face identity enrollment and verification (calls Face Rec Server)
+- Full course hierarchy management (courses → modules → contents)
+- Course knowledge base indexing (calls Voice Agent to index into Qdrant)
+- Exam management with configurable proctoring
+- Exam integrity flagging and review
+- Live face check during exams (calls Face Rec Server)
+- Screen analysis during exams (calls AI Core)
+- Video recording management and video quiz
+- Live class session management
+- Direct messaging between users
+- Push notifications
+- Redis response caching (with `@SkipCache()` decorator for real-time routes)
+- Socket.IO gateways: `/live`, `/messages`, `/notifications`
 
-- Course, module, and content management (CRUD)
-- File upload to MinIO (PDF, DOCX, video) with Qdrant auto-indexing
-- Student and teacher management
-- Course enrollment management
-- Exam lifecycle: creation, scheduling, access control, submission, grading
-- Exam integrity monitoring with violation logging
-- Video recording management with category and course assignment
-- Timed video questions (questions injected at specific timestamps)
-- Live session management via Socket.IO
-- Real-time notifications
-- Student performance reporting across quizzes and exams
-- Voice session lifecycle management (direct endpoints for Voice Agent)
+### Key Modules
+| Module | Purpose |
+|---|---|
+| `auth` | Institute users, roles, face ID (enroll/verify) |
+| `courses` | Course, module, content CRUD + KB search |
+| `exams` | Exam CRUD, submission, integrity flagging, essay grading |
+| `recordings` | Recording upload, categories, course assignments, video quiz |
+| `live` | Live session lifecycle + participant tracking |
+| `messages` | Direct message threads |
+| `notifications` | Notification creation and delivery |
+| `gateway` | Socket.IO gateways (live, messages, notifications) |
 
-### Key Entities
+### Dependencies
+- PostgreSQL
+- Redis
+- MinIO
+- AI Core (quiz generation, screen analysis, essay grading, teacher tools)
+- Face Recognition Server (face enroll/verify)
+- Voice Agent (KB indexing, voice session control)
+- Firebase Admin SDK
+- JWT (shared with SaaS Service)
 
-| Entity | Table | Description |
-|--------|-------|-------------|
-| Course | `courses` | Educational courses |
-| CourseModule | `course_modules` | Sections within a course |
-| ModuleContent | `module_contents` | Lessons, videos, quizzes, PDFs |
-| Student | `students` | Student profiles with face descriptors |
-| Teacher | `teachers` | Teacher profiles |
-| Exam | `exams` | Assessments with integrity tracking |
-| Recording | `recordings` | Video lecture recordings |
-| RecordingCategory | `recording_categories` | Groupings for recordings |
-| LiveSession | `live_sessions` | Real-time class sessions |
-| LiveParticipant | `live_participants` | Session attendees |
-| Message | `messages` | Chat messages |
-| Notification | `notifications` | System notifications |
-
-### JSONB Fields (schema-flexible data)
-
-| Entity | Field | Purpose |
-|--------|-------|---------|
-| `ModuleContent` | `quizData` | Quiz questions, settings, max attempts |
-| `ModuleContent` | `studentAttempts` | Per-student scores and answer history |
-| `Exam` | `questions` | Exam questions and marking |
-| `Exam` | `studentAttempts` | Per-student exam scores and answers |
-| `Exam` | `integrityFlags` | Per-student integrity violation events |
-| `Recording` | `videoQuestions` | Timed mid-video questions |
-| `Recording` | `quizAttempts` | Per-student video quiz scores |
-| `Student` | `faceDescriptor` | 512-d face vector for proctoring |
-
-### Voice Session Endpoints (bypass gateway)
-
-These endpoints are called directly by the Voice Agent and are excluded from the global prefix:
-
+### Environment Variables
 ```
-POST /api/session/voice/start
-POST /api/session/voice/end
-```
-
-### Configuration
-
-```env
 PORT=5003
 DB_HOST=localhost
 DB_PORT=5432
 DB_USERNAME=postgres
-DB_PASSWORD=your-password
-DB_DATABASE=dev
-JWT_SECRET=your-jwt-secret
-JWT_EXPIRATION=1d
+DB_PASSWORD=<password>
+DB_DATABASE=institute_service
+JWT_SECRET=<shared-secret>         # Must match SaaS Service
 MINIO_ENDPOINT=localhost
 MINIO_PORT=9000
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin
+MINIO_ACCESS_KEY=<key>
+MINIO_SECRET_KEY=<secret>
 MINIO_BUCKET=smartedx-bucket
-REDIS_HOST=127.0.0.1
+REDIS_HOST=localhost
 REDIS_PORT=6379
-GATEWAY_SECRET=your-gateway-secret
-```
-
----
-
-## AI Core
-
-**Path:** `/backend/ai_core`  
-**Port:** 8001  
-**Tech:** FastAPI, Python 3.11+, Agno agent framework
-
-Provides all AI-powered content generation. Supports three LLM providers, switchable via environment variable.
-
-### Supported Providers
-
-| Provider | Models | env `AI_PROVIDER` |
-|----------|--------|-------------------|
-| Anthropic | claude-sonnet-4-6, claude-opus-4-6 | `anthropic` |
-| OpenAI | gpt-4o, gpt-4o-mini | `openai` |
-| Google | gemini-2.0-flash, gemini-1.5-pro | `gemini` |
-
-### Key Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/ai/quiz/generate-from-text` | Generate MCQ/essay questions from raw text |
-| POST | `/api/ai/quiz/generate-from-file` | Generate questions from uploaded PDF/DOCX/PPTX |
-| POST | `/api/ai/chat` | General-purpose AI chat |
-| POST | `/api/ai/teacher-chat` | Teacher-mode chat assistance |
-| POST | `/api/ai/student-chat` | Student learning chat |
-| POST | `/api/ai/voice-assessment` | Score a voice answer against expected answer |
-| POST | `/api/ai/transcription` | Speech-to-text transcription |
-| POST | `/api/ai/description` | Generate content description |
-
-### Quiz Generation Payload
-
-```json
-{
-  "text": "Course content to generate questions from",
-  "numQuestions": 10,
-  "difficulty": "medium",
-  "questionType": "mcq"
-}
-```
-
-### Configuration
-
-```env
-PORT=8001
-AI_PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-...
-OPENAI_API_KEY=sk-...
-GOOGLE_API_KEY=AI...
-MODEL_ID=claude-sonnet-4-6
-CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:5001
-```
-
----
-
-## Voice Agent
-
-**Path:** `/backend/voice_agent`  
-**Port:** 8002  
-**Tech:** FastAPI, Python 3.13+, Google ADK, Gemini Live API, Qdrant
-
-Enables real-time voice learning. Students speak with a Gemini-powered AI tutor that has access to course materials.
-
-### How It Works
-
-1. Student connects via WebSocket or SIP
-2. Voice Agent opens a Gemini Live session
-3. Student questions are processed in real-time audio
-4. Agent queries Qdrant for relevant course KB content
-5. Gemini generates a spoken response grounded in course material
-6. Session lifecycle (start/end) is synced to Institute Service
-
-### Knowledge Base Indexing
-
-When a teacher uploads a PDF or DOCX to a course, the Institute Service calls the AI Core to extract text, which is then embedded and stored in Qdrant under a collection per course (`course_kb`). The Voice Agent queries this collection during sessions.
-
-### Transport Protocols
-
-| Protocol | Endpoint | Use Case |
-|----------|----------|---------|
-| WebSocket | `ws://localhost:8002/ws` | Browser-based voice chat |
-| SIP/UDP | Port 5060 | VoIP phone integration |
-
-### Configuration
-
-```env
-GOOGLE_API_KEY=AI...
-DEMO_AGENT_MODEL=gemini-2.5-flash-native-audio-preview-12-2025
 AI_CORE_URL=http://localhost:8001
-INSTITUTE_SERVICE_URL=http://localhost:5003
-MINIO_URL=http://localhost:9000
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin
-QDRANT_URL=http://localhost:6333
-QDRANT_API_KEY=
-COURSE_KB_ENABLED=true
-COURSE_KB_COLLECTION_NAME=course_kb
-SIP_SERVER_HOST=localhost
-SIP_SDP_HOST=127.0.0.1
-SIP_SDP_PORT=20000
+FACE_REC_URL=http://localhost:8003
+VOICE_AGENT_URL=http://localhost:8002
+GATEWAY_SECRET=<shared-secret>
+FIREBASE_PROJECT_ID=<project>
+FIREBASE_PRIVATE_KEY=<key>
+FIREBASE_CLIENT_EMAIL=<email>
 ```
 
 ---
 
-## Facial Recognition Server
+## 4. AI Core
 
-**Path:** `/backend/facial_recognition_server`  
-**Port:** 8003  
-**Tech:** FastAPI, Python, DeepFace
+| Property | Value |
+|---|---|
+| Location | `backend/ai_core/` |
+| Framework | Python 3.11 + FastAPI + Agno |
+| Port | `8001` |
+| Role | All AI/ML features — quiz generation, chat, transcription, screen analysis, teacher tools |
 
-Provides face enrollment and verification for exam proctoring.
+### Responsibilities
+- Quiz generation from text or uploaded documents (PDF/DOCX/PPTX)
+- AI chat agents for institute admins, teachers, and students
+- Audio transcription (Gemini multi-language)
+- Screen analysis for academic dishonesty detection (vision models)
+- Essay grading with AI feedback
+- Lesson plan generation
+- Class insights and at-risk student analysis
+- Voice assessment question generation and answer evaluation
 
-### How It Works
+### AI Provider Support
+Configurable via `AI_PROVIDER` environment variable:
+- `anthropic` — Anthropic Claude (default: `claude-sonnet-4-6`)
+- `openai` — OpenAI GPT (e.g., `gpt-4o`)
+- `gemini` — Google Gemini (e.g., `gemini-2.0-flash`)
 
-1. **Enrollment:** Student uploads a face photo via the portal. The descriptor (512-d vector) is extracted and stored on the `Student` entity in PostgreSQL.
-2. **Verification:** At exam start, a webcam frame is captured. The Institute Service calls this server with the stored descriptor and live frame. Cosine distance below 0.30 = match.
+### Key Routers
+| Router | File | Endpoints |
+|---|---|---|
+| Quiz | `routers/quiz.py` | `/api/quiz/generate-from-text`, `/api/quiz/generate-from-file` |
+| Chat | `routers/chat.py` | `/api/chat/message`, `/api/teacher-chat/message`, `/api/student-chat/message` |
+| Screen | `routers/screen.py` | `/api/screen/analyze` |
+| Teacher Tools | `routers/teacher_tools.py` | `/api/teacher-tools/*` |
+| Transcription | `routers/transcription.py` | `/api/transcription/transcribe` |
+| Voice Assessment | `routers/voice_assessment.py` | `/api/voice-assessment/*` |
+| Description | `routers/description.py` | `/api/description/generate` |
 
-### Key Endpoints
+### Dependencies
+- Anthropic API / OpenAI API / Google Gemini API (at least one required)
 
+### Environment Variables
+```
+PORT=8001
+AI_PROVIDER=anthropic          # anthropic | openai | gemini
+MODEL_ID=claude-sonnet-4-6
+ANTHROPIC_API_KEY=<key>
+OPENAI_API_KEY=<key>
+GOOGLE_API_KEY=<key>
+```
+
+---
+
+## 5. Voice Agent
+
+| Property | Value |
+|---|---|
+| Location | `backend/voice_agent/` |
+| Framework | Python 3.11 + FastAPI + Google ADK |
+| Port | `8002` |
+| Role | Real-time voice AI assistant powered by Gemini Live |
+
+### Responsibilities
+- Host three Gemini Live voice agent modes: general, teacher, course Q&A
+- Manage voice sessions (`InMemorySessionService`)
+- Index course documents into Qdrant for RAG (retrieval-augmented generation)
+- Search institute knowledge base at query time
+- Support SIP/UDP transport for VoIP/telephony integration
+- Store conversation transcripts per session
+- Warm up FastEmbed embedding model on startup (background thread)
+
+### Agent Modes
+| Mode | WS Path | Description |
+|---|---|---|
+| General | `/ws/{institute_id}/{user_id}/{session_id}` | General institute assistant |
+| Teacher | `/ws/teacher/{institute_id}/{teacher_id}/{session_id}` | Teacher assistant with KB access |
+| Course Q&A | `/ws/course-qa/{institute_id}/{course_id}/{user_id}/{session_id}` | Course-scoped Q&A |
+
+### Voice Model
+`gemini-2.5-flash-native-audio-preview-12-2025` (or configurable via `DEMO_AGENT_MODEL`)
+
+### Embedding Model
+`all-MiniLM-L6-v2-onnx` via FastEmbed (warmed up on startup)
+
+### Dependencies
+- Google Gemini API (Gemini Live)
+- Qdrant (vector DB for course KB)
+- Institute Service (for institute/course context)
+- AI Core (optional, for hybrid tasks)
+- MinIO (document access)
+
+### Environment Variables
+```
+GOOGLE_API_KEY=<key>
+DEMO_AGENT_MODEL=gemini-2.5-flash-native-audio-preview-12-2025
+QDRANT_URL=http://localhost:6333
+MINIO_URL=http://localhost:9000
+MINIO_ACCESS_KEY=<key>
+MINIO_SECRET_KEY=<secret>
+INSTITUTE_SERVICE_URL=http://localhost:5003
+AI_CORE_URL=http://localhost:8001
+SIP_HOST=0.0.0.0
+SIP_PORT=5060
+LANGFUSE_PUBLIC_KEY=<key>       # Optional: observability
+LANGFUSE_SECRET_KEY=<key>
+LANGFUSE_HOST=<host>
+```
+
+---
+
+## 6. Facial Recognition Server
+
+| Property | Value |
+|---|---|
+| Location | `backend/facial_recognition_server/` |
+| Framework | Python 3.11 + FastAPI + DeepFace |
+| Port | `8003` |
+| Role | Face enrollment and verification for exam proctoring |
+
+### Responsibilities
+- Extract 512-dimensional face descriptors from uploaded images (Facenet512 model)
+- Verify identity by computing cosine distance between two descriptors
+- Verify a stored descriptor against a live webcam capture (base64)
+- Return verification result with distance score and pass/fail decision
+
+### Model Details
+| Property | Value |
+|---|---|
+| Model | DeepFace Facenet512 |
+| Embedding dimensions | 512 |
+| Distance metric | Cosine |
+| Verification threshold | ≤ 0.30 (configurable) |
+| Detector backend | OpenCV |
+
+### Endpoints
 | Method | Path | Description |
-|--------|------|-------------|
-| POST | `/face/enroll` | Extract and return face descriptor from image |
-| POST | `/face/verify` | Compare two descriptors, return match result |
+|---|---|---|
+| POST | `/api/face/enroll` | Extract descriptor from image upload |
+| POST | `/api/face/verify` | Compare two descriptors |
+| POST | `/api/face/verify-image` | Verify descriptor vs. base64 image |
+| GET | `/health` | Health check |
 
-### Configuration
-
-```env
+### Environment Variables
+```
 PORT=8003
 FACE_MODEL=Facenet512
 DETECTOR_BACKEND=opencv
 DISTANCE_THRESHOLD=0.30
-CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:5001
 ```
 
 ---
 
-## Institute Portal
+## 7. Institute Portal (Frontend)
 
-**Path:** `/frontend/institute_protal`  
-**Port:** 3001  
-**Tech:** Next.js 16, React 19, TypeScript, TailwindCSS
-
-The main application used by institute administrators, teachers, and students.
-
-### Route Structure
-
-```
-/[instituteId]/
-  (auth)/                 Login, register
-  institute/              Admin dashboard, user management, settings
-  teacher/
-    courses/              Course management
-    courses/[courseId]/   Module/content editor
-    recordings/           Recording management + timed questions
-    reports/              Student performance reports
-    integrity-monitor/    Exam integrity violation review
-    live/                 Live session management
-  student/
-    courses/              My enrolled courses
-    recordings/           Course recordings (mid-video questions)
-    assignments/[id]/     Quiz assessment taking
-    exams/[id]/           Exam taking with proctoring
-    dashboard/            Student overview
-```
+| Property | Value |
+|---|---|
+| Location | `frontend/institute_protal/` |
+| Framework | Next.js 16 (App Router) + React 19 + TypeScript |
+| Port | `3001` |
+| Role | Web app for institute admins, teachers, and students |
 
 ### Key Dependencies
+- TailwindCSS 4 + Tailwind Merge
+- ApexCharts + react-apexcharts (data visualization)
+- FullCalendar 6 (scheduling)
+- Firebase JS SDK 12 (auth)
+- Socket.IO client (real-time)
+- `@vladmandic/face-api` (client-side face detection)
+- react-dropzone (file uploads)
+- react-dnd (drag and drop)
+- flatpickr (date picker)
 
-| Package | Purpose |
-|---------|---------|
-| `socket.io-client` | Real-time live sessions and notifications |
-| `face-api.js` | Browser-side face detection for proctoring |
-| `apexcharts` | Analytics charts |
-| `fullcalendar` | Schedule/calendar views |
-| `@dnd-kit` / `react-dnd` | Drag-and-drop content ordering |
-| `react-dropzone` | File upload UI |
-| `swiper` | Carousel/slider UI |
+### Route Structure (`/[instituteId]/`)
+```
+/(auth)/signin                    Login
+/institute/courses                Institute admin course management
+/institute/users/lecture-staff    Teacher/staff management
+/institute/users/students         Student management
+/institute/finance                Finance / billing
+/teacher/courses                  Teacher course management
+/teacher/assessments              Quiz assessments
+/teacher/exams                    Exam management
+/teacher/recordings               Video recording management
+/teacher/live-classes             Live session management
+/teacher/integrity-monitor        Exam integrity dashboard
+/teacher/messages                 Direct messaging
+/teacher/performance              Analytics
+/teacher/reports                  Student reports
+/teacher/ai-tools                 AI tools
+/teacher/virtual-labs             Virtual labs
+/student/my-courses               Enrolled courses
+/student/exams                    Available exams
+/student/assignments              Quiz assignments
+/student/recordings               Video recordings
+/student/live-classes             Live classes
+/student/ai-chat                  AI chat assistant
+/student/performance              Performance dashboard
+/student/messages                 Direct messaging
+/student/virtual-labs             Virtual labs
+```
+
+### Environment Variables
+```
+NEXT_PUBLIC_API_URL=http://localhost:5001
+NEXT_PUBLIC_FIREBASE_API_KEY=<key>
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=<domain>
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=<project>
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=<bucket>
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=<id>
+NEXT_PUBLIC_FIREBASE_APP_ID=<app-id>
+```
 
 ---
 
-## SaaS Admin Portal
+## 8. SaaS Portal (Frontend)
 
-**Path:** `/frontend/sass_protal`  
-**Port:** 3000  
-**Tech:** Next.js 16, React 19, TypeScript, TailwindCSS, Framer Motion
-
-The operator-facing dashboard for managing the SmartEdX SaaS platform.
-
-### Route Structure
-
-```
-/                         Landing page
-/(full-width-pages)/
-  onboard/                Guided institute onboarding
-  (auth)/                 Login, register
-/admin/                   System admin panel
-/dashboard/               Institute owner dashboard
-```
+| Property | Value |
+|---|---|
+| Location | `frontend/sass_protal/` |
+| Framework | Next.js 16 (App Router) + React 19 + TypeScript |
+| Port | `3000` |
+| Role | Web app for SaaS operators and platform admins |
 
 ### Key Dependencies
+- TailwindCSS 4
+- framer-motion (animations)
+- ApexCharts (charts)
+- Firebase JS SDK
 
-| Package | Purpose |
-|---------|---------|
-| `framer-motion` | Animations and transitions |
-| `canvas-confetti` | Onboarding celebration effects |
-| `apexcharts` | Analytics dashboards |
-| `next-themes` | Dark mode support |
+### Route Structure
+```
+/(full-width-pages)/(auth)/signin       Operator login
+/(full-width-pages)/(auth)/admin-login  Admin login
+/(full-width-pages)/onboard             New institute onboarding wizard
+/dashboard                              Operator home dashboard
+/dashboard/(others-pages)/institute/:id Institute detail
+/dashboard/(others-pages)/billing       Billing management
+/dashboard/(others-pages)/profile       Profile settings
+/admin/institutes                       Admin: all institutes
+/admin/subscriptions                    Admin: subscription management
+/admin/users                            Admin: user management
+```
+
+### Environment Variables
+```
+NEXT_PUBLIC_API_URL=http://localhost:5001
+NEXT_PUBLIC_FIREBASE_API_KEY=<key>
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=<domain>
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=<project>
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=<bucket>
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=<id>
+NEXT_PUBLIC_FIREBASE_APP_ID=<app-id>
+```
+
+---
+
+## 9. Infrastructure Services (Docker Compose)
+
+### PostgreSQL 15
+- **Port:** 5432
+- **Role:** Primary relational database
+- **Databases:** `saas_service`, `institute_service`
+- **Used by:** SaaS Service, Institute Service
+
+### Redis (Alpine)
+- **Port:** 6379
+- **Role:** Response cache (HTTP GET caching via `RedisCacheInterceptor`)
+- **Config:** `maxmemory 100mb`, `maxmemory-policy allkeys-lru`
+- **Used by:** Institute Service, SaaS Service
+
+### MinIO
+- **API Port:** 9000
+- **Console Port:** 9001
+- **Role:** S3-compatible object storage for all user-uploaded files
+- **Bucket:** `smartedx-bucket` (public access)
+- **Used by:** Institute Service, SaaS Service, Voice Agent, AI Core
+
+### Qdrant
+- **HTTP Port:** 6333
+- **gRPC Port:** 6334
+- **Role:** Vector database for course knowledge base semantic search
+- **Collection:** `course_kb`
+- **Used by:** Voice Agent (indexing + search), Institute Service (KB search via Voice Agent)
+- **Persistence:** Docker volume `qdrant_storage`
+
+---
+
+## Service Dependency Graph
+
+```
+                Frontend Portals (3000, 3001)
+                         │
+                  API Gateway (5001)
+                 /    |    \        \
+                /     |     \        \
+         SaaS(5002) Inst(5003) AI(8001) Voice(8002)
+            │          │   \    /         │
+            │          │    Face(8003)     │
+            │          │                  │
+         PostgreSQL  PostgreSQL         Qdrant
+           Redis       Redis            MinIO
+           MinIO       MinIO
+```

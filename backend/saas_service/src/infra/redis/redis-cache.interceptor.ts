@@ -42,25 +42,40 @@ export class RedisCacheInterceptor implements NestInterceptor {
       return next.handle().pipe(
         tap(async () => {
           try {
-            const pattern = `saas_users:${userId}:*`;
-            const stream = this.redisClient.scanStream({
-              match: pattern,
-            });
+            const patterns = [`saas_users:${userId}:*`];
 
-            stream.on('data', async (keys: string[]) => {
-              if (keys.length > 0) {
-                await this.redisClient.del(...keys);
+            // Extract instituteId from request to invalidate Institute Service cache
+            let instituteId = request.user?.instituteId || request.body?.instituteId || request.query?.instituteId || request.params?.id;
+            const instituteRegex = /\/api\/auth\/institutes\/([\w-]+)/;
+            const match = request.url.match(instituteRegex);
+            if (match) {
+              instituteId = match[1];
+            }
+
+            if (instituteId) {
+              patterns.push(`Institute_users:${instituteId}:*`);
+            }
+
+            for (const pattern of patterns) {
+              const stream = this.redisClient.scanStream({
+                match: pattern,
+              });
+
+              stream.on('data', async (keys: string[]) => {
+                if (keys.length > 0) {
+                  await this.redisClient.del(...keys);
+                  this.logger.log(
+                    `Invalidated cache for keys: ${keys.join(', ')} (pattern: ${pattern})`
+                  );
+                }
+              });
+
+              stream.on('end', () => {
                 this.logger.log(
-                  `Invalidated cache for keys: ${keys.join(', ')}`,
+                  `Cache invalidation stream ended for pattern: ${pattern}`
                 );
-              }
-            });
-
-            stream.on('end', () => {
-              this.logger.log(
-                `Cache invalidation complete for pattern: ${pattern}`,
-              );
-            });
+              });
+            }
           } catch (error) {
             this.logger.error(`Redis invalidation error: ${error.message}`);
           }

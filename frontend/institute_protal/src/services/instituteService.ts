@@ -533,6 +533,28 @@ class InstituteService {
     }
   }
 
+  async getAdaptiveRecommendations(instituteId: string): Promise<{
+    overallAverage: number;
+    weakTopics: Array<{ topic: string; score: number; maxScore: number }>;
+    strongTopics: Array<{ topic: string; score: number; maxScore: number }>;
+    contentResults: Array<{ contentId: string; title: string; courseId: string; courseName: string; score: number; maxScore: number; percentage: number }>;
+    recommendations: string[];
+    studyPlan: string;
+  } | null> {
+    const token = authService.getToken();
+    if (!token) return null;
+    try {
+      const response = await fetch(
+        `${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/adaptive-recommendations`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!response.ok) return null;
+      return response.json();
+    } catch {
+      return null;
+    }
+  }
+
   async getMyTeacherCourses(instituteId: string): Promise<Course[]> {
     const token = authService.getToken();
     if (!token) return [];

@@ -45,7 +45,9 @@ export class MinioService {
     bucket?: string,
   ): Promise<string> {
     const targetBucket = bucket || this.bucketName;
-    const fileName = `${Date.now()}-${file.originalname}`;
+    // Strip characters that are unsafe in URLs (#, ?, &, %, spaces, etc.)
+    const safeName = file.originalname.replace(/[#?&%\s]+/g, '_');
+    const fileName = `${Date.now()}-${safeName}`;
 
     try {
       const bucketExists = await this.minioClient.bucketExists(targetBucket);

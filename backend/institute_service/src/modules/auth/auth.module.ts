@@ -15,6 +15,7 @@ import { FirebaseModule } from '../../infra/firebase/firebase.module';
 import { MinioModule } from '../../infra/storage/minio.module';
 import { VoiceAgentClient } from '../../infra/http/voice-agent.client';
 import { FaceRecClient } from '../../infra/http/face-rec.client';
+import { AiCoreClient } from '../../infra/http/ai-core.client';
 
 import { InstituteUserController } from './institute-user.controller';
 import { CourseController } from './course.controller';
@@ -90,6 +91,7 @@ import { VoiceSessionController } from './voice-session.controller';
     SeedService,
     VoiceAgentClient,
     FaceRecClient,
+    AiCoreClient,
   ],
   exports: [AuthService, JwtAuthGuard, FirebaseAuthGuard, RolesGuard],
 })

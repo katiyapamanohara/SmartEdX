@@ -347,7 +347,7 @@ export class AuthService {
   }
 
   async getInstituteInfo(id: string) {
-    const institute = await this.instituteRepository.findById(id);
+    const institute = await this.instituteRepository.findPublicInfoById(id);
     if (!institute) {
       throw new NotFoundException('Institute not found');
     }
