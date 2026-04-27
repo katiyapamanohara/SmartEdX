@@ -64,6 +64,16 @@ const SendIcon = () => (
     <path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z"/>
   </svg>
 );
+const WhiteboardIcon = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+    <path d="M3 3h18v2H3V3zm0 4h18v10H3V7zm2 2v6h14V9H5zm-2 8h18v2H3v-2z"/>
+  </svg>
+);
+const CaptionIcon = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+    <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-3 7h-2v-.5h-2v3h2V13h2v1c0 .55-.45 1-1 1h-2c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h2c.55 0 1 .45 1 1v1zm-7 0H8v-.5H6v3h2V13h2v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h2c.55 0 1 .45 1 1v1z"/>
+  </svg>
+);
 const RecordIcon = ({ recording }: { recording?: boolean }) => (
   <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
     {recording
@@ -386,6 +396,167 @@ function SidePanel({
   );
 }
 
+// ── Language options for live captions ───────────────────────────────────────
+const LANG_OPTIONS = [
+  { code: "en-US", label: "English (US)" },
+  { code: "en-GB", label: "English (UK)" },
+  { code: "es-ES", label: "Spanish" },
+  { code: "fr-FR", label: "French" },
+  { code: "de-DE", label: "German" },
+  { code: "zh-CN", label: "Chinese (Mandarin)" },
+  { code: "ar-SA", label: "Arabic" },
+  { code: "hi-IN", label: "Hindi" },
+  { code: "pt-BR", label: "Portuguese" },
+  { code: "ja-JP", label: "Japanese" },
+  { code: "ko-KR", label: "Korean" },
+  { code: "si-LK", label: "Sinhala" },
+];
+
+const WB_COLORS = ["#000000","#ffffff","#ef4444","#3b82f6","#22c55e","#f59e0b","#8b5cf6","#ec4899","#f97316"];
+
+// ── Whiteboard Canvas component ───────────────────────────────────────────────
+function WhiteboardCanvas({
+  canvasRef,
+  wbSharing,
+  onShare,
+  onStopShare,
+  onClose,
+}: {
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
+  wbSharing: boolean;
+  onShare: () => void;
+  onStopShare: () => void;
+  onClose: () => void;
+}) {
+  const [tool, setTool] = useState<"pen" | "eraser">("pen");
+  const [color, setColor] = useState("#000000");
+  const [size, setSize] = useState(4);
+  const drawingRef = useRef(false);
+  const lastRef = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx2d = canvas.getContext("2d");
+    if (!ctx2d) return;
+    ctx2d.fillStyle = "#ffffff";
+    ctx2d.fillRect(0, 0, canvas.width, canvas.height);
+  }, [canvasRef]);
+
+  const getPos = (e: React.MouseEvent | React.TouchEvent) => {
+    const canvas = canvasRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    if ("touches" in e) {
+      return {
+        x: (e.touches[0].clientX - rect.left) * scaleX,
+        y: (e.touches[0].clientY - rect.top) * scaleY,
+      };
+    }
+    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+  };
+
+  const startDraw = (e: React.MouseEvent | React.TouchEvent) => {
+    drawingRef.current = true;
+    lastRef.current = getPos(e);
+  };
+
+  const doDraw = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!drawingRef.current || !lastRef.current) return;
+    const canvas = canvasRef.current!;
+    const ctx2d = canvas.getContext("2d")!;
+    const pos = getPos(e);
+    ctx2d.beginPath();
+    ctx2d.moveTo(lastRef.current.x, lastRef.current.y);
+    ctx2d.lineTo(pos.x, pos.y);
+    ctx2d.strokeStyle = tool === "eraser" ? "#ffffff" : color;
+    ctx2d.lineWidth = tool === "eraser" ? size * 5 : size;
+    ctx2d.lineCap = "round";
+    ctx2d.lineJoin = "round";
+    ctx2d.stroke();
+    lastRef.current = pos;
+  };
+
+  const endDraw = () => { drawingRef.current = false; lastRef.current = null; };
+
+  const clearCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx2d = canvas.getContext("2d")!;
+    ctx2d.fillStyle = "#ffffff";
+    ctx2d.fillRect(0, 0, canvas.width, canvas.height);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[1000000] bg-black/80 flex flex-col">
+      <div className="flex items-center gap-3 px-4 py-2.5 bg-[#202124] border-b border-white/10 flex-wrap shrink-0">
+        <span className="text-white text-sm font-semibold mr-1">Whiteboard</span>
+        <div className="flex items-center gap-1">
+          <button onClick={() => setTool("pen")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${tool === "pen" ? "bg-[#1a73e8] text-white" : "bg-[#3c4043] text-white/70 hover:bg-[#4a5157]"}`}>
+            ✏️ Pen
+          </button>
+          <button onClick={() => setTool("eraser")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${tool === "eraser" ? "bg-[#1a73e8] text-white" : "bg-[#3c4043] text-white/70 hover:bg-[#4a5157]"}`}>
+            ⬜ Eraser
+          </button>
+        </div>
+        <div className="flex gap-1.5">
+          {WB_COLORS.map((c) => (
+            <button key={c} onClick={() => { setColor(c); setTool("pen"); }}
+              className={`w-6 h-6 rounded-full border-2 transition-all ${color === c && tool === "pen" ? "border-white scale-125" : "border-white/30"}`}
+              style={{ backgroundColor: c }}
+            />
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-white/50 text-xs">Size</span>
+          <input type="range" min={1} max={20} value={size} onChange={(e) => setSize(+e.target.value)}
+            className="w-20 accent-[#1a73e8]" />
+        </div>
+        <button onClick={clearCanvas}
+          className="px-3 py-1.5 bg-[#3c4043] hover:bg-[#4a5157] text-white/70 text-xs rounded-lg transition-colors">
+          🗑️ Clear
+        </button>
+        <div className="ml-auto flex items-center gap-2">
+          {wbSharing ? (
+            <button onClick={onStopShare}
+              className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-lg transition-colors">
+              ⏹ Stop Sharing
+            </button>
+          ) : (
+            <button onClick={onShare}
+              className="px-4 py-1.5 bg-[#1a73e8] hover:bg-[#1557b0] text-white text-xs font-medium rounded-lg transition-colors">
+              📡 Share to Students
+            </button>
+          )}
+          <button onClick={onClose}
+            className="px-4 py-1.5 bg-[#3c4043] hover:bg-[#4a5157] text-white/70 text-xs rounded-lg transition-colors">
+            ✕ Close
+          </button>
+        </div>
+      </div>
+      <div className="flex-1 overflow-auto flex items-center justify-center bg-[#2d2f31] p-4">
+        <canvas
+          ref={canvasRef}
+          width={1280}
+          height={720}
+          className="max-w-full max-h-full shadow-2xl"
+          style={{ background: "#fff", touchAction: "none", cursor: "crosshair" }}
+          onMouseDown={startDraw}
+          onMouseMove={doDraw}
+          onMouseUp={endDraw}
+          onMouseLeave={endDraw}
+          onTouchStart={(e) => { e.preventDefault(); startDraw(e); }}
+          onTouchMove={(e) => { e.preventDefault(); doDraw(e); }}
+          onTouchEnd={endDraw}
+        />
+      </div>
+    </div>
+  );
+}
+
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5001";
 
 function getToken(): string | null {
@@ -411,6 +582,133 @@ export default function TeacherClassroomPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Whiteboard state ─────────────────────────────────────────────────────
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [showWhiteboard, setShowWhiteboard] = useState(false);
+  const [wbSharing, setWbSharing] = useState(false);
+  const wbStreamRef = useRef<MediaStream | null>(null);
+
+  const handleShareWhiteboard = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const canvasStream = canvas.captureStream(30);
+    ctx.originalStreamRef.current?.getAudioTracks().forEach((t) => canvasStream.addTrack(t));
+    ctx.peerConnectionsRef.current.forEach((pc) => {
+      const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+      const [vTrack] = canvasStream.getVideoTracks();
+      if (sender && vTrack) sender.replaceTrack(vTrack).catch(() => {});
+    });
+    ctx.localStreamRef.current = canvasStream;
+    if (localVideoRef.current) localVideoRef.current.srcObject = canvasStream;
+    wbStreamRef.current = canvasStream;
+    setWbSharing(true);
+  };
+
+  const handleStopWhiteboardShare = () => {
+    const original = ctx.originalStreamRef.current;
+    if (original) {
+      ctx.peerConnectionsRef.current.forEach((pc) => {
+        const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+        const [vTrack] = original.getVideoTracks();
+        if (sender && vTrack) sender.replaceTrack(vTrack).catch(() => {});
+      });
+      ctx.localStreamRef.current = original;
+      if (localVideoRef.current) localVideoRef.current.srcObject = original;
+    }
+    setWbSharing(false);
+    wbStreamRef.current = null;
+  };
+
+  // ── Live captions state ──────────────────────────────────────────────────
+  const [captionsOn, setCaptionsOn] = useState(false);
+  const [captionLang, setCaptionLang] = useState("en-US");
+  const [captionText, setCaptionText] = useState("");
+  const [captionError, setCaptionError] = useState("");
+  const recognitionRef = useRef<any>(null);
+
+  const startRecognition = (lang: string) => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) {
+      setCaptionError("Live captions are not supported in this browser.");
+      setCaptionsOn(false);
+      return;
+    }
+    if (recognitionRef.current) {
+      recognitionRef.current.onend = null;
+      try { recognitionRef.current.stop(); } catch { /* ignore */ }
+    }
+    setCaptionError("");
+    const rec = new SR();
+    rec.lang = lang;
+    rec.continuous = true;
+    rec.interimResults = true;
+    let fatalError = false;
+
+    rec.onresult = (e: any) => {
+      let text = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        text += e.results[i][0].transcript;
+      }
+      setCaptionText(text);
+      setCaptionError("");
+    };
+
+    rec.onerror = (e: any) => {
+      if (e.error === "network") {
+        fatalError = true;
+        setCaptionError("Speech recognition needs an internet connection. Check your connection.");
+        setCaptionsOn(false);
+      } else if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        fatalError = true;
+        setCaptionError("Microphone access was denied for captions.");
+        setCaptionsOn(false);
+      } else if (e.error === "language-not-supported") {
+        fatalError = true;
+        setCaptionError("Selected language is not supported for captions.");
+        setCaptionsOn(false);
+      }
+      // "no-speech" and "aborted" are non-fatal — onend will restart automatically
+    };
+
+    rec.onend = () => {
+      // Only auto-restart for non-fatal errors; stop permanently on fatal ones
+      if (!fatalError && recognitionRef.current === rec) {
+        try { rec.start(); } catch { /* ignore */ }
+      }
+    };
+
+    rec.start();
+    recognitionRef.current = rec;
+  };
+
+  const stopRecognition = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.onend = null;
+      try { recognitionRef.current.stop(); } catch { /* ignore */ }
+      recognitionRef.current = null;
+    }
+    setCaptionText("");
+    setCaptionError("");
+  };
+
+  const handleToggleCaptions = () => {
+    if (captionsOn) {
+      stopRecognition();
+      setCaptionsOn(false);
+    } else {
+      setCaptionsOn(true);
+      startRecognition(captionLang);
+    }
+  };
+
+  // Changing language auto-restarts recognition — no separate button needed
+  const handleCaptionLangChange = (lang: string) => {
+    setCaptionLang(lang);
+    if (captionsOn) startRecognition(lang);
+  };
+
+  useEffect(() => () => { stopRecognition(); }, []); // eslint-disable-line
 
   const startRecording = () => {
     const stream = ctx.localStream;
@@ -492,7 +790,7 @@ export default function TeacherClassroomPage() {
       title: "Live Class",
     });
     // Auto-minimize on unmount so PiP widget keeps session alive
-    return () => { if (ctx.session) ctx.minimize(); };
+    return () => { ctx.minimize(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, instituteId]);
 
@@ -521,8 +819,13 @@ export default function TeacherClassroomPage() {
     participants, remoteVideos, raisedHands, chatMessages, chatInput,
     sidePanel, activePanelTab, unreadChat,
     minimize, toggleMic, toggleCam, toggleScreenShare, endSession,
-    sendChat, setChatInput, togglePanel, setActivePanelTab, clearUnread,
+    sendChat, setChatInput, togglePanel, setActivePanelTab, clearUnread, broadcastCaption,
   } = ctx;
+
+  // Broadcast captions to students whenever the text changes
+  useEffect(() => {
+    if (captionsOn && captionText) broadcastCaption(captionText);
+  }, [captionText]); // eslint-disable-line
 
   const handleSendChat = (e: React.FormEvent) => {
     e.preventDefault();
@@ -560,6 +863,17 @@ export default function TeacherClassroomPage() {
 
   return (
     <div className="fixed inset-0 z-999999 bg-[#202124] flex flex-col overflow-hidden">
+      {/* Whiteboard overlay */}
+      {showWhiteboard && (
+        <WhiteboardCanvas
+          canvasRef={canvasRef}
+          wbSharing={wbSharing}
+          onShare={handleShareWhiteboard}
+          onStopShare={handleStopWhiteboardShare}
+          onClose={() => setShowWhiteboard(false)}
+        />
+      )}
+
       {/* Recording name modal */}
       {showNameModal && (
         <RecordingNameModal
@@ -583,8 +897,25 @@ export default function TeacherClassroomPage() {
               ⏺ REC {recDuration}
             </span>
           )}
+          {wbSharing && (
+            <span className="flex items-center gap-1.5 text-xs font-bold text-white bg-purple-600 px-2.5 py-1 rounded-full">
+              📋 Whiteboard
+            </span>
+          )}
         </div>
         <div className="pointer-events-auto flex items-center gap-3">
+          {/* Caption language selector — auto-starts when changed, no translate button */}
+          {captionsOn && (
+            <select
+              value={captionLang}
+              onChange={(e) => handleCaptionLangChange(e.target.value)}
+              className="bg-[#3c4043] text-white text-xs px-2 py-1.5 rounded-lg border border-white/20 focus:outline-none focus:ring-1 focus:ring-[#8ab4f8]"
+            >
+              {LANG_OPTIONS.map((l) => (
+                <option key={l.code} value={l.code}>{l.label}</option>
+              ))}
+            </select>
+          )}
           <Clock />
           <button
             onClick={minimize}
@@ -668,6 +999,26 @@ export default function TeacherClassroomPage() {
         )}
       </div>
 
+      {/* Caption error banner */}
+      {captionError && (
+        <div className="absolute bottom-28 inset-x-0 flex justify-center px-6 z-20">
+          <div className="flex items-center gap-2 max-w-lg bg-red-900/90 text-red-200 text-xs px-4 py-2.5 rounded-xl border border-red-700/50">
+            <span>⚠️</span>
+            <span>{captionError}</span>
+            <button onClick={() => setCaptionError("")} className="ml-auto text-red-300 hover:text-white">✕</button>
+          </div>
+        </div>
+      )}
+
+      {/* Live caption overlay */}
+      {captionsOn && !captionError && captionText && (
+        <div className="absolute bottom-28 inset-x-0 flex justify-center px-6 pointer-events-none z-20">
+          <div className="max-w-2xl bg-black/75 text-white text-sm px-4 py-2 rounded-xl backdrop-blur-sm text-center leading-relaxed">
+            {captionText}
+          </div>
+        </div>
+      )}
+
       {/* Bottom control bar */}
       <div className="absolute bottom-0 inset-x-0 flex items-center justify-center gap-3 pb-6 bg-linear-to-t from-black/50 to-transparent pointer-events-none">
         <div className="pointer-events-auto flex items-end gap-3 px-6 py-3 rounded-2xl bg-[#202124]/80 backdrop-blur-md border border-white/10 shadow-2xl">
@@ -680,6 +1031,9 @@ export default function TeacherClassroomPage() {
           <RoundBtn onClick={toggleScreenShare} label={isScreenSharing ? "Stop share" : "Share"} highlight={isScreenSharing}>
             {isScreenSharing ? <StopShareIcon /> : <ScreenShareIcon />}
           </RoundBtn>
+          <RoundBtn onClick={() => setShowWhiteboard((v) => !v)} label="Whiteboard" highlight={showWhiteboard || wbSharing}>
+            <WhiteboardIcon />
+          </RoundBtn>
 
           <div className="w-px h-8 bg-white/10 mx-1" />
 
@@ -688,6 +1042,9 @@ export default function TeacherClassroomPage() {
           </RoundBtn>
           <RoundBtn onClick={() => togglePanel("chat")} label="Chat" highlight={sidePanel === "chat"} badge={unreadChat || undefined}>
             <ChatIcon />
+          </RoundBtn>
+          <RoundBtn onClick={handleToggleCaptions} label={captionsOn ? "Captions On" : "Captions"} highlight={captionsOn}>
+            <CaptionIcon />
           </RoundBtn>
 
           <div className="w-px h-8 bg-white/10 mx-1" />

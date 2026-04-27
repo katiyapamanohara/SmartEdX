@@ -284,7 +284,7 @@ export default function StudentClassroomPage() {
       isTeacher: false,
       title: "Live Class",
     });
-    return () => { if (ctx.session) ctx.minimize(); };
+    return () => { ctx.minimize(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, instituteId]);
 
@@ -309,6 +309,7 @@ export default function StudentClassroomPage() {
     chatMessages, chatInput, sidePanel, activePanelTab, unreadChat,
     minimize, leaveSession, toggleMic, toggleHandRaised,
     sendChat, setChatInput, togglePanel, setActivePanelTab, clearUnread,
+    teacherCaptions,
   } = ctx;
 
   const handleSendChat = (e: React.FormEvent) => {
@@ -413,6 +414,15 @@ export default function StudentClassroomPage() {
           </div>
         )}
       </div>
+
+      {/* Teacher live caption overlay */}
+      {teacherCaptions && (
+        <div className="absolute bottom-28 inset-x-0 flex justify-center px-6 pointer-events-none z-20">
+          <div className="max-w-2xl bg-black/75 text-white text-sm px-4 py-2 rounded-xl backdrop-blur-sm text-center leading-relaxed">
+            {teacherCaptions}
+          </div>
+        </div>
+      )}
 
       {/* Bottom control bar */}
       <div className="absolute bottom-0 inset-x-0 flex items-center justify-center gap-3 pb-6 bg-linear-to-t from-black/50 to-transparent pointer-events-none">
