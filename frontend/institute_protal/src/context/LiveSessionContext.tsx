@@ -68,6 +68,7 @@ interface LiveSessionContextValue {
   unreadChat: number;
   sidePanel: "chat" | "people" | null;
   activePanelTab: "chat" | "people";
+  teacherCaptions: string;
 
   joinSession: (meta: SessionMeta) => Promise<void>;
   setSessionTitle: (t: string) => void;
@@ -86,6 +87,7 @@ interface LiveSessionContextValue {
   togglePanel: (p: "chat" | "people") => void;
   setActivePanelTab: (t: "chat" | "people") => void;
   clearUnread: () => void;
+  broadcastCaption: (text: string) => void;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -158,6 +160,7 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
   const [isCamOff, setIsCamOff] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [selfEmail, setSelfEmail] = useState("You");
+  const selfEmailRef = useRef("You");
   const [selfAvatar, setSelfAvatar] = useState<string | undefined>(undefined);
   const [participants, setParticipants] = useState<LiveParticipant[]>([]);
   const [remoteVideos, setRemoteVideos] = useState<RemoteVideo[]>([]);
@@ -168,6 +171,7 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
   const [unreadChat, setUnreadChat] = useState(0);
   const [sidePanel, setSidePanel] = useState<"chat" | "people" | null>(null);
   const [activePanelTab, setActivePanelTab] = useState<"chat" | "people">("chat");
+  const [teacherCaptions, setTeacherCaptions] = useState("");
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -360,7 +364,15 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
     });
 
     socket.on("chat-message", (msg: ChatMessage) => {
-      setChatMessages((prev) => [...prev, msg]);
+      setChatMessages((prev) => {
+        // Replace any matching optimistic message from the same sender
+        const filtered = prev.filter(
+          (m) => !(m.id.startsWith("__opt__") && m.email === msg.email && m.message === msg.message),
+        );
+        // Avoid exact server-side duplicates
+        if (filtered.some((m) => m.id === msg.id)) return filtered;
+        return [...filtered, msg];
+      });
       setSidePanel((p) => { if (p !== "chat") setUnreadChat((n) => n + 1); return p; });
     });
 
@@ -370,6 +382,10 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
         data.raised ? n.add(data.userId) : n.delete(data.userId);
         return n;
       });
+    });
+
+    socket.on("live-caption", (data: { text: string }) => {
+      if (!meta.isTeacher) setTeacherCaptions(data.text);
     });
 
     socket.on("session-started", () => { /* no-op */ });
@@ -427,7 +443,7 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
       if (raw) {
         const u = JSON.parse(decodeURIComponent(raw));
         if (u.profilePicture) setSelfAvatar(u.profilePicture);
-        if (u.email) setSelfEmail(u.email);
+        if (u.email) { setSelfEmail(u.email); selfEmailRef.current = u.email; }
       }
     } catch { /* ignore */ }
 
@@ -578,6 +594,8 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
         updateLocalStream(s);
         isScreenSharingRef.current = true;
         setIsScreenSharing(true);
+        // Minimize to PiP so the user can see/navigate the screen being shared
+        setIsMinimized(true);
         s.getVideoTracks()[0].onended = () => {
           isScreenSharingRef.current = false;
           setIsScreenSharing(false);
@@ -590,7 +608,20 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
   // ── Chat / hand ────────────────────────────────────────────────────────────
 
   const sendChat = useCallback((message: string) => {
-    socketRef.current?.emit("chat-message", { sessionId: sessionRef.current?.sessionId, message });
+    const s = sessionRef.current;
+    socketRef.current?.emit("chat-message", { sessionId: s?.sessionId, message });
+    // Optimistically add the sender's own message so it appears immediately
+    if (s) {
+      const opt: ChatMessage = {
+        id: `__opt__${Date.now()}`,
+        userId: "local",
+        email: selfEmailRef.current,
+        role: s.isTeacher ? "teacher" : "student",
+        message,
+        timestamp: new Date().toISOString(),
+      };
+      setChatMessages((prev) => [...prev, opt]);
+    }
   }, []);
 
   const raiseHand = useCallback((raised: boolean) => {
@@ -618,6 +649,10 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
 
   const clearUnread = useCallback(() => setUnreadChat(0), []);
 
+  const broadcastCaption = useCallback((text: string) => {
+    socketRef.current?.emit("live-caption", { sessionId: sessionRef.current?.sessionId, text });
+  }, []);
+
   // ── Value ─────────────────────────────────────────────────────────────────
 
   const value: LiveSessionContextValue = {
@@ -626,12 +661,12 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
     mediaReady, mediaError, isMicMuted, isCamOff, isScreenSharing,
     selfEmail, selfAvatar,
     participants, remoteVideos, raisedHands, handRaised,
-    chatMessages, chatInput, unreadChat, sidePanel, activePanelTab,
+    chatMessages, chatInput, unreadChat, sidePanel, activePanelTab, teacherCaptions,
     joinSession, setSessionTitle, minimize, expand,
     leaveSession, endSession, emitSessionEnded,
     toggleMic, toggleCam, toggleScreenShare,
     sendChat, raiseHand, toggleHandRaised,
-    setChatInput, togglePanel, setActivePanelTab, clearUnread,
+    setChatInput, togglePanel, setActivePanelTab, clearUnread, broadcastCaption,
   };
 
   return (
