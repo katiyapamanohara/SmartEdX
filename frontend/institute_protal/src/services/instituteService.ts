@@ -98,6 +98,32 @@ class InstituteService {
     }
   }
 
+  async publicEnrol(
+    instituteId: string,
+    data: {
+      firstName: string;
+      lastName: string;
+      email: string;
+      admissionNumber?: string;
+      batchNumber?: string;
+      courseIds: string[];
+      role: string;
+    }
+  ): Promise<void> {
+    const response = await fetch(
+      `${this.apiUrl}/api/institutes/auth/institutes/${instituteId}/enrol`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }
+    );
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || `Enrollment failed: ${response.statusText}`);
+    }
+  }
+
   async getInstituteById(id: string): Promise<Institute | null> {
     const token = authService.getToken();
     if (!token) return null;
