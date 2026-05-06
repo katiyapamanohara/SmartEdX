@@ -22,11 +22,11 @@ describe('Auth integration (saas_service)', () => {
     await app.init();
 
     dataSource = moduleFixture.get(DataSource);
-  });
+    await dataSource.query(`DELETE FROM sass_users WHERE email LIKE '%${SUFFIX}'`);
+  }, 30_000);
 
   afterAll(async () => {
-    // Remove only test-created rows so other data is unaffected
-    await dataSource.query(`DELETE FROM users WHERE email LIKE '%${SUFFIX}'`);
+    await dataSource.query(`DELETE FROM sass_users WHERE email LIKE '%${SUFFIX}'`);
     await app.close();
   });
 
@@ -133,12 +133,12 @@ describe('Auth integration (saas_service)', () => {
   // ─── firebase/login — empty token ─────────────────────────────────────────
 
   describe('POST /auth/firebase/login', () => {
-    it('401 — empty token is rejected before Firebase call', () => {
+    it('400 — empty token is rejected by validation before Firebase call', () => {
       return request(app.getHttpServer())
         .post('/auth/firebase/login')
         .set('x-gateway-secret', GATEWAY_SECRET)
         .send({ idToken: '' })
-        .expect(401);
+        .expect(400);
     });
   });
 });

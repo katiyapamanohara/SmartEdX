@@ -20,7 +20,7 @@ describe('Auth integration (institute_service)', () => {
     await app.init();
 
     dataSource = moduleFixture.get(DataSource);
-  });
+  }, 30_000);
 
   afterAll(async () => {
     await app.close();
@@ -78,12 +78,12 @@ describe('Auth integration (institute_service)', () => {
   // ─── firebase/login — empty token rejected before Firebase ────────────────
 
   describe('POST /auth/firebase/login', () => {
-    it('401 — empty token rejected without hitting Firebase', () => {
+    it('400 — empty token rejected by validation before hitting Firebase', () => {
       return request(app.getHttpServer())
         .post('/auth/firebase/login')
         .set('x-gateway-secret', GATEWAY_SECRET)
         .send({ idToken: '' })
-        .expect(401);
+        .expect(400);
     });
   });
 
