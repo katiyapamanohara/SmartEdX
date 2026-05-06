@@ -348,13 +348,13 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
             <span className="text-sm font-semibold text-success-700 dark:text-success-400">Course Created</span>
           </div>
           <div className="space-y-1 text-xs text-success-700 dark:text-success-300">
-            {msg.data.name && (
+            {!!msg.data.name && (
               <p><span className="font-medium">Name:</span> {String(msg.data.name)}</p>
             )}
-            {msg.data.code && (
+            {!!msg.data.code && (
               <p><span className="font-medium">Code:</span> {String(msg.data.code)}</p>
             )}
-            {msg.data.batchNumber && (
+            {!!msg.data.batchNumber && (
               <p><span className="font-medium">Batch:</span> {String(msg.data.batchNumber)}</p>
             )}
           </div>

@@ -59,7 +59,7 @@ export default function TeacherVirtualLabsPage() {
       setLoadingCourses(true);
       try {
         const data = await instituteService.getCourses(instituteId);
-        setCourses(Array.isArray(data) ? data : []);
+        setCourses(Array.isArray(data) ? data.map(c => ({ id: c.id, title: c.name })) : []);
       } catch (e) {
         console.error(e);
       } finally {
@@ -238,7 +238,7 @@ export default function TeacherVirtualLabsPage() {
 
                 <div className="flex items-center justify-between pt-1 text-[10px] text-gray-500 dark:text-gray-400">
                   <span>{meta?.label ?? sim.subject}</span>
-                  <span>{sim.platform}</span>
+                  <span>{sim.source}</span>
                 </div>
               </div>
 
@@ -277,7 +277,7 @@ export default function TeacherVirtualLabsPage() {
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-800">
               <div>
                 <h2 className="text-base font-bold text-gray-800 dark:text-white">{previewSim.title}</h2>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{previewSim.topic} · {previewSim.platform}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{previewSim.topic} · {previewSim.source}</p>
               </div>
               <button
                 onClick={() => setPreviewSim(null)}

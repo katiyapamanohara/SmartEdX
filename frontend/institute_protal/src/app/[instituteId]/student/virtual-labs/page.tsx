@@ -51,7 +51,7 @@ export default function StudentVirtualLabsPage() {
                   title: content.title,
                   description: content.description,
                   type: content.type,
-                  url: content.url,
+                  url: content.url ?? "",
                   courseName: (course as any).title ?? "Course",
                   courseId: course.id,
                   moduleName: (mod as any).title ?? "Module",

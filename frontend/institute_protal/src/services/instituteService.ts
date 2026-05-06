@@ -917,21 +917,6 @@ class InstituteService {
     }
   }
 
-  async getMyTeacherAssessments(instituteId: string): Promise<any[]> {
-    const token = authService.getToken();
-    if (!token) return [];
-    try {
-      const response = await fetch(
-        `${this.apiUrl}/api/institutes/institutes/${instituteId}/courses/my-assessments`,
-        { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } },
-      );
-      if (!response.ok) return [];
-      return await response.json();
-    } catch {
-      return [];
-    }
-  }
-
   async getStudentExams(instituteId: string): Promise<any[]> {
     const token = authService.getToken();
     if (!token) return [];

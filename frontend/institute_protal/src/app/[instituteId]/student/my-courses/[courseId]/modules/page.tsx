@@ -55,6 +55,12 @@ const TYPE_CONFIG: Record<
     iconBg: "bg-amber-100 dark:bg-amber-900/30",
     iconColor: "text-amber-600 dark:text-amber-400",
   },
+  simulation: {
+    icon: <FiFileText className="w-5 h-5" />,
+    label: "Simulation",
+    iconBg: "bg-cyan-100 dark:bg-cyan-900/30",
+    iconColor: "text-cyan-600 dark:text-cyan-400",
+  },
 };
 
 function ContentRow({ content }: { content: ModuleContent }) {
