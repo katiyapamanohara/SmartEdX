@@ -29,22 +29,15 @@ spec:
             - name: rtp-udp
               containerPort: 20000
               protocol: UDP
+          envFrom:
+            - configMapRef:
+                name: voice-agent-config
           env:
-            - name: PORT
-              value: "8000"
-            - name: SIP_PORT
-              value: "5060"
-            - name: SIP_SDP_PORT
-              value: "20000"
-            - name: TRANSPORT_WEBSOCKET
-              value: "true"
             - name: GOOGLE_GENAI_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: voice-agent-secret
                   key: google-genai-api-key
-            - name: INSTITUTE_API_URL
-              value: "http://institute-service:5002"
           resources:
             requests:
               cpu: 250m

@@ -6,7 +6,7 @@ metadata:
   labels:
     app: saas-service
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: saas-service
@@ -21,18 +21,15 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 5002
+          envFrom:
+            - configMapRef:
+                name: saas-service-config
           env:
-            - name: NODE_ENV
-              value: production
-            - name: PORT
-              value: "5002"
             - name: DB_HOST
               valueFrom:
                 secretKeyRef:
                   name: saas-db-secret
                   key: host
-            - name: DB_PORT
-              value: "5432"
             - name: DB_USERNAME
               valueFrom:
                 secretKeyRef:
@@ -53,14 +50,6 @@ spec:
                 secretKeyRef:
                   name: saas-app-secret
                   key: jwt-secret
-            - name: REDIS_HOST
-              value: "redis"
-            - name: REDIS_PORT
-              value: "6379"
-            - name: MINIO_ENDPOINT
-              value: "minio"
-            - name: MINIO_PORT
-              value: "9000"
             - name: MINIO_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
@@ -71,15 +60,11 @@ spec:
                 secretKeyRef:
                   name: saas-minio-secret
                   key: secret-key
-            - name: MINIO_BUCKET
-              value: "smartedx-bucket"
             - name: FIREBASE_SERVICE_ACCOUNT
               valueFrom:
                 secretKeyRef:
                   name: saas-firebase-secret
                   key: service-account-json
-            - name: CORS_ORIGIN
-              value: "https://institute.smartedx.com,https://saas.smartedx.com"
           resources:
             requests:
               cpu: 250m

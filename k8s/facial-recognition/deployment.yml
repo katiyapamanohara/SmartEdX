@@ -21,17 +21,9 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 8002
-          env:
-            - name: PORT
-              value: "8002"
-            - name: FACE_MODEL
-              value: "Facenet512"
-            - name: DETECTOR_BACKEND
-              value: "retinaface"
-            - name: DISTANCE_THRESHOLD
-              value: "0.30"
-            - name: CORS_ORIGINS
-              value: "https://institute.smartedx.com,https://saas.smartedx.com"
+          envFrom:
+            - configMapRef:
+                name: facial-recognition-config
           resources:
             requests:
               cpu: 500m

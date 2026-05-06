@@ -6,7 +6,7 @@ metadata:
   labels:
     app: api-gateway
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: api-gateway
@@ -21,18 +21,15 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: api-gateway-config
           env:
-            - name: NODE_ENV
-              value: production
-            - name: PORT
-              value: "3000"
             - name: DB_HOST
               valueFrom:
                 secretKeyRef:
                   name: api-gateway-db-secret
                   key: host
-            - name: DB_PORT
-              value: "5432"
             - name: DB_USERNAME
               valueFrom:
                 secretKeyRef:
@@ -48,18 +45,6 @@ spec:
                 secretKeyRef:
                   name: api-gateway-db-secret
                   key: database
-            - name: CORS_ORIGIN
-              value: "https://institute.smartedx.com,https://saas.smartedx.com"
-            - name: VOICE_AGENT_URL
-              value: "http://voice-agent:8000"
-            - name: INSTITUTE_SERVICE_URL
-              value: "http://institute-service:5002"
-            - name: SAAS_SERVICE_URL
-              value: "http://saas-service:5002"
-            - name: AI_CORE_URL
-              value: "http://ai-core:8001"
-            - name: FACIAL_RECOGNITION_URL
-              value: "http://facial-recognition:8002"
           resources:
             requests:
               cpu: 200m

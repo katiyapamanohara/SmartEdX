@@ -21,13 +21,10 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 8001
+          envFrom:
+            - configMapRef:
+                name: ai-core-config
           env:
-            - name: PORT
-              value: "8001"
-            - name: AI_PROVIDER
-              value: "anthropic"
-            - name: MODEL_ID
-              value: "claude-sonnet-4-6"
             - name: ANTHROPIC_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -43,10 +40,6 @@ spec:
                 secretKeyRef:
                   name: ai-core-secret
                   key: google-api-key
-            - name: INSTITUTE_API_URL
-              value: "http://institute-service:5002"
-            - name: CORS_ORIGINS
-              value: "https://institute.smartedx.com,https://saas.smartedx.com"
           resources:
             requests:
               cpu: 500m

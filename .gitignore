@@ -24,6 +24,7 @@ out/
 .env.test.local
 .env.production.local
 
+config-files/
 # IDEs and editors
 .vscode/
 .idea/
