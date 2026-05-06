@@ -15,7 +15,7 @@ on:
 
 env:
   GAR_REGION: us-central1
-  GAR_REPOSITORY: smartedx
+  GAR_REPOSITORY: smartedx-docker-repo
 
 jobs:
   # ─── Step 1: detect which services changed ───────────────────────────────
