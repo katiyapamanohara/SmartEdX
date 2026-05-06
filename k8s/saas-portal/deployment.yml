@@ -22,8 +22,8 @@ spec:
           ports:
             - containerPort: 3000
           envFrom:
-            - configMapRef:
-                name: saas-portal-config
+            - secretRef:
+                name: saas-portal-secret
           resources:
             requests:
               cpu: 100m

@@ -22,49 +22,8 @@ spec:
           ports:
             - containerPort: 5002
           envFrom:
-            - configMapRef:
-                name: saas-service-config
-          env:
-            - name: DB_HOST
-              valueFrom:
-                secretKeyRef:
-                  name: saas-db-secret
-                  key: host
-            - name: DB_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: saas-db-secret
-                  key: username
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: saas-db-secret
-                  key: password
-            - name: DB_DATABASE
-              valueFrom:
-                secretKeyRef:
-                  name: saas-db-secret
-                  key: database
-            - name: JWT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: saas-app-secret
-                  key: jwt-secret
-            - name: MINIO_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: saas-minio-secret
-                  key: access-key
-            - name: MINIO_SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: saas-minio-secret
-                  key: secret-key
-            - name: FIREBASE_SERVICE_ACCOUNT
-              valueFrom:
-                secretKeyRef:
-                  name: saas-firebase-secret
-                  key: service-account-json
+            - secretRef:
+                name: saas-service-secret
           resources:
             requests:
               cpu: 250m

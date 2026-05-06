@@ -22,8 +22,8 @@ spec:
           ports:
             - containerPort: 8002
           envFrom:
-            - configMapRef:
-                name: facial-recognition-config
+            - secretRef:
+                name: facial-recognition-secret
           resources:
             requests:
               cpu: 500m

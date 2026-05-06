@@ -30,14 +30,8 @@ spec:
               containerPort: 20000
               protocol: UDP
           envFrom:
-            - configMapRef:
-                name: voice-agent-config
-          env:
-            - name: GOOGLE_GENAI_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: voice-agent-secret
-                  key: google-genai-api-key
+            - secretRef:
+                name: voice-agent-secret
           resources:
             requests:
               cpu: 250m
