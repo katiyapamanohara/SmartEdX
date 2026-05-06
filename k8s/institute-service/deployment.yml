@@ -26,7 +26,7 @@ spec:
                 name: institute-service-secret
           resources:
             requests:
-              cpu: 250m
+              cpu: 100m
               memory: 256Mi
             limits:
               cpu: 500m
@@ -73,7 +73,7 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: institute-service
-  minReplicas: 2
+  minReplicas: 1
   maxReplicas: 8
   metrics:
     - type: Resource
