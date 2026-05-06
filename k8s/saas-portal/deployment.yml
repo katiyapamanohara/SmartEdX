@@ -21,9 +21,6 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 3000
-          envFrom:
-            - secretRef:
-                name: saas-portal-secret
           resources:
             requests:
               cpu: 100m
