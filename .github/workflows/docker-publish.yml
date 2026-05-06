@@ -97,6 +97,10 @@ jobs:
               esac
             done
             SERVICES="${CHANGED[*]}"
+            # Nothing service-specific changed (e.g. workflow/k8s/README push) — build all
+            if [[ -z "$SERVICES" ]]; then
+              SERVICES="$ALL_SERVICES"
+            fi
           fi
 
           # Build JSON matrix
