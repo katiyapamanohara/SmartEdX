@@ -39,7 +39,7 @@ export interface CourseModule {
   courseId: string;
 }
 
-export type ContentType = 'pdf' | 'video' | 'document' | 'quiz' | 'link';
+export type ContentType = 'pdf' | 'video' | 'document' | 'quiz' | 'link' | 'simulation';
 
 export interface QuizQuestion {
   id: string;
