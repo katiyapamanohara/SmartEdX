@@ -12,5 +12,5 @@ COPY package.json yarn.lock nest-cli.json tsconfig.json tsconfig.build.json ./
 RUN yarn install --frozen-lockfile && yarn cache clean
 COPY --from=builder /app/dist ./dist
 COPY src ./src
-EXPOSE 5002
+EXPOSE 5003
 CMD ["npm", "run", "start:prod"]
