@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: saas-portal
-          image: ghcr.io/smartedx-docker-repo/saas-portal:latest
+          image: us-central1-docker.pkg.dev/lively-synapse-495509-t0/smartedx-docker-repo/saas-portal:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 3000

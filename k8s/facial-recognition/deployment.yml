@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: facial-recognition
-          image: ghcr.io/smartedx-docker-repo/facial-recognition:latest
+          image: us-central1-docker.pkg.dev/lively-synapse-495509-t0/smartedx-docker-repo/facial-recognition:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8002

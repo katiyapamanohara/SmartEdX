@@ -32,7 +32,8 @@ const TYPE_CONFIG: Record<ContentType, { icon: React.ReactNode; label: string; i
   video:    { icon: <FiVideo className="w-5 h-5"/>,     label: "Video",    iconBg: "bg-purple-100 dark:bg-purple-900/30", iconColor: "text-purple-600 dark:text-purple-400" },
   document: { icon: <FiFileText className="w-5 h-5"/>,  label: "Document", iconBg: "bg-blue-100 dark:bg-blue-900/30",  iconColor: "text-blue-600 dark:text-blue-400" },
   quiz:     { icon: <FiHelpCircle className="w-5 h-5"/>,label: "Quiz",     iconBg: "bg-green-100 dark:bg-green-900/30",iconColor: "text-green-600 dark:text-green-400" },
-  link:     { icon: <FiLink className="w-5 h-5"/>,      label: "Link",     iconBg: "bg-amber-100 dark:bg-amber-900/30",iconColor: "text-amber-600 dark:text-amber-400" },
+  link:       { icon: <FiLink className="w-5 h-5"/>,      label: "Link",       iconBg: "bg-amber-100 dark:bg-amber-900/30",iconColor: "text-amber-600 dark:text-amber-400" },
+  simulation: { icon: <FiFileText className="w-5 h-5"/>, label: "Simulation", iconBg: "bg-cyan-100 dark:bg-cyan-900/30",  iconColor: "text-cyan-600 dark:text-cyan-400" },
 };
 
 // ─── Content row ─────────────────────────────────────────────────

@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: institute-service
-          image: ghcr.io/smartedx-docker-repo/institute-service:latest
+          image: us-central1-docker.pkg.dev/lively-synapse-495509-t0/smartedx-docker-repo/institute-service:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 5002

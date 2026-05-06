@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: api-gateway
-          image: ghcr.io/smartedx-docker-repo/api-gateway:latest
+          image: us-central1-docker.pkg.dev/lively-synapse-495509-t0/smartedx-docker-repo/api-gateway:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 3000
