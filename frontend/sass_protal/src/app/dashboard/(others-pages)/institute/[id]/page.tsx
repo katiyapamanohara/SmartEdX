@@ -1,4 +1,7 @@
 "use client";
+
+export const dynamic = "force-dynamic";
+
 import React, { useState, useEffect, Suspense } from "react";
 import Alert from "@/components/ui/alert/Alert";
 import { useParams, useSearchParams, useRouter, usePathname } from "next/navigation";

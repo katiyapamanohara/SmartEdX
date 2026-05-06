@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: ai-core
-          image: ghcr.io/smartedx/ai-core:latest
+          image: ghcr.io/smartedx-docker-repo/ai-core:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8001

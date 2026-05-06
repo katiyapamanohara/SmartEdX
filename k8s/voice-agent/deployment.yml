@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: voice-agent
-          image: ghcr.io/smartedx/voice-agent:latest
+          image: ghcr.io/smartedx-docker-repo/voice-agent:latest
           imagePullPolicy: Always
           ports:
             - name: http

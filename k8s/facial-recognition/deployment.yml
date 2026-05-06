@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: facial-recognition
-          image: ghcr.io/smartedx/facial-recognition:latest
+          image: ghcr.io/smartedx-docker-repo/facial-recognition:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8002

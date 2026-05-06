@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: saas-portal
-          image: ghcr.io/smartedx/saas-portal:latest
+          image: ghcr.io/smartedx-docker-repo/saas-portal:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 3000

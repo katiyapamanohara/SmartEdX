@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: institute-portal
-          image: ghcr.io/smartedx/institute-portal:latest
+          image: ghcr.io/smartedx-docker-repo/institute-portal:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 3000
