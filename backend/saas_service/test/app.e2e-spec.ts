@@ -7,19 +7,23 @@ import { AppModule } from '../src/app.module';
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
 
     app = moduleFixture.createNestApplication();
     await app.init();
+  }, 30_000);
+
+  afterAll(async () => {
+    await app.close();
   });
 
-  it('/ (GET)', () => {
+  it('GET / returns 401 without auth token (guards are active)', () => {
     return request(app.getHttpServer())
       .get('/')
-      .expect(200)
-      .expect('Hello World!');
+      .set('x-gateway-secret', process.env.GATEWAY_SECRET || 'test-secret')
+      .expect(401);
   });
 });
