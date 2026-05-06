@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     INSTITUTE_API_URL: str = "http://localhost:5001"
 
     @property
+    def cors_allow_all(self) -> bool:
+        return self.CORS_ORIGINS.strip() == "*"
+
+    @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",")]
 
