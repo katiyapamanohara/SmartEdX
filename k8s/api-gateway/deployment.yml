@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: api-gateway
-  namespace: smartedx
+  namespace: prod
   labels:
     app: api-gateway
 spec:
@@ -86,7 +86,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: api-gateway
-  namespace: smartedx
+  namespace: prod
   labels:
     app: api-gateway
 spec:
@@ -103,7 +103,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: api-gateway-hpa
-  namespace: smartedx
+  namespace: prod
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

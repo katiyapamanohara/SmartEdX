@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ai-core
-  namespace: smartedx
+  namespace: prod
   labels:
     app: ai-core
 spec:
@@ -73,7 +73,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: ai-core
-  namespace: smartedx
+  namespace: prod
   labels:
     app: ai-core
 spec:
@@ -90,7 +90,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: ai-core-hpa
-  namespace: smartedx
+  namespace: prod
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

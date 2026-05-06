@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: facial-recognition
-  namespace: smartedx
+  namespace: prod
   labels:
     app: facial-recognition
 spec:
@@ -58,7 +58,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: facial-recognition
-  namespace: smartedx
+  namespace: prod
   labels:
     app: facial-recognition
 spec:
@@ -75,7 +75,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: facial-recognition-hpa
-  namespace: smartedx
+  namespace: prod
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

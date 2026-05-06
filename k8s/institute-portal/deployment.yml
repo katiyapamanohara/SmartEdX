@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: institute-portal
-  namespace: smartedx
+  namespace: prod
   labels:
     app: institute-portal
 spec:
@@ -56,7 +56,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: institute-portal
-  namespace: smartedx
+  namespace: prod
   labels:
     app: institute-portal
 spec:
@@ -73,7 +73,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: institute-portal-hpa
-  namespace: smartedx
+  namespace: prod
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
