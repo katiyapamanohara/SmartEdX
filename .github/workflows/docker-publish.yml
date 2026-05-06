@@ -1,0 +1,185 @@
+name: Build and Push to Google Artifact Registry
+
+on:
+  push:
+    branches:
+      - development
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      services:
+        description: 'Services to build — comma-separated (api-gateway, institute-service, saas-service, ai-core, facial-recognition, voice-agent, institute-portal, saas-portal) or "all"'
+        required: false
+        default: all
+
+env:
+  GAR_REGION: us-central1
+  GAR_REPOSITORY: smartedx-docker-repo
+
+jobs:
+  # ─── Step 1: detect which services changed ───────────────────────────────
+  detect-changes:
+    name: Detect changed services
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      has_changes: ${{ steps.set-matrix.outputs.has_changes }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api-gateway:
+              - 'api-gateway/**'
+            institute-service:
+              - 'backend/institute_service/**'
+            saas-service:
+              - 'backend/saas_service/**'
+            ai-core:
+              - 'backend/ai_core/**'
+            facial-recognition:
+              - 'backend/facial_recognition_server/**'
+            voice-agent:
+              - 'backend/voice_agent/**'
+            institute-portal:
+              - 'frontend/institute_protal/**'
+            saas-portal:
+              - 'frontend/sass_protal/**'
+
+      - name: Build matrix from changed services
+        id: set-matrix
+        shell: bash
+        run: |
+          # Full service definitions
+          declare -A CONTEXT=(
+            [api-gateway]="./api-gateway"
+            [institute-service]="./backend/institute_service"
+            [saas-service]="./backend/saas_service"
+            [ai-core]="./backend/ai_core"
+            [facial-recognition]="./backend/facial_recognition_server"
+            [voice-agent]="./backend/voice_agent"
+            [institute-portal]="./frontend/institute_protal"
+            [saas-portal]="./frontend/sass_protal"
+          )
+
+          ALL_SERVICES="api-gateway institute-service saas-service ai-core facial-recognition voice-agent institute-portal saas-portal"
+
+          # On workflow_dispatch with "all" or explicit list — build requested services
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            INPUT="${{ github.event.inputs.services }}"
+            if [[ "$INPUT" == "all" ]]; then
+              SERVICES="$ALL_SERVICES"
+            else
+              SERVICES=$(echo "$INPUT" | tr ',' ' ')
+            fi
+          else
+            # On push — only build services whose files changed
+            CHANGED=()
+            for svc in $ALL_SERVICES; do
+              VAR="steps.filter.outputs.${svc//-/_}"
+              CHANGED_FLAG="${{ steps.filter.outputs['api-gateway'] }}"
+              # Evaluate each service's filter output
+              case "$svc" in
+                api-gateway)         [[ "${{ steps.filter.outputs.api-gateway }}"         == "true" ]] && CHANGED+=("$svc") ;;
+                institute-service)   [[ "${{ steps.filter.outputs.institute-service }}"   == "true" ]] && CHANGED+=("$svc") ;;
+                saas-service)        [[ "${{ steps.filter.outputs.saas-service }}"        == "true" ]] && CHANGED+=("$svc") ;;
+                ai-core)             [[ "${{ steps.filter.outputs.ai-core }}"             == "true" ]] && CHANGED+=("$svc") ;;
+                facial-recognition)  [[ "${{ steps.filter.outputs.facial-recognition }}"  == "true" ]] && CHANGED+=("$svc") ;;
+                voice-agent)         [[ "${{ steps.filter.outputs.voice-agent }}"         == "true" ]] && CHANGED+=("$svc") ;;
+                institute-portal)    [[ "${{ steps.filter.outputs.institute-portal }}"    == "true" ]] && CHANGED+=("$svc") ;;
+                saas-portal)         [[ "${{ steps.filter.outputs.saas-portal }}"         == "true" ]] && CHANGED+=("$svc") ;;
+              esac
+            done
+            SERVICES="${CHANGED[*]}"
+            # Nothing service-specific changed (e.g. workflow/k8s/README push) — build all
+            if [[ -z "$SERVICES" ]]; then
+              SERVICES="$ALL_SERVICES"
+            fi
+          fi
+
+          # Build JSON matrix
+          INCLUDES="[]"
+          for svc in $SERVICES; do
+            CTX="${CONTEXT[$svc]}"
+            ENTRY=$(jq -n \
+              --arg service "$svc" \
+              --arg context "$CTX" \
+              --arg image "$svc" \
+              '{service: $service, context: $context, image: $image}')
+            INCLUDES=$(echo "$INCLUDES" | jq --argjson e "$ENTRY" '. + [$e]')
+          done
+
+          MATRIX=$(jq -nc --argjson inc "$INCLUDES" '{include: $inc}')
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+
+          if [[ "$INCLUDES" == "[]" ]]; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ─── Step 2: build and push changed services in parallel ─────────────────
+  build-and-push:
+    name: Build ${{ matrix.service }}
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.detect-changes.outputs.matrix) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GAR_REGION }}-docker.pkg.dev --quiet
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── Compute image tags ───────────────────────────────────────────────
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.GAR_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/${{ matrix.image }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest
+
+      # ── Build and push ───────────────────────────────────────────────────
+      - name: Build and push ${{ matrix.service }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+      # ── Summary ─────────────────────────────────────────────────────────
+      - name: Write job summary
+        run: |
+          echo "### ${{ matrix.service }} pushed to GAR" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ steps.meta.outputs.tags }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

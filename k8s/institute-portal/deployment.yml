@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: institute-portal
+  namespace: smartedx
+  labels:
+    app: institute-portal
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: institute-portal
+  template:
+    metadata:
+      labels:
+        app: institute-portal
+    spec:
+      containers:
+        - name: institute-portal
+          image: ghcr.io/smartedx/institute-portal:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: NEXT_TELEMETRY_DISABLED
+              value: "1"
+            - name: NEXT_PUBLIC_API_URL
+              value: "https://api.smartedx.com"
+            - name: NEXT_PUBLIC_MINIO_ENDPOINT
+              value: "https://storage.smartedx.com"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: institute-portal
+  namespace: smartedx
+  labels:
+    app: institute-portal
+spec:
+  selector:
+    app: institute-portal
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: institute-portal-hpa
+  namespace: smartedx
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: institute-portal
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

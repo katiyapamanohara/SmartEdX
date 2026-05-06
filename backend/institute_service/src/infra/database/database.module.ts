@@ -48,13 +48,14 @@ import { LiveParticipant } from '../../modules/auth/entities/live-participant.en
           LiveSession,
           LiveParticipant,
         ],
+        autoLoadEntities: true,
         synchronize: true, // Auto-sync for dev
         logging: configService.get<string>('NODE_ENV') === 'development',
         migrations: [__dirname + '/migrations/*.ts'],
         migrationsRun: true, // Auto-run migrations on startup
-        ssl: {
-          rejectUnauthorized: false, // Required for Supabase connections
-        },
+        ssl: configService.get<string>('DB_SSL') === 'false'
+          ? false
+          : { rejectUnauthorized: false }, // Required for Supabase connections
       }),
       inject: [ConfigService],
     }),

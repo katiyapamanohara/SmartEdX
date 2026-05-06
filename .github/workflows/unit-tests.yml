@@ -1,0 +1,86 @@
+name: Unit Tests
+
+on:
+  push:
+    branches: [development]
+    paths:
+      - 'backend/institute_service/src/**'
+      - 'backend/saas_service/src/**'
+  pull_request:
+    branches: [development]
+    paths:
+      - 'backend/institute_service/src/**'
+      - 'backend/saas_service/src/**'
+
+jobs:
+  institute-service-tests:
+    name: Institute Service
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend/institute_service
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+          cache-dependency-path: backend/institute_service/yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Run unit tests
+        run: yarn test --no-coverage --forceExit
+
+      - name: Run unit tests with coverage
+        if: github.event_name == 'pull_request'
+        run: yarn test:cov --forceExit
+
+      - name: Upload coverage report
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: institute-service-coverage
+          path: backend/institute_service/coverage/
+          retention-days: 7
+
+  saas-service-tests:
+    name: SaaS Service
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend/saas_service
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+          cache-dependency-path: backend/saas_service/yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Run unit tests
+        run: yarn test --no-coverage --forceExit
+
+      - name: Run unit tests with coverage
+        if: github.event_name == 'pull_request'
+        run: yarn test:cov --forceExit
+
+      - name: Upload coverage report
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: saas-service-coverage
+          path: backend/saas_service/coverage/
+          retention-days: 7

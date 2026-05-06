@@ -18,6 +18,9 @@
     "dev:sass_portal": "yarn --cwd frontend/sass_protal run dev",
     "build:all": "concurrently \"yarn --cwd api-gateway run build\" \"yarn --cwd backend/institute_service run build\" \"yarn --cwd backend/saas_service run build\" \"yarn --cwd frontend/institute_protal run build\" \"yarn --cwd frontend/sass_protal run build\"",
     "test": "concurrently \"yarn --cwd api-gateway test\" \"yarn --cwd backend/institute_service test\" \"yarn --cwd backend/saas_service test\"",
+    "test:unit": "concurrently \"yarn --cwd api-gateway test\" \"yarn --cwd backend/institute_service test\" \"yarn --cwd backend/saas_service test\"",
+    "test:integration": "yarn --cwd backend/institute_service test:e2e && yarn --cwd backend/saas_service test:e2e",
+    "test:all": "yarn test:unit && yarn test:integration",
     "lint": "concurrently \"yarn --cwd api-gateway run lint\" \"yarn --cwd backend/institute_service run lint\" \"yarn --cwd backend/saas_service run lint\" \"yarn --cwd frontend/institute_protal run lint\" \"yarn --cwd frontend/sass_protal run lint\"",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
     "prepare": "husky"
