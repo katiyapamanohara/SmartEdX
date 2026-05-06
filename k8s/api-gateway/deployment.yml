@@ -20,7 +20,7 @@ spec:
           image: us-central1-docker.pkg.dev/lively-synapse-495509-t0/smartedx-docker-repo/api-gateway:latest
           imagePullPolicy: Always
           ports:
-            - containerPort: 3000
+            - containerPort: 5001
           envFrom:
             - secretRef:
                 name: api-gateway-secret
@@ -34,14 +34,14 @@ spec:
           livenessProbe:
             httpGet:
               path: /health
-              port: 3000
+              port: 5001
             initialDelaySeconds: 30
             periodSeconds: 10
             failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /health
-              port: 3000
+              port: 5001
             initialDelaySeconds: 15
             periodSeconds: 5
             failureThreshold: 3
@@ -58,8 +58,8 @@ spec:
     app: api-gateway
   ports:
     - name: http
-      port: 3000
-      targetPort: 3000
+      port: 5001
+      targetPort: 5001
       protocol: TCP
   type: ClusterIP
 ---
@@ -73,7 +73,7 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: api-gateway
-  minReplicas: 2
+  minReplicas: 1
   maxReplicas: 10
   metrics:
     - type: Resource
