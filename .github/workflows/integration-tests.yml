@@ -1,0 +1,167 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [development]
+    paths:
+      - 'backend/institute_service/src/**'
+      - 'backend/institute_service/test/**'
+      - 'backend/saas_service/src/**'
+      - 'backend/saas_service/test/**'
+  pull_request:
+    branches: [development]
+    paths:
+      - 'backend/institute_service/src/**'
+      - 'backend/institute_service/test/**'
+      - 'backend/saas_service/src/**'
+      - 'backend/saas_service/test/**'
+
+jobs:
+  institute-service-integration:
+    name: Institute Service (integration)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: institute_integration_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: backend/institute_service
+
+    env:
+      NODE_ENV: development
+      PORT: 5003
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_DATABASE: institute_integration_test
+      DB_SSL: 'false'
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      JWT_SECRET: integration-test-jwt-secret
+      JWT_EXPIRATION: 1d
+      GATEWAY_SECRET: integration-test-gateway-secret
+      MINIO_ENDPOINT: localhost
+      MINIO_PORT: 9000
+      MINIO_USE_SSL: 'false'
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: smartedx-bucket
+      VOICE_AGENT_URL: http://localhost:8000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/institute_service/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run e2e + integration tests
+        run: npm run test:e2e -- --forceExit
+        timeout-minutes: 5
+
+  saas-service-integration:
+    name: SaaS Service (integration)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: saas_integration_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: backend/saas_service
+
+    env:
+      NODE_ENV: development
+      PORT: 5002
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_DATABASE: saas_integration_test
+      DB_SSL: 'false'
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      JWT_SECRET: integration-test-jwt-secret
+      JWT_EXPIRATION: 1d
+      GATEWAY_SECRET: integration-test-gateway-secret
+      MINIO_ENDPOINT: localhost
+      MINIO_PORT: 9000
+      MINIO_USE_SSL: 'false'
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: smartedx-bucket
+      PAYHERE_MERCHANT_ID: '1216238'
+      PAYHERE_MERCHANT_SECRET: test-secret
+      PAYHERE_SANDBOX: 'true'
+      PAYHERE_RETURN_URL: http://localhost:3000/dashboard/billing
+      PAYHERE_CANCEL_URL: http://localhost:3000/dashboard/billing
+      PAYHERE_NOTIFY_URL: http://localhost:5002/payhere/notify
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/saas_service/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run e2e + integration tests
+        run: npm run test:e2e -- --forceExit
+        timeout-minutes: 5
