@@ -457,7 +457,9 @@ def get_runner_for_course(
         """Search course material. Call immediately for any course-content question.
 
         Args:
-            query: What to search for.
+            query: Specific topic or keywords from the user's question (e.g. 'algorithms',
+                   'photosynthesis', 'World War 2'). NEVER use generic phrases like
+                   'course content' or 'course material' — always use the actual subject.
             limit: Max results (default 2).
         """
         if not COURSE_KB_ENABLED:
@@ -492,6 +494,9 @@ def get_runner_for_course(
         f"Rules:\n"
         f"- Greetings / chitchat / yes-no follow-ups: answer directly, no tool call.\n"
         f"- ANY question about course content: call search_course_material IMMEDIATELY — no hesitation, no preamble.\n"
+        f"  QUERY RULE: extract the specific topic from the user's question and use that as the query.\n"
+        f"  Example — user asks 'what is photosynthesis?': query='photosynthesis'.\n"
+        f"  NEVER pass 'course content', 'course material', or any other generic phrase as the query.\n"
         f"- After search: answer in 1-2 sentences, cite the page if available (e.g. 'Page 3 says ...').\n"
         f"- If nothing is found: say so in one sentence and suggest the teacher.\n"
         f"- Always be brief."
@@ -555,7 +560,9 @@ def get_runner_for_teacher(
         """Search course materials. Call immediately for any course-content question.
 
         Args:
-            query:     What to search for.
+            query:     Specific topic or keywords from the teacher's question (e.g.
+                       'sorting algorithms', 'cell division'). NEVER use generic phrases
+                       like 'course content' — always use the actual subject being asked about.
             course_id: Specific course UUID (leave empty to search all courses).
             limit:     Max results (default 2).
         """
@@ -597,6 +604,8 @@ def get_runner_for_teacher(
         "Rules:\n"
         "- Greetings / general conversation: answer directly, no tool call.\n"
         "- ANY question about course content or material: call search_course_material IMMEDIATELY.\n"
+        "  QUERY RULE: use the specific topic from the teacher's question as the query\n"
+        "  (e.g. 'binary search trees', not 'course content' or 'course material').\n"
         "- Include course_id if the teacher mentions a specific course.\n"
         "- Answer in 1-2 sentences, cite page numbers. If not found, say so honestly."
     )
