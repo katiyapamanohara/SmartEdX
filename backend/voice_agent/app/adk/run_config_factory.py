@@ -2,7 +2,7 @@
 
 import logging
 
-from google.adk.agents.run_config import RunConfig, StreamingMode
+from google.adk.agents.run_config import RunConfig, StreamingMode, ToolThreadPoolConfig
 from google.genai import types
 
 from app.config import AGENT_VOICE
@@ -25,6 +25,11 @@ _VAD_CONFIG = types.RealtimeInputConfig(
     )
 )
 
+# Run tools in a thread pool so the audio event loop is never blocked during
+# Qdrant searches or embedding inference — interruptions stay instant.
+_TOOL_THREAD_POOL = ToolThreadPoolConfig(max_workers=4)
+
+
 def build_run_config(
     model_name: str,
     *,
@@ -42,10 +47,9 @@ def build_run_config(
             input_audio_transcription=types.AudioTranscriptionConfig(),
             output_audio_transcription=types.AudioTranscriptionConfig(),
             session_resumption=types.SessionResumptionConfig(),
-            # Always set explicitly — leaving None defaults to proactive_audio=True in Gemini Live,
-            # which causes the model to spontaneously speak after ~30s of user silence.
             proactivity=types.ProactivityConfig(proactive_audio=proactivity),
             enable_affective_dialog=affective_dialog if affective_dialog else None,
+            tool_thread_pool_config=_TOOL_THREAD_POOL,
         )
         logger.debug(
             f"Native audio model: {model_name}, AUDIO modality, "
@@ -58,9 +62,11 @@ def build_run_config(
             input_audio_transcription=None,
             output_audio_transcription=None,
             session_resumption=types.SessionResumptionConfig(),
+            tool_thread_pool_config=_TOOL_THREAD_POOL,
         )
         logger.debug(f"Half-cascade model: {model_name}, TEXT modality")
     return run_config
+
 
 def build_sip_run_config() -> RunConfig:
     return RunConfig(
@@ -72,4 +78,5 @@ def build_sip_run_config() -> RunConfig:
         output_audio_transcription=types.AudioTranscriptionConfig(),
         session_resumption=types.SessionResumptionConfig(),
         proactivity=types.ProactivityConfig(proactive_audio=False),
+        tool_thread_pool_config=_TOOL_THREAD_POOL,
     )

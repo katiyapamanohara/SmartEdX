@@ -10,9 +10,10 @@ from google.adk.agents import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.adk.tools import FunctionTool, ToolContext
+from google.genai import types
 
 from app.agent.api import fetch_institute_config
-from app.qdrant.course_kb import _get_embedding_model
+from app.qdrant.course_kb import _get_query_vector
 from app.agent.assessment_tools import evaluate_voice_assessment
 from app.agent.audio_clips import create_audio_clip_tool
 from app.agent.custom_tools import CustomToolHelper
@@ -139,28 +140,26 @@ def _get_kb_http_client() -> httpx.Client:
     return _kb_http_client
 
 
-def search_knowledgebase(query: str, limit: int = 3) -> dict:
-    """Search the knowledge base for relevant information.
-    Use this tool when the user asks questions about products, services,
-    pricing, installation, company details, or any domain-specific information.
+def search_knowledgebase(query: str, limit: int = 2) -> dict:
+    """Search the knowledge base. Call this for any domain-specific question.
 
     Args:
-        query: The search query describing what information to find.
-        limit: Maximum number of results to return.
-
-    Returns:
-        A dict with matching results from the knowledge base.
+        query: What to search for.
+        limit: Max results (default 2).
     """
     if not QDRANT_KB_ENABLED:
         return {"status": "error", "message": "Knowledge base is not enabled."}
+    t_total = time.monotonic()
+    logger.info(f"[KB Search] query={query!r} collection={QDRANT_COLLECTION_NAME!r} limit={limit}")
     try:
-        model = _get_embedding_model()
-        query_vector = list(model.embed([query]))[0].tolist()
+        query_vector = _get_query_vector(query)
 
         headers = {"Content-Type": "application/json"}
         if QDRANT_API_KEY:
             headers["api-key"] = QDRANT_API_KEY
 
+        t_req = time.monotonic()
+        logger.info(f"[KB Search] Sending vector search → Qdrant {QDRANT_URL}/collections/{QDRANT_COLLECTION_NAME}")
         search_result = _get_kb_http_client().post(
             f"{QDRANT_URL}/collections/{QDRANT_COLLECTION_NAME}/points/search",
             headers=headers,
@@ -172,23 +171,34 @@ def search_knowledgebase(query: str, limit: int = 3) -> dict:
                 "params": {"hnsw_ef": 32, "exact": False},
             },
         )
+        req_ms = (time.monotonic() - t_req) * 1000
         search_result.raise_for_status()
         hits = search_result.json().get("result", [])
 
+        total_ms = (time.monotonic() - t_total) * 1000
+        scores = [round(h["score"], 3) for h in hits]
+        logger.info(
+            f"[KB Search] QDRANT → {len(hits)} hits in {req_ms:.1f}ms (total {total_ms:.1f}ms) "
+            f"scores={scores}"
+        )
+
         if not hits:
+            logger.info("[KB Search] No results above threshold 0.35")
             return {"status": "no_results", "message": "No relevant information found."}
 
         results = [
             {
-                "content": h["payload"].get("content", "")[:500],
+                "content": h["payload"].get("content", "")[:300],
                 "page": h["payload"].get("page"),
                 "score": round(h["score"], 3),
             }
             for h in hits
         ]
+        for i, r in enumerate(results):
+            logger.debug(f"  [hit {i+1}] page={r.get('page')} score={r['score']} | {r['content'][:120]!r}")
         return {"status": "ok", "results": results}
     except Exception as e:
-        logger.error(f"Knowledge base search failed: {e}", exc_info=True)
+        logger.error(f"[KB Search] FAILED: {e}", exc_info=True)
         return {"status": "error", "message": "Failed to search knowledge base."}
 
 
@@ -373,6 +383,9 @@ def get_runner_for_institute(institute_id: str, session_service: InMemorySession
         model=DEMO_AGENT_MODEL,
         tools=_shared_tools,
         instruction=system_instructions,
+        generate_content_config=types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_budget=512, include_thoughts=True),
+        ),
     )
 
     institute_runner = Runner(
@@ -428,19 +441,12 @@ def get_runner_for_course(
     logger.info(f"Building course Q&A agent for course: {course_name!r} ({course_id})")
 
     # Build a course-specific search tool via closure so course_id is baked in.
-    def search_course_material(query: str, limit: int = 3) -> dict:
-        """Search the course material for information relevant to the student's question.
-
-        Use this tool whenever the student asks about any topic, concept, or
-        content covered in this course.  Always search before answering to
-        ensure accuracy.
+    def search_course_material(query: str, limit: int = 2) -> dict:
+        """Search course material. Call immediately for any course-content question.
 
         Args:
-            query: Natural-language description of the information to find.
-            limit: Maximum number of results to return (default 3).
-
-        Returns:
-            Matching excerpts from the course material with page references.
+            query: What to search for.
+            limit: Max results (default 2).
         """
         if not COURSE_KB_ENABLED:
             return {"status": "error", "message": "Course knowledge base is not enabled."}
@@ -464,13 +470,12 @@ def get_runner_for_course(
 
     system_instructions = all_instructions + (
         f"You are an AI tutor for the course '{course_name}'.\n"
-        f"Help students understand the course material concisely.\n"
-        f"- For greetings, chitchat, or simple follow-ups: answer directly WITHOUT calling any tool.\n"
-        f"- ONLY call search_course_material when the student asks a factual question about specific\n"
-        f"  topics, concepts, or details from the course. Do NOT search for every message.\n"
-        f"- When you do search, cite the page number (e.g. 'According to page 3...').\n"
-        f"- If the answer is not in the course material, say so and suggest consulting the teacher.\n"
-        f"- Be encouraging and brief — 1-2 sentences unless detail is genuinely needed."
+        f"Rules:\n"
+        f"- Greetings / chitchat / yes-no follow-ups: answer directly, no tool call.\n"
+        f"- ANY question about course content: call search_course_material IMMEDIATELY — no hesitation, no preamble.\n"
+        f"- After search: answer in 1-2 sentences, cite the page if available (e.g. 'Page 3 says ...').\n"
+        f"- If nothing is found: say so in one sentence and suggest the teacher.\n"
+        f"- Always be brief."
     )
 
     safe_id = course_id.replace("-", "_")
@@ -482,6 +487,9 @@ def get_runner_for_course(
             FunctionTool(func=end_call),
         ],
         instruction=system_instructions,
+        generate_content_config=types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_budget=512, include_thoughts=True),
+        ),
     )
 
     course_runner = Runner(
@@ -524,20 +532,13 @@ def get_runner_for_teacher(
 
     logger.info(f"Building teacher agent for institute={institute_id} teacher={teacher_id}")
 
-    def search_course_material(query: str, course_id: str = "", limit: int = 3) -> dict:
-        """Search course materials stored in Qdrant.
-
-        Use this tool whenever the teacher asks about course content, lesson topics,
-        or any information that may be in the course materials.
+    def search_course_material(query: str, course_id: str = "", limit: int = 2) -> dict:
+        """Search course materials. Call immediately for any course-content question.
 
         Args:
-            query:     Natural-language description of the information to find.
-            course_id: Optional specific course UUID to narrow the search.
-                       Leave empty to search across all indexed courses.
-            limit:     Maximum number of results to return (default 3).
-
-        Returns:
-            Matching excerpts from course materials with page references.
+            query:     What to search for.
+            course_id: Specific course UUID (leave empty to search all courses).
+            limit:     Max results (default 2).
         """
         if not COURSE_KB_ENABLED:
             return {"status": "error", "message": "Course knowledge base is not enabled."}
@@ -566,12 +567,11 @@ def get_runner_for_teacher(
 
     system_instructions = all_instructions + (
         "You are an AI voice assistant for teachers at SmartEdX.\n"
-        "Your role is to help teachers with course content, lesson planning, and curriculum questions.\n"
-        "- For greetings or general questions: answer directly WITHOUT calling any tool.\n"
-        "- ONLY call search_course_material when the teacher asks about specific course content or material.\n"
-        "- When searching, provide a course_id if the teacher mentions a specific course.\n"
-        "- Give concise answers — 1-2 sentences unless detail is required. Cite page numbers.\n"
-        "- If the answer is not in the course material, say so honestly."
+        "Rules:\n"
+        "- Greetings / general conversation: answer directly, no tool call.\n"
+        "- ANY question about course content or material: call search_course_material IMMEDIATELY.\n"
+        "- Include course_id if the teacher mentions a specific course.\n"
+        "- Answer in 1-2 sentences, cite page numbers. If not found, say so honestly."
     )
 
     safe_id = teacher_id.replace("-", "_")
@@ -583,6 +583,9 @@ def get_runner_for_teacher(
             FunctionTool(func=end_call),
         ],
         instruction=system_instructions,
+        generate_content_config=types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_budget=512, include_thoughts=True),
+        ),
     )
 
     teacher_runner = Runner(

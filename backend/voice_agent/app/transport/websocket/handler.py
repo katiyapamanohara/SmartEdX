@@ -89,13 +89,23 @@ async def websocket_endpoint(
     # models wait silently for user speech before saying anything.
     # Suppressed for assessment sessions which send their own init prompt.
     if greet:
-        greeting_trigger = types.Content(
-            parts=[types.Part(text=(
-                "[SESSION START] Live voice call. Be natural, warm, and brief — like a helpful person on the phone.\n"
-                "Greet in ONE short sentence. Then go silent and wait for the user to speak."
-            ))],
-            role="user",
-        )
+        if mgr.has_prior_memory:
+            # Returning user — skip intro, pick up where we left off
+            greeting_trigger = types.Content(
+                parts=[types.Part(text=(
+                    "[SESSION RESUMED] The user is back. Greet them briefly by acknowledging you remember "
+                    "your conversation, then ask how you can help. One sentence only."
+                ))],
+                role="user",
+            )
+        else:
+            greeting_trigger = types.Content(
+                parts=[types.Part(text=(
+                    "[SESSION START] Live voice call. Be natural, warm, and brief.\n"
+                    "Greet in ONE short sentence. Then stop and wait for the user to speak."
+                ))],
+                role="user",
+            )
         live_request_queue.send_content(greeting_trigger)
 
     # Register audio clip queue for this session (no-op overhead if map is empty)
@@ -304,6 +314,31 @@ async def websocket_endpoint(
                 has_audio = '"inlineData"' in event_json
                 has_text = '"text"' in event_json
                 has_usage = '"usageMetadata"' in event_json
+
+                # ── Log model reasoning (thought parts) ──────────────────
+                try:
+                    parts = (evt.get("content") or {}).get("parts") or []
+                    for p in parts:
+                        if p.get("thought"):
+                            thought_text = (p.get("text") or "")[:400]
+                            logger.info(f"[Reasoning] {thought_text!r}")
+                        fc = p.get("functionCall")
+                        if fc:
+                            logger.info(f"[ToolCall] {fc.get('name')} args={fc.get('args')}")
+                        fr = p.get("functionResponse")
+                        if fr:
+                            resp_preview = str(fr.get("response", ""))[:300]
+                            logger.info(f"[ToolResponse] {fr.get('name')} → {resp_preview}")
+                    if has_usage:
+                        usage = evt.get("usageMetadata", {})
+                        logger.info(
+                            f"[Tokens] prompt={usage.get('promptTokenCount')} "
+                            f"thoughts={usage.get('thoughtsTokenCount')} "
+                            f"candidates={usage.get('candidatesTokenCount')} "
+                            f"total={usage.get('totalTokenCount')}"
+                        )
+                except Exception:
+                    pass
 
                 # --- Reminder logic (reuses already-parsed evt) ---
                 try:

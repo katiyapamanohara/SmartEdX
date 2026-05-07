@@ -6,6 +6,7 @@ pattern used by all three transports (WebSocket, SIP-over-WS, native SIP).
 
 import asyncio
 import logging
+import threading
 from typing import Optional
 
 import requests
@@ -18,6 +19,22 @@ from app.agent.api import end_assistant_session, start_assistant_session
 from app.config import APP_NAME
 from app.latency import latency
 from app.observability.langfuse_client import get_langfuse, update_generation
+
+# ── Cross-reconnect session memory ────────────────────────────────────────
+# Survives WebSocket disconnects so the agent remembers what was discussed.
+_session_memory: dict[str, list[dict]] = {}
+_session_memory_lock = threading.Lock()
+_SESSION_MEMORY_TURNS = 12  # last N turns to inject on reconnect
+
+
+def _get_session_memory(session_id: str) -> list[dict]:
+    with _session_memory_lock:
+        return list(_session_memory.get(session_id, []))
+
+
+def _save_session_memory(session_id: str, turns: list[dict]) -> None:
+    with _session_memory_lock:
+        _session_memory[session_id] = turns[-_SESSION_MEMORY_TURNS:]
 from app.transcription import TranscriptHandler
 
 logger = logging.getLogger(__name__)
@@ -62,6 +79,7 @@ class ADKSessionManager:
         self.live_request_queue: Optional[LiveRequestQueue] = None
         self.core_session_id: Optional[str] = None
         self._core_session_task: Optional[asyncio.Task] = None
+        self.has_prior_memory: bool = False
 
     def _build_language_lock_prompt(self) -> str:
         """Return a strict language lock policy for the current session.
@@ -104,6 +122,29 @@ class ADKSessionManager:
 
         self.live_request_queue = LiveRequestQueue()
 
+        # Inject prior conversation memory if this session_id has been seen before.
+        # This gives the agent context on reconnect without any network I/O.
+        prior_turns = _get_session_memory(self.session_id)
+        if prior_turns:
+            lines = []
+            for m in prior_turns:
+                actor = m.get("actor", "")
+                msg = (m.get("message") or "")[:200]
+                if msg:
+                    label = "User" if actor == "user" else "You"
+                    lines.append(f"{label}: {msg}")
+            if lines:
+                memory_prompt = (
+                    "[MEMORY — your conversation so far with this user]\n"
+                    + "\n".join(lines)
+                    + "\n[Continue naturally from here — the user is reconnecting]"
+                )
+                self.live_request_queue.send_content(
+                    types.Content(parts=[types.Part(text=memory_prompt)], role="user")
+                )
+                self.has_prior_memory = True
+                logger.info(f"[Memory] Injected {len(lines)} prior turns into session {self.session_id}")
+
         # Start SmartEdX Core session in a background thread — non-fatal and
         # not needed until finalize(), so don't block the voice stream startup.
         async def _start_core_session():
@@ -117,7 +158,7 @@ class ADKSessionManager:
                     call_id=self.call_id,
                 )
                 self.core_session_id = core_response.get("session_id") or core_response.get("id")
-                logger.debug(f"Started Core session: {self.core_session_id}")
+                logger.info(f"[Session] Core session started: {self.core_session_id}")
             except requests.exceptions.HTTPError as e:
                 logger.warning(f"Core session start failed (HTTP {e.response.status_code}): {e}")
             except requests.exceptions.RequestException as e:
@@ -165,11 +206,14 @@ class ADKSessionManager:
             try:
                 final_transcript = self.transcript_handler.get_transcript()
                 await asyncio.to_thread(end_assistant_session, session_id=self.core_session_id, history=final_transcript)
-                logger.debug(f"Ended Core session: {self.core_session_id}")
+                logger.info(f"[Session] Core session ended: {self.core_session_id}")
             except requests.exceptions.RequestException as e:
                 logger.warning(f"Core session end failed: {e}")
         else:
             logger.debug("Skipping Core session end — no core_session_id")
+
+        # Persist last N turns to memory before wiping transcript
+        _save_session_memory(self.session_id, self.transcript_handler.get_transcript())
 
         # Free memory
         self.transcript_handler.clear_transcript()

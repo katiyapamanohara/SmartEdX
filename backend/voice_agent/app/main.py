@@ -60,9 +60,15 @@ else:
 
 logger = logging.getLogger(__name__)
 
-# Suppress ADK internal error logs for expected 1008 disconnects
-logging.getLogger("google_adk.google.adk.flows.llm_flows.base_llm_flow").setLevel(logging.CRITICAL)
-logging.getLogger("google.adk.flows.llm_flows.base_llm_flow").setLevel(logging.CRITICAL)
+# Show ADK internals at DEBUG — reveals model reasoning, tool calls, and flow decisions
+logging.getLogger("google.adk").setLevel(logging.DEBUG)
+logging.getLogger("google_adk").setLevel(logging.DEBUG)
+# Keep these noisy connection-reset errors suppressed (expected on 1008 disconnect)
+logging.getLogger("google_adk.google.adk.flows.llm_flows.base_llm_flow").setLevel(logging.WARNING)
+logging.getLogger("google.adk.flows.llm_flows.base_llm_flow").setLevel(logging.WARNING)
+# Show httpx request/response details
+logging.getLogger("httpx").setLevel(logging.DEBUG)
+logging.getLogger("httpcore").setLevel(logging.DEBUG)
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
 
 # Initialize Langfuse ADK instrumentor (no-op if disabled)

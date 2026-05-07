@@ -66,7 +66,7 @@ EMBEDDING_DIM = 384
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 BATCH_SIZE = 50
-MAX_CONTENT_CHARS = 500  # truncate chunks to limit tokens sent to model
+MAX_CONTENT_CHARS = 300  # truncate chunks to limit tokens sent to model
 
 # ── Search result cache ────────────────────────────────────────────────
 _CACHE_TTL = 300  # seconds
@@ -102,6 +102,35 @@ def _get_embedding_model() -> TextEmbedding:
     return _embedding_model
 
 
+# ── Query-vector cache — skips ONNX inference for repeated queries ────────
+_qvec_cache: dict[str, list] = {}
+_qvec_lock = Lock()
+_QVEC_MAX = 256
+
+
+def _get_query_vector(query: str) -> list:
+    """Return the embedding vector for query, using cache when possible."""
+    with _qvec_lock:
+        if query in _qvec_cache:
+            logger.info(f"[Embed] Cache HIT for query: {query!r}")
+            return _qvec_cache[query]
+
+    logger.info(f"[Embed] Cache MISS — running FastEmbed inference for: {query!r}")
+    t0 = time.monotonic()
+    vec = list(_get_embedding_model().embed([query]))[0].tolist()
+    elapsed_ms = (time.monotonic() - t0) * 1000
+    logger.info(f"[Embed] Inference done in {elapsed_ms:.1f}ms (dim={len(vec)})")
+
+    with _qvec_lock:
+        if len(_qvec_cache) >= _QVEC_MAX:
+            try:
+                del _qvec_cache[next(iter(_qvec_cache))]
+            except StopIteration:
+                pass
+        _qvec_cache[query] = vec
+    return vec
+
+
 def _qdrant_headers() -> dict:
     headers = {"Content-Type": "application/json"}
     if QDRANT_API_KEY:
@@ -111,7 +140,11 @@ def _qdrant_headers() -> dict:
 
 def _qdrant_request(method: str, path: str, **kwargs) -> dict:
     url = f"{QDRANT_URL}{path}"
+    t0 = time.monotonic()
+    logger.debug(f"[Qdrant→] {method} {path}")
     r = _get_http_client().request(method, url, headers=_qdrant_headers(), **kwargs)
+    elapsed_ms = (time.monotonic() - t0) * 1000
+    logger.info(f"[Qdrant←] {method} {path} → HTTP {r.status_code} in {elapsed_ms:.1f}ms")
     r.raise_for_status()
     return r.json()
 
@@ -470,31 +503,41 @@ def search_course(institute_id: str, course_id: str, query: str, limit: int = 3)
         List of dicts with keys: content, page, title, score.
     """
     col = collection_name(institute_id, course_id)
+    t_total = time.monotonic()
+    logger.info(f"[Search] query={query!r} col={col!r} limit={limit}")
 
     # Fast path: in-memory exact search
     with _memory_lock:
         kb = _memory_kb.get(col)
     if kb is not None:
-        model = _get_embedding_model()
-        qv = list(model.embed([query]))[0].tolist()
+        qv = _get_query_vector(query)
         results = _memory_search(kb, qv, limit, threshold=0.35)
-        logger.debug(f"search_course in-memory: {len(results)} hits for {query!r}")
+        elapsed_ms = (time.monotonic() - t_total) * 1000
+        scores = [r["score"] for r in results]
+        logger.info(
+            f"[Search] IN-MEMORY → {len(results)} hits in {elapsed_ms:.1f}ms "
+            f"scores={scores} col={col!r}"
+        )
+        for i, r in enumerate(results):
+            logger.debug(f"  [hit {i+1}] page={r.get('page')} score={r['score']} | {r['content'][:120]!r}")
         return results
 
     # Fallback: Qdrant with TTL cache
     cache_key = (col, query, limit)
     cached = _cache_get(cache_key)
     if cached is not None:
-        logger.debug(f"search_course cache hit for query={query!r} col={col!r}")
+        elapsed_ms = (time.monotonic() - t_total) * 1000
+        logger.info(f"[Search] RESULT-CACHE HIT → {len(cached)} results in {elapsed_ms:.1f}ms col={col!r}")
         return cached
 
     with _missing_cols_lock:
         if col in _missing_cols:
+            logger.info(f"[Search] SKIPPED — collection {col!r} is known-missing")
             return []
 
-    model = _get_embedding_model()
-    query_vector = list(model.embed([query]))[0].tolist()
+    query_vector = _get_query_vector(query)
 
+    logger.info(f"[Search] Sending vector search → Qdrant col={col!r} hnsw_ef=32 threshold=0.35")
     try:
         result = _qdrant_request(
             "POST",
@@ -511,7 +554,7 @@ def search_course(institute_id: str, course_id: str, query: str, limit: int = 3)
         if e.response.status_code == 404:
             with _missing_cols_lock:
                 _missing_cols.add(col)
-            logger.info(f"Collection {col!r} does not exist — no KB indexed yet, returning empty results.")
+            logger.info(f"[Search] 404 — collection {col!r} does not exist, caching as missing")
             return []
         raise
 
@@ -524,5 +567,14 @@ def search_course(institute_id: str, course_id: str, query: str, limit: int = 3)
         }
         for h in result.get("result", [])
     ]
+    elapsed_ms = (time.monotonic() - t_total) * 1000
+    scores = [r["score"] for r in results]
+    logger.info(
+        f"[Search] QDRANT → {len(results)} hits in {elapsed_ms:.1f}ms "
+        f"scores={scores} col={col!r}"
+    )
+    for i, r in enumerate(results):
+        logger.debug(f"  [hit {i+1}] page={r.get('page')} score={r['score']} title={r.get('title')!r} | {r['content'][:120]!r}")
+
     _cache_set(cache_key, results)
     return results
