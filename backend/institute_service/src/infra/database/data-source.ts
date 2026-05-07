@@ -45,10 +45,10 @@ export const dataSourceOptions: DataSourceOptions = {
     RecordingCategory,
     RecordingCourseAssignment,
   ],
-  migrations: [__dirname + '/migrations/*.ts'],
-  synchronize: false, // Always use migrations in production
+  migrations: [__dirname + '/migrations/*.{ts,js}'],
+  synchronize: false,
   logging: process.env.NODE_ENV === 'development',
-  migrationsRun: true, // Don't auto-run migrations
+  migrationsRun: true,
   ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
 };
 
