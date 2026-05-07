@@ -99,21 +99,10 @@ const StudentHeader: React.FC = () => {
             {/* Cross Icon */}
           </button>
 
-          <Link href="/" className="lg:hidden">
-            <Image
-              width={154}
-              height={32}
-              className="dark:hidden"
-              src="./images/logo/logo.svg"
-              alt="Logo"
-            />
-            <Image
-              width={154}
-              height={32}
-              className="hidden dark:block"
-              src="./images/logo/logo-dark.svg"
-              alt="Logo"
-            />
+          <Link href="/" className="lg:hidden flex items-center">
+            <span className="text-2xl font-black tracking-tighter text-brand-950 dark:text-white drop-shadow-sm">
+              SmartEdX
+            </span>
           </Link>
 
           <button
