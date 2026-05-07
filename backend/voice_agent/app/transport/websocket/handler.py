@@ -91,14 +91,8 @@ async def websocket_endpoint(
     if greet:
         greeting_trigger = types.Content(
             parts=[types.Part(text=(
-                "[SESSION STARTED] This is a LIVE voice conversation — respond like a real person talking.\n"
-                "Rules for this session:\n"
-                "- Keep EVERY response to 1-2 short sentences maximum.\n"
-                "- Speak at normal conversational speed.\n"
-                "- No preamble, no filler. Answer directly.\n"
-                "- After each response, STOP SPEAKING IMMEDIATELY and wait silently for the user. "
-                "Do NOT add follow-up questions or continue talking unprompted.\n"
-                "Now: greet the student in one short sentence and ask what they need. Then STOP and wait."
+                "[SESSION START] Live voice call. Be natural, warm, and brief — like a helpful person on the phone.\n"
+                "Greet in ONE short sentence. Then go silent and wait for the user to speak."
             ))],
             role="user",
         )

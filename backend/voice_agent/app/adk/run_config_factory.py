@@ -20,8 +20,8 @@ _VAD_CONFIG = types.RealtimeInputConfig(
     automatic_activity_detection=types.AutomaticActivityDetection(
         start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_HIGH,
         end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_HIGH,
-        prefix_padding_ms=100,
-        silence_duration_ms=180, # Dropped from 300 to 150ms for lightning-fast turn taking
+        prefix_padding_ms=50,
+        silence_duration_ms=150,
     )
 )
 
@@ -29,7 +29,7 @@ def build_run_config(
     model_name: str,
     *,
     proactivity: bool = False,
-    affective_dialog: bool = False,
+    affective_dialog: bool = True,
 ) -> RunConfig:
     is_native_audio = "native-audio" in model_name.lower()
 

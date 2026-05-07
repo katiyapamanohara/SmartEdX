@@ -34,6 +34,31 @@ from fastembed import TextEmbedding
 
 from app.config import QDRANT_API_KEY, QDRANT_URL
 
+# ── Persistent HTTP client — reuses connections across all Qdrant calls ──
+_http_client: Optional[httpx.Client] = None
+_http_client_lock = Lock()
+
+
+def _get_http_client() -> httpx.Client:
+    global _http_client
+    if _http_client is None:
+        with _http_client_lock:
+            if _http_client is None:
+                _http_client = httpx.Client(
+                    timeout=8.0,
+                    limits=httpx.Limits(
+                        max_keepalive_connections=10,
+                        max_connections=20,
+                        keepalive_expiry=30,
+                    ),
+                )
+    return _http_client
+
+
+# ── Negative collection cache — avoids pre-flight GET on every search ────
+_missing_cols: set[str] = set()
+_missing_cols_lock = Lock()
+
 logger = logging.getLogger(__name__)
 
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
@@ -86,10 +111,9 @@ def _qdrant_headers() -> dict:
 
 def _qdrant_request(method: str, path: str, **kwargs) -> dict:
     url = f"{QDRANT_URL}{path}"
-    with httpx.Client(timeout=30) as client:
-        r = client.request(method, url, headers=_qdrant_headers(), **kwargs)
-        r.raise_for_status()
-        return r.json()
+    r = _get_http_client().request(method, url, headers=_qdrant_headers(), **kwargs)
+    r.raise_for_status()
+    return r.json()
 
 
 def collection_name(institute_id: str, course_id: str) -> str:
@@ -117,6 +141,8 @@ def ensure_collection(col_name: str) -> None:
             },
         )
         logger.info(f"Created Qdrant collection: {col_name!r}")
+    with _missing_cols_lock:
+        _missing_cols.discard(col_name)
 
 
 # ── Text extraction ────────────────────────────────────────────────────
@@ -462,24 +488,33 @@ def search_course(institute_id: str, course_id: str, query: str, limit: int = 3)
         logger.debug(f"search_course cache hit for query={query!r} col={col!r}")
         return cached
 
-    if not collection_exists(col):
-        logger.info(f"Collection {col!r} does not exist — no KB indexed yet, returning empty results.")
-        return []
+    with _missing_cols_lock:
+        if col in _missing_cols:
+            return []
 
     model = _get_embedding_model()
     query_vector = list(model.embed([query]))[0].tolist()
 
-    result = _qdrant_request(
-        "POST",
-        f"/collections/{col}/points/search",
-        json={
-            "vector": query_vector,
-            "limit": limit,
-            "with_payload": True,
-            "score_threshold": 0.35,
-            "params": {"hnsw_ef": 64, "exact": False},
-        },
-    )
+    try:
+        result = _qdrant_request(
+            "POST",
+            f"/collections/{col}/points/search",
+            json={
+                "vector": query_vector,
+                "limit": limit,
+                "with_payload": True,
+                "score_threshold": 0.35,
+                "params": {"hnsw_ef": 32, "exact": False},
+            },
+        )
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            with _missing_cols_lock:
+                _missing_cols.add(col)
+            logger.info(f"Collection {col!r} does not exist — no KB indexed yet, returning empty results.")
+            return []
+        raise
+
     results = [
         {
             "content": h["payload"].get("content", "")[:MAX_CONTENT_CHARS],

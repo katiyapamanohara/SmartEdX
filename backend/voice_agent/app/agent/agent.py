@@ -3,15 +3,16 @@
 import logging
 import threading
 import time
+from typing import Optional
 
-import requests
-from fastembed import TextEmbedding
+import httpx
 from google.adk.agents import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.adk.tools import FunctionTool, ToolContext
 
 from app.agent.api import fetch_institute_config
+from app.qdrant.course_kb import _get_embedding_model
 from app.agent.assessment_tools import evaluate_voice_assessment
 from app.agent.audio_clips import create_audio_clip_tool
 from app.agent.custom_tools import CustomToolHelper
@@ -117,7 +118,25 @@ def end_call(tool_context: ToolContext) -> dict:
 
 # ── Qdrant knowledge base search ────────────────────────────────────
 
-_embedding_model = TextEmbedding("sentence-transformers/all-MiniLM-L6-v2") if QDRANT_KB_ENABLED else None
+# Persistent HTTP client for institute-level KB — reuses TCP connections.
+_kb_http_client: Optional[httpx.Client] = None
+_kb_http_lock = threading.Lock()
+
+
+def _get_kb_http_client() -> httpx.Client:
+    global _kb_http_client
+    if _kb_http_client is None:
+        with _kb_http_lock:
+            if _kb_http_client is None:
+                _kb_http_client = httpx.Client(
+                    timeout=5.0,
+                    limits=httpx.Limits(
+                        max_keepalive_connections=5,
+                        max_connections=10,
+                        keepalive_expiry=30,
+                    ),
+                )
+    return _kb_http_client
 
 
 def search_knowledgebase(query: str, limit: int = 3) -> dict:
@@ -132,16 +151,17 @@ def search_knowledgebase(query: str, limit: int = 3) -> dict:
     Returns:
         A dict with matching results from the knowledge base.
     """
-    if not QDRANT_KB_ENABLED or _embedding_model is None:
+    if not QDRANT_KB_ENABLED:
         return {"status": "error", "message": "Knowledge base is not enabled."}
     try:
-        query_vector = list(_embedding_model.embed([query]))[0].tolist()
+        model = _get_embedding_model()
+        query_vector = list(model.embed([query]))[0].tolist()
 
         headers = {"Content-Type": "application/json"}
         if QDRANT_API_KEY:
             headers["api-key"] = QDRANT_API_KEY
 
-        search_result = requests.post(
+        search_result = _get_kb_http_client().post(
             f"{QDRANT_URL}/collections/{QDRANT_COLLECTION_NAME}/points/search",
             headers=headers,
             json={
@@ -149,9 +169,8 @@ def search_knowledgebase(query: str, limit: int = 3) -> dict:
                 "limit": limit,
                 "with_payload": True,
                 "score_threshold": 0.35,
-                "params": {"hnsw_ef": 64, "exact": False},
+                "params": {"hnsw_ef": 32, "exact": False},
             },
-            timeout=15,
         )
         search_result.raise_for_status()
         hits = search_result.json().get("result", [])
@@ -534,7 +553,7 @@ def get_runner_for_teacher(
                 )
             else:
                 # No course_id supplied — search the general institute KB if available
-                if QDRANT_KB_ENABLED and _embedding_model is not None:
+                if QDRANT_KB_ENABLED:
                     return search_knowledgebase(query=query, limit=limit)
                 return {"status": "error", "message": "Please provide a course_id to search course materials."}
 

@@ -92,10 +92,10 @@ TRANSPORT_SIP_WS = os.getenv("TRANSPORT_SIP_WS", "false").lower() == "true"
 DASHBOARD_ENABLED = os.getenv("DASHBOARD_ENABLED", "true").lower() == "true"
 
 # ── Audio / Barge-in ────────────────────────────────────────────────
-HARD_MUTE_SECONDS = float(os.getenv("HARD_MUTE_SECONDS", "2.5"))
-SILENCE_FLUSH_MS = int(os.getenv("SILENCE_FLUSH_MS", "1500"))
-INTERRUPT_SILENCE_MS = int(os.getenv("INTERRUPT_SILENCE_MS", "500"))
-SILENCE_END_FRAMES = int(os.getenv("SILENCE_END_FRAMES", "75"))
+HARD_MUTE_SECONDS = float(os.getenv("HARD_MUTE_SECONDS", "1.5"))
+SILENCE_FLUSH_MS = int(os.getenv("SILENCE_FLUSH_MS", "1000"))
+INTERRUPT_SILENCE_MS = int(os.getenv("INTERRUPT_SILENCE_MS", "250"))
+SILENCE_END_FRAMES = int(os.getenv("SILENCE_END_FRAMES", "50"))
 INTERRUPT_TIMEOUT_SECONDS = float(os.getenv("INTERRUPT_TIMEOUT_SECONDS", "8.0"))
 MIN_USER_TURNS_BEFORE_END_CALL = int(os.getenv("MIN_USER_TURNS_BEFORE_END_CALL", "3"))
 END_CALL_INTERRUPT_COOLDOWN = float(os.getenv("END_CALL_INTERRUPT_COOLDOWN", "5.0"))
