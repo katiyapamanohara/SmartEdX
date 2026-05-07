@@ -6,7 +6,7 @@ metadata:
   labels:
     app: voice-agent
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: voice-agent
@@ -44,29 +44,4 @@ spec:
       targetPort: 8000
       protocol: TCP
   type: ClusterIP
----
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: voice-agent-hpa
-  namespace: prod
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: voice-agent
-  minReplicas: 3
-  maxReplicas: 5
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 70
-    - type: Resource
-      resource:
-        name: memory
-        target:
-          type: Utilization
-          averageUtilization: 80
+
