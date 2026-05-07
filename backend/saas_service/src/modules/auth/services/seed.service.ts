@@ -4,6 +4,7 @@ import { User } from '../entities/user.entity';
 import {
   UserRepository,
   RoleRepository,
+  InstituteRoleRepository,
 } from '../../../infra/database/repositories';
 
 @Injectable()
@@ -13,13 +14,32 @@ export class SeedService {
   constructor(
     private readonly userRepository: UserRepository,
     private readonly roleRepository: RoleRepository,
+    private readonly instituteRoleRepository: InstituteRoleRepository,
   ) {}
 
   /**
    * Seed default admin users if they don't exist
    */
+  private async seedInstituteRoles(): Promise<void> {
+    const instituteRoles = [
+      { name: 'instructor', description: 'Instructor who can create and manage courses' },
+      { name: 'student', description: 'Student enrolled in courses' },
+      { name: 'admin', description: 'Institute administrator' },
+    ];
+
+    for (const roleData of instituteRoles) {
+      const existing = await this.instituteRoleRepository.findByName(roleData.name);
+      if (!existing) {
+        await this.instituteRoleRepository.create(roleData);
+        this.logger.log(`✅ Created institute role: ${roleData.name}`);
+      }
+    }
+  }
+
   async seedAdminUsers(): Promise<void> {
     try {
+      await this.seedInstituteRoles();
+
       // Get or create roles (self-healing in case migrations haven't run)
       const adminRole = await this.roleRepository.findOrCreate(
         'admin',

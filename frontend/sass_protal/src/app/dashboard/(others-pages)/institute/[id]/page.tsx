@@ -521,8 +521,7 @@ function InstituteCustomizeContent() {
               <div className="mt-8 p-4 bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-900/20">
                 <h4 className="text-sm font-bold text-blue-800 dark:text-blue-400 mb-2">Instructions</h4>
                 <p className="text-xs text-blue-600 dark:text-blue-500 leading-relaxed">
-                  Enter the email address of the user you want to assign. The user must already have a SmartEdX account. 
-                  Once assigned, the user will have access to this institute with the specified role.
+                  Enter the email address of the user you want to assign. Once assigned, the user will have access to this institute with the specified role.
                 </p>
               </div>
 
