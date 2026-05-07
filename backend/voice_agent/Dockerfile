@@ -8,7 +8,7 @@ COPY pyproject.toml README.md ./
 RUN pip install --no-cache-dir .
 
 COPY app/ ./app/
-COPY assets/ ./assets/
+
 
 EXPOSE 8000
 
