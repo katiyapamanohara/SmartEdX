@@ -47,38 +47,40 @@ export function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 md:h-20 flex items-center justify-between gap-4">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 group shrink-0">
-          <span className="text-xl font-bold bg-clip-text text-transparent bg-linear-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400 group-hover:from-indigo-600 group-hover:to-violet-600 transition-all">
+          <span className="text-xl md:text-2xl font-black tracking-tighter bg-clip-text text-transparent bg-brand-950 dark:bg-white drop-shadow-sm transition-all hover:scale-105">
             SmartEdX
           </span>
         </Link>
 
         {/* Desktop nav — hidden on mobile */}
-        <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600 dark:text-gray-300">
+        <nav className="hidden lg:flex items-center gap-8 text-sm font-medium text-gray-600 dark:text-gray-300">
           {["Features", "Pricing", "FAQ"].map((item) => (
             <Link
               key={item}
               href={`#${item.toLowerCase()}`}
-              className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors relative group"
+              className="hover:text-brand-500 dark:hover:text-brand-400 transition-colors relative group"
             >
               {item}
-              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-indigo-600 transition-all group-hover:w-full" />
+              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-500 transition-all group-hover:w-full" />
             </Link>
           ))}
         </nav>
 
         {/* Right side */}
         <div className="flex items-center gap-2 sm:gap-3">
-          <ThemeToggle />
+          <div className="relative z-50 bg-white/50 dark:bg-gray-900/50 backdrop-blur-md p-1.5 rounded-full border border-gray-200 dark:border-gray-800">
+            <ThemeToggle />
+          </div>
 
           {/* Desktop auth — hidden on mobile */}
           {!loading && (
-            <div className="hidden md:flex items-center gap-3">
+            <div className="hidden lg:flex items-center gap-3">
               {isAuthenticated ? (
                 <>
                   <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                     <Link
                       href="/dashboard"
-                      className="px-5 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 transition-all"
+                      className="px-5 py-2.5 bg-brand-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-brand-500/30 hover:bg-brand-600 transition-all"
                     >
                       Dashboard
                     </Link>
@@ -89,14 +91,14 @@ export function Navbar() {
                 <>
                   <Link
                     href="/signin"
-                    className="text-sm font-bold text-gray-700 dark:text-gray-200 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                    className="text-sm font-bold text-gray-700 dark:text-gray-200 hover:text-brand-500 dark:hover:text-brand-400 transition-colors"
                   >
                     Log in
                   </Link>
                   <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                     <Link
                       href="/signin"
-                      className="px-5 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 transition-all"
+                      className="px-5 py-2.5 bg-brand-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-brand-500/30 hover:bg-brand-600 transition-all"
                     >
                       Get Started
                     </Link>
@@ -109,7 +111,7 @@ export function Navbar() {
           {/* Hamburger — mobile only */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="lg:hidden p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             aria-label="Toggle menu"
           >
             {mobileMenuOpen ? (
@@ -133,7 +135,7 @@ export function Navbar() {
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2, ease: "easeInOut" }}
-            className="md:hidden overflow-hidden border-t border-gray-200/50 dark:border-gray-800/50 bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl"
+            className="lg:hidden overflow-hidden border-t border-gray-200/50 dark:border-gray-800/50 bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl"
           >
             <div className="px-4 py-3 flex flex-col gap-1">
               {["Features", "Pricing", "FAQ"].map((item) => (
@@ -141,7 +143,7 @@ export function Navbar() {
                   key={item}
                   href={`#${item.toLowerCase()}`}
                   onClick={() => setMobileMenuOpen(false)}
-                  className="px-3 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-lg transition-colors"
+                  className="px-3 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:text-brand-500 dark:hover:text-brand-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-lg transition-colors"
                 >
                   {item}
                 </Link>
@@ -153,7 +155,7 @@ export function Navbar() {
                     <Link
                       href="/dashboard"
                       onClick={() => setMobileMenuOpen(false)}
-                      className="w-full px-3 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl text-center hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-600/30"
+                      className="w-full px-3 py-2.5 bg-brand-500 text-white text-sm font-bold rounded-xl text-center hover:bg-brand-600 transition-colors shadow-lg shadow-brand-500/30"
                     >
                       Dashboard
                     </Link>
@@ -162,14 +164,14 @@ export function Navbar() {
                       <Link
                         href="/signin"
                         onClick={() => setMobileMenuOpen(false)}
-                        className="px-3 py-2.5 text-sm font-bold text-gray-700 dark:text-gray-200 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-lg transition-colors"
+                        className="px-3 py-2.5 text-sm font-bold text-gray-700 dark:text-gray-200 hover:text-brand-500 dark:hover:text-brand-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-lg transition-colors"
                       >
                         Log in
                       </Link>
                       <Link
                         href="/signin"
                         onClick={() => setMobileMenuOpen(false)}
-                        className="w-full px-3 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl text-center hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-600/30"
+                        className="w-full px-3 py-2.5 bg-brand-500 text-white text-sm font-bold rounded-xl text-center hover:bg-brand-600 transition-colors shadow-lg shadow-brand-500/30"
                       >
                         Get Started
                       </Link>

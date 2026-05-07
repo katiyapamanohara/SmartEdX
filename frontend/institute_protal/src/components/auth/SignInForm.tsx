@@ -35,16 +35,16 @@ export default function SignInForm() {
   };
 
   return (
-    <div className="flex flex-col flex-1 lg:w-1/2 w-full">
-      <div className="w-full max-w-md sm:pt-10 mx-auto mb-5">
+    <div className="flex flex-col flex-1 lg:w-1/2 w-full p-6 sm:p-12 md:p-16 lg:p-20 xl:p-24 transition-all duration-300">
+      <div className="w-full max-w-md mx-auto mb-8 sm:mb-10">
       </div>
-      <div className="flex flex-col justify-center flex-1 w-full max-w-md mx-auto">
-        <div>
-          <div className="mb-5 sm:mb-8">
-            <h1 className="mb-2 font-semibold text-gray-800 text-title-sm dark:text-white/90 sm:text-title-md">
+      <div className="flex flex-col justify-center flex-1 w-full max-w-md mx-auto animate-fade-in-up">
+        <div className="bg-white dark:bg-gray-800/50 backdrop-blur-xl border border-gray-100 dark:border-gray-800 p-8 sm:p-10 rounded-2xl shadow-xl dark:shadow-2xl transition-all duration-300">
+          <div className="mb-8">
+            <h1 className="mb-3 font-bold text-gray-900 text-3xl dark:text-white tracking-tight">
               Sign In
             </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-base text-gray-500 dark:text-gray-400">
               Sign in to access your institute portal.
             </p>
           </div>
