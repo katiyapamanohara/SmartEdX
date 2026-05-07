@@ -77,17 +77,8 @@ def unregister_call_guard(session_id: str) -> None:
 
 
 def end_call(tool_context: ToolContext) -> dict:
-    """End the current phone call. ONLY call this tool when the user has EXPLICITLY said goodbye, bye, hang up, or clearly indicated they want to end the call with an unambiguous farewell.
-
-    DO NOT call this tool if:
-    - The user's speech was unclear, garbled, or too short to understand.
-    - You are unsure what the user said.
-    - The user asked a question or made a request.
-    - There was silence or background noise.
-    - You just want to wrap up — always wait for the user to end the conversation.
-
-    Returns:
-        Status of the call termination.
+    """End the current call. Only call when the user has EXPLICITLY said goodbye or asked to hang up.
+    Never call on unclear speech, silence, or after answering a question.
     """
     session_id = tool_context.session.id if tool_context.session else None
     with _guard_lock:
@@ -454,15 +445,13 @@ def get_runner_for_course(
 
     system_instructions = all_instructions + (
         f"You are an AI tutor for the course '{course_name}'.\n"
-        f"Your role is to help students understand the course material and answer their questions.\n"
-        f"- Use the search_course_material tool to look up relevant information before answering.\n"
-        f"- Give clear, concise, and helpful explanations based on the retrieved content.\n"
-        f"- Cite the page number when referencing specific material (e.g. 'According to page 3...').\n"
-        f"- If the answer is not in the course material, say so honestly and suggest the student\n"
-        f"  consult their teacher or course notes.\n"
-        f"- Be encouraging and supportive — you are a tutor, not just a search engine.\n"
-        f"\nCOURSE MATERIAL SEARCH: Only call search_course_material if the user asks a specific question\n"
-        f"about facts, topics, or details from the course content. Do not use it for general conversation."
+        f"Help students understand the course material concisely.\n"
+        f"- For greetings, chitchat, or simple follow-ups: answer directly WITHOUT calling any tool.\n"
+        f"- ONLY call search_course_material when the student asks a factual question about specific\n"
+        f"  topics, concepts, or details from the course. Do NOT search for every message.\n"
+        f"- When you do search, cite the page number (e.g. 'According to page 3...').\n"
+        f"- If the answer is not in the course material, say so and suggest consulting the teacher.\n"
+        f"- Be encouraging and brief — 1-2 sentences unless detail is genuinely needed."
     )
 
     safe_id = course_id.replace("-", "_")
@@ -472,7 +461,6 @@ def get_runner_for_course(
         tools=[
             FunctionTool(func=search_course_material),
             FunctionTool(func=end_call),
-            FunctionTool(func=evaluate_voice_assessment),
         ],
         instruction=system_instructions,
     )
@@ -560,13 +548,11 @@ def get_runner_for_teacher(
     system_instructions = all_instructions + (
         "You are an AI voice assistant for teachers at SmartEdX.\n"
         "Your role is to help teachers with course content, lesson planning, and curriculum questions.\n"
-        "- Use the search_course_material tool to look up information from course materials in Qdrant.\n"
+        "- For greetings or general questions: answer directly WITHOUT calling any tool.\n"
+        "- ONLY call search_course_material when the teacher asks about specific course content or material.\n"
         "- When searching, provide a course_id if the teacher mentions a specific course.\n"
-        "- Give clear, concise answers based on the retrieved content.\n"
-        "- Cite page numbers when referencing specific material.\n"
-        "- If the answer is not in the course material, say so honestly.\n"
-        "- Be professional, supportive, and focused on helping the teacher.\n"
-        "\nCOURSE MATERIAL SEARCH: Use search_course_material before answering questions about course content."
+        "- Give concise answers — 1-2 sentences unless detail is required. Cite page numbers.\n"
+        "- If the answer is not in the course material, say so honestly."
     )
 
     safe_id = teacher_id.replace("-", "_")

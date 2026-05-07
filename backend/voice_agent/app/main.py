@@ -379,6 +379,13 @@ async def course_qa_ws_endpoint(
         course_name=course_name or course_id,
         session_service=session_service,
     )
+
+    # Kick off in-memory KB preload in the background so the first search
+    # hits RAM instead of making a Qdrant round-trip.
+    if COURSE_KB_ENABLED:
+        from app.qdrant.course_kb import preload_course_kb
+        asyncio.create_task(preload_course_kb(institute_id, course_id))
+
     await websocket_endpoint(
         websocket=websocket,
         institute_id=institute_id,

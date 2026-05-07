@@ -55,6 +55,11 @@ MINIO_URL = os.getenv("MINIO_URL", "http://localhost:9000")
 MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "")
 
+# ── Language features ────────────────────────────────────────────────
+# Set true to include Sinhala number-pronunciation rules in every agent's
+# system prompt (~350 tokens).  Only needed for Sinhala-language deployments.
+SINHALA_RULES_ENABLED = os.getenv("SINHALA_RULES_ENABLED", "true").lower() == "true"
+
 # ── Course Knowledge Base (Qdrant) ───────────────────────────────────
 # Separate collection that stores course-specific content (PDFs, Word docs).
 # Enabled independently of the general KB so course Q&A works even when

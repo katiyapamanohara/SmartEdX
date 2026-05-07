@@ -42,7 +42,9 @@ def build_run_config(
             input_audio_transcription=types.AudioTranscriptionConfig(),
             output_audio_transcription=types.AudioTranscriptionConfig(),
             session_resumption=types.SessionResumptionConfig(),
-            proactivity=(types.ProactivityConfig(proactive_audio=True) if proactivity else None),
+            # Always set explicitly — leaving None defaults to proactive_audio=True in Gemini Live,
+            # which causes the model to spontaneously speak after ~30s of user silence.
+            proactivity=types.ProactivityConfig(proactive_audio=proactivity),
             enable_affective_dialog=affective_dialog if affective_dialog else None,
         )
         logger.debug(
@@ -69,4 +71,5 @@ def build_sip_run_config() -> RunConfig:
         input_audio_transcription=types.AudioTranscriptionConfig(),
         output_audio_transcription=types.AudioTranscriptionConfig(),
         session_resumption=types.SessionResumptionConfig(),
+        proactivity=types.ProactivityConfig(proactive_audio=False),
     )
