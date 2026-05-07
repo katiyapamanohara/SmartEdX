@@ -142,12 +142,33 @@ async def lifespan(app: FastAPI):
         logger.info("Native SIP server disabled (SIP_ENABLED=false)")
 
     _warmup_embeddings()
+    _check_qdrant()
 
     yield
 
     if sip_enabled:
         logger.info("Stopping native SIP server...")
         await stop_native_sip_server()
+
+def _check_qdrant():
+    """Log Qdrant connectivity status at startup."""
+    from app.config import COURSE_KB_ENABLED, QDRANT_KB_ENABLED, QDRANT_URL
+    if not (COURSE_KB_ENABLED or QDRANT_KB_ENABLED):
+        logger.info("Qdrant check skipped (KB disabled)")
+        return
+    try:
+        import httpx
+        from app.config import QDRANT_API_KEY
+        headers = {"Content-Type": "application/json"}
+        if QDRANT_API_KEY:
+            headers["api-key"] = QDRANT_API_KEY
+        r = httpx.get(f"{QDRANT_URL}/collections", headers=headers, timeout=5.0)
+        r.raise_for_status()
+        names = [c["name"] for c in r.json().get("result", {}).get("collections", [])]
+        logger.info(f"Qdrant connected OK — {QDRANT_URL} | collections={names}")
+    except Exception as e:
+        logger.error(f"Qdrant connection FAILED — {QDRANT_URL} | {e}")
+
 
 def _warmup_embeddings():
     """Ensure FastEmbed model is loaded in the background to avoid first-query latency."""
