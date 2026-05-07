@@ -87,6 +87,7 @@ export default function VoiceModal({
   const [avatarState, setAvatarState] = useState<AvatarState>("idle");
   const [micMuted, setMicMuted]       = useState(false);
   const [errorMsg, setErrorMsg]       = useState("");
+  const [captionText, setCaptionText] = useState("");
   const instName = context.institute_name ?? "";
   const instLogo = instituteLogo ?? "";
   const [screenSharing, setScreenSharing] = useState(false);
@@ -206,13 +207,24 @@ export default function VoiceModal({
 
   // ── Parse WebSocket events ─────────────────────────────────────────────────
   const handleEvent = useCallback((event: Record<string, unknown>) => {
-    if (event.interrupted === true) { stopAllAudio(); return; }
+    if (event.interrupted === true) { stopAllAudio(); setCaptionText(""); return; }
 
     if (event.type === "reminder") return;
+
+    // outputTranscription: text form of what the native-audio model spoke
+    const outTranscription = event.outputTranscription as Record<string, unknown> | undefined;
+    if (outTranscription?.text && typeof outTranscription.text === "string") {
+      setCaptionText(outTranscription.text);
+    }
 
     const parts = ((event.content as any)?.parts as any[]) ?? [];
     for (const p of parts) {
       if (p?.inlineData?.data) enqueueAudio(p.inlineData.data);
+
+      // Final text response from model (TEXT-modality or alongside audio)
+      if (typeof p?.text === "string" && p.text.trim() && !p.thought) {
+        setCaptionText(p.text.trim());
+      }
 
       // Evaluation result from voice agent
       const fnResp = p?.functionResponse as Record<string, unknown> | undefined;
@@ -689,6 +701,14 @@ export default function VoiceModal({
               </span>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Caption — model's text response (visible when using text-modality or audio transcription) */}
+      {captionText && step === "session" && (
+        <div className="mb-4 w-full max-w-sm px-6 text-center text-sm leading-relaxed"
+          style={{ color: isDark ? "#d1d5db" : "#374151" }}>
+          {captionText}
         </div>
       )}
 
