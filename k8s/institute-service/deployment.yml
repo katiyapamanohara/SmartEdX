@@ -20,7 +20,7 @@ spec:
           image: us-central1-docker.pkg.dev/lively-synapse-495509-t0/smartedx-docker-repo/institute-service:latest
           imagePullPolicy: Always
           ports:
-            - containerPort: 5002
+            - containerPort: 5003
           envFrom:
             - secretRef:
                 name: institute-service-secret
@@ -34,14 +34,14 @@ spec:
           livenessProbe:
             httpGet:
               path: /api/institutes/health
-              port: 5002
+              port: 5003
             initialDelaySeconds: 40
             periodSeconds: 10
             failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /api/institutes/health
-              port: 5002
+              port: 5003
             initialDelaySeconds: 20
             periodSeconds: 5
             failureThreshold: 3
@@ -58,8 +58,8 @@ spec:
     app: institute-service
   ports:
     - name: http
-      port: 5002
-      targetPort: 5002
+      port: 5003
+      targetPort: 5003
       protocol: TCP
   type: ClusterIP
 ---
