@@ -59,11 +59,7 @@ function InstituteCustomizeContent() {
 
   // Assign User State
   const [assignEmail, setAssignEmail] = useState("");
-  const [assignRole, setAssignRole] = useState("instructor");
-  const [rolesList, setRolesList] = useState<any[]>([
-    { id: 'default-1', name: 'instructor' },
-    { id: 'default-2', name: 'student' }
-  ]);
+  const [assignRole] = useState("instructor");
   const [isAssigning, setIsAssigning] = useState(false);
   const [assignedUsers, setAssignedUsers] = useState<any[]>([]);
   const [isUsersLoading, setIsUsersLoading] = useState(false);
@@ -107,28 +103,6 @@ function InstituteCustomizeContent() {
     fetchInstituteDetails();
   }, [instituteId]);
 
-  useEffect(() => {
-    const fetchRoles = async () => {
-      try {
-        const roles = await authService.getRoles();
-        // Filter roles to only include 'instructor'
-        const allowedRoles = ['instructor'];
-        const filteredRoles = roles.filter((r: any) => allowedRoles.includes(r.name));
-        
-        setRolesList(filteredRoles);
-        
-        if (filteredRoles.length > 0) {
-          // Default to instructor if available, otherwise first available
-          const instructorRole = filteredRoles.find((r: any) => r.name === 'instructor');
-          setAssignRole(instructorRole?.name || filteredRoles[0].name);
-        }
-      } catch (error) {
-        console.error("Error fetching roles:", error);
-      }
-    };
-
-    fetchRoles();
-  }, []);
 
   const fetchUsers = async () => {
     if (!instituteId) return;
@@ -488,17 +462,12 @@ function InstituteCustomizeContent() {
                   value={assignEmail} 
                   onChange={setAssignEmail} 
                 />
-                <Select 
-                  label="Assign Role" 
-                  value={assignRole} 
-                  onChange={setAssignRole}
-                >
-                  {rolesList.map((role) => (
-                    <option key={role.id} value={role.name}>
-                      {role.name.charAt(0).toUpperCase() + role.name.slice(1)}
-                    </option>
-                  ))}
-                </Select>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Assign Role</label>
+                  <div className="px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl cursor-not-allowed select-none">
+                    {assignRole.charAt(0).toUpperCase() + assignRole.slice(1)}
+                  </div>
+                </div>
               </div>
 
               <div className="flex justify-start">
