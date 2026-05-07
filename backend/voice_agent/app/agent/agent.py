@@ -140,13 +140,7 @@ def _get_kb_http_client() -> httpx.Client:
     return _kb_http_client
 
 
-def search_knowledgebase(query: str, limit: int = 2) -> dict:
-    """Search the knowledge base. Call this for any domain-specific question.
-
-    Args:
-        query: What to search for.
-        limit: Max results (default 2).
-    """
+def _search_kb_sync(query: str, limit: int) -> dict:
     if not QDRANT_KB_ENABLED:
         return {"status": "error", "message": "Knowledge base is not enabled."}
     t_total = time.monotonic()
@@ -200,6 +194,17 @@ def search_knowledgebase(query: str, limit: int = 2) -> dict:
     except Exception as e:
         logger.error(f"[KB Search] FAILED: {e}", exc_info=True)
         return {"status": "error", "message": "Failed to search knowledge base."}
+
+
+async def search_knowledgebase(query: str, limit: int = 2) -> dict:
+    """Search the knowledge base. Call this for any domain-specific question.
+
+    Args:
+        query: What to search for.
+        limit: Max results (default 2).
+    """
+    import asyncio
+    return await asyncio.to_thread(_search_kb_sync, query=query, limit=limit)
 
 
 # ── Shared tools (not institute-specific) ───────────────────────────
@@ -441,7 +446,7 @@ def get_runner_for_course(
     logger.info(f"Building course Q&A agent for course: {course_name!r} ({course_id})")
 
     # Build a course-specific search tool via closure so course_id is baked in.
-    def search_course_material(query: str, limit: int = 2) -> dict:
+    async def search_course_material(query: str, limit: int = 2) -> dict:
         """Search course material. Call immediately for any course-content question.
 
         Args:
@@ -451,9 +456,10 @@ def get_runner_for_course(
         if not COURSE_KB_ENABLED:
             return {"status": "error", "message": "Course knowledge base is not enabled."}
         try:
+            import asyncio
             from app.qdrant.course_kb import search_course
 
-            results = search_course(institute_id=institute_id, course_id=course_id, query=query, limit=limit)
+            results = await asyncio.to_thread(search_course, institute_id=institute_id, course_id=course_id, query=query, limit=limit)
             if not results:
                 return {
                     "status": "no_results",
@@ -532,7 +538,7 @@ def get_runner_for_teacher(
 
     logger.info(f"Building teacher agent for institute={institute_id} teacher={teacher_id}")
 
-    def search_course_material(query: str, course_id: str = "", limit: int = 2) -> dict:
+    async def search_course_material(query: str, course_id: str = "", limit: int = 2) -> dict:
         """Search course materials. Call immediately for any course-content question.
 
         Args:
@@ -543,10 +549,12 @@ def get_runner_for_teacher(
         if not COURSE_KB_ENABLED:
             return {"status": "error", "message": "Course knowledge base is not enabled."}
         try:
+            import asyncio
             from app.qdrant.course_kb import search_course
 
             if course_id:
-                results = search_course(
+                results = await asyncio.to_thread(
+                    search_course,
                     institute_id=institute_id,
                     course_id=course_id,
                     query=query,
@@ -555,7 +563,7 @@ def get_runner_for_teacher(
             else:
                 # No course_id supplied — search the general institute KB if available
                 if QDRANT_KB_ENABLED:
-                    return search_knowledgebase(query=query, limit=limit)
+                    return await asyncio.to_thread(search_knowledgebase, query=query, limit=limit)
                 return {"status": "error", "message": "Please provide a course_id to search course materials."}
 
             if not results:
