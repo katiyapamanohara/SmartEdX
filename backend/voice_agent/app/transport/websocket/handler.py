@@ -388,17 +388,33 @@ async def websocket_endpoint(
                 logger.debug(f"WS {session_id}: audio injection task ended: {e}")
                 break
 
-    tasks = [upstream_task(), downstream_task()]
+    all_tasks = [
+        asyncio.create_task(upstream_task()),
+        asyncio.create_task(downstream_task()),
+    ]
     if audio_clip_queue is not None:
-        tasks.append(audio_clip_injection_task())
+        all_tasks.append(asyncio.create_task(audio_clip_injection_task()))
 
     try:
-        await asyncio.gather(*tasks)
+        # Stop all tasks as soon as any one finishes (e.g. Gemini connection drops)
+        done, pending = await asyncio.wait(all_tasks, return_when=asyncio.FIRST_COMPLETED)
+        for t in pending:
+            t.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+        for t in done:
+            if not t.cancelled():
+                exc = t.exception()
+                if exc is not None and not isinstance(exc, WebSocketDisconnect):
+                    raise exc
     except WebSocketDisconnect:
         logger.debug("Client disconnected normally")
     except Exception as e:
         logger.error(f"Streaming error: {e}", exc_info=True)
     finally:
+        for t in all_tasks:
+            if not t.done():
+                t.cancel()
+        await asyncio.gather(*all_tasks, return_exceptions=True)
         if audio_clip_queue is not None:
             unregister_session_audio_queue(session_id)
         await mgr.finalize()

@@ -92,13 +92,19 @@ def _cache_set(key: tuple, results: list) -> None:
                 del _search_cache[k]
 
 _embedding_model: Optional[TextEmbedding] = None
+_embedding_model_lock = Lock()
 
 
 def _get_embedding_model() -> TextEmbedding:
     global _embedding_model
     if _embedding_model is None:
-        logger.info(f"Loading FastEmbed model: {EMBEDDING_MODEL}")
-        _embedding_model = TextEmbedding(EMBEDDING_MODEL)
+        with _embedding_model_lock:
+            if _embedding_model is None:
+                logger.info(f"Loading FastEmbed model: {EMBEDDING_MODEL}")
+                _embedding_model = TextEmbedding(EMBEDDING_MODEL)
+                # Force ONNX runtime to load now so first embed() call is fast
+                list(_embedding_model.embed(["warmup"]))
+                logger.info("FastEmbed model fully loaded")
     return _embedding_model
 
 
