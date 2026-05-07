@@ -383,40 +383,32 @@ def collection_exists(col_name: str) -> bool:
         return False
 
 
-
-
 def search_course(institute_id: str, course_id: str, query: str, limit: int = 3) -> list[dict]:
-    """Semantic search within a course's dedicated Qdrant collection.
-
-    Args:
-        institute_id: Institute UUID (part of the collection name).
-        course_id:    Course UUID (part of the collection name).
-        query:        Natural-language search query.
-        limit:        Maximum number of results to return.
-
-    Returns:
-        List of dicts with keys: content, page, title, score.
-    """
     col = collection_name(institute_id, course_id)
     t_total = time.monotonic()
+
     logger.info(f"[Search] query={query!r} col={col!r} limit={limit}")
 
-    # Result-level TTL cache — avoids repeated Qdrant round-trips for identical queries
+    # 1. Always ensure collection exists (prevents race condition)
+    try:
+        ensure_collection(col)
+    except Exception as e:
+        logger.warning(f"[Search] ensure_collection failed: {e}")
+
+    # 2. Cache
     cache_key = (col, query, limit)
     cached = _cache_get(cache_key)
     if cached is not None:
-        elapsed_ms = (time.monotonic() - t_total) * 1000
-        logger.info(f"[Search] CACHE HIT → {len(cached)} results in {elapsed_ms:.1f}ms col={col!r}")
+        logger.info(f"[Search] CACHE HIT → {len(cached)} results")
         return cached
 
-    with _missing_cols_lock:
-        if col in _missing_cols:
-            logger.info(f"[Search] SKIPPED — collection {col!r} is known-missing")
-            return []
+    # 3. DO NOT permanently skip collections (removed _missing_cols logic)
 
+    # 4. Embedding
     query_vector = _get_query_vector(query)
 
-    logger.info(f"[Search] Sending vector search → Qdrant col={col!r} hnsw_ef=32 threshold=0.35")
+    logger.info(f"[Search] Sending vector search → Qdrant col={col!r}")
+
     try:
         result = _qdrant_request(
             "POST",
@@ -425,17 +417,21 @@ def search_course(institute_id: str, course_id: str, query: str, limit: int = 3)
                 "vector": query_vector,
                 "limit": limit,
                 "with_payload": True,
-                "score_threshold": 0.35,
-                "params": {"hnsw_ef": 32, "exact": False},
+                # IMPORTANT: removed score_threshold completely
+                "params": {
+                    "hnsw_ef": 64,
+                    "exact": False
+                },
             },
         )
     except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
-            with _missing_cols_lock:
-                _missing_cols.add(col)
-            logger.info(f"[Search] 404 — collection {col!r} does not exist, caching as missing")
-            return []
-        raise
+        logger.error(f"[Search] Qdrant HTTP error: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"[Search] Unexpected error: {e}")
+        return []
+
+    hits = result.get("result", [])
 
     results = [
         {
@@ -444,16 +440,14 @@ def search_course(institute_id: str, course_id: str, query: str, limit: int = 3)
             "title": h["payload"].get("title", ""),
             "score": round(h["score"], 3),
         }
-        for h in result.get("result", [])
+        for h in hits
     ]
-    elapsed_ms = (time.monotonic() - t_total) * 1000
-    scores = [r["score"] for r in results]
+
     logger.info(
-        f"[Search] QDRANT → {len(results)} hits in {elapsed_ms:.1f}ms "
-        f"scores={scores} col={col!r}"
+        f"[Search] QDRANT → {len(results)} hits in "
+        f"{(time.monotonic() - t_total)*1000:.1f}ms"
     )
-    for i, r in enumerate(results):
-        logger.debug(f"  [hit {i+1}] page={r.get('page')} score={r['score']} title={r.get('title')!r} | {r['content'][:120]!r}")
 
     _cache_set(cache_key, results)
-    return results
+    return results  
+
