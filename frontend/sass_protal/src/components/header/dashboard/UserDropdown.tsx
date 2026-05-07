@@ -61,7 +61,7 @@ export default function UserDropdown() {
           )}
         </span>
 
-        <span className="block mr-1 font-medium text-theme-sm">
+        <span className="hidden sm:block mr-1 font-medium text-theme-sm">
           {isLoading ? (
              <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
           ) : (
