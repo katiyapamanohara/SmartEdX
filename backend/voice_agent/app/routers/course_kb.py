@@ -14,7 +14,16 @@ import logging
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
-from app.qdrant.course_kb import delete_content, ensure_collection, collection_name, index_content, search_course
+from app.qdrant.course_kb import (
+    delete_content,
+    delete_course_collection,
+    ensure_collection,
+    collection_name,
+    index_content,
+    list_course_collections,
+    search_course,
+    search_all_institute_courses,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +45,7 @@ class IndexRequest(BaseModel):
 
 class SearchRequest(BaseModel):
     institute_id: str
-    course_id: str
+    course_id: str = ""  # empty = search all institute courses
     query: str
     limit: int = 5
 
@@ -96,17 +105,51 @@ async def remove_course_content(institute_id: str, course_id: str, content_id: s
     """Delete all Qdrant points for a content_id from the course's collection."""
     try:
         delete_content(institute_id, course_id, content_id)
-        return {"status": "deleted", "content_id": content_id, "collection": f"kb_{institute_id}_{course_id}"}
+        return {"status": "deleted", "content_id": content_id, "collection": collection_name(institute_id, course_id)}
     except Exception as e:
         logger.error(f"[course-kb] Delete failed for content {content_id!r}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.delete("/{institute_id}/{course_id}")
+async def remove_course_collection(institute_id: str, course_id: str):
+    """Drop the entire Qdrant collection for a course.
+
+    Call this when a course is permanently deleted so no orphan data remains.
+    """
+    col = collection_name(institute_id, course_id)
+    try:
+        delete_course_collection(institute_id, course_id)
+        return {"status": "deleted", "collection": col}
+    except Exception as e:
+        logger.error(f"[course-kb] Collection delete failed for {col!r}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{institute_id}/collections")
+async def list_institute_collections(institute_id: str):
+    """List all Qdrant collections that belong to the given institute."""
+    try:
+        cols = list_course_collections(institute_id)
+        return {"status": "ok", "institute_id": institute_id, "collections": cols, "count": len(cols)}
+    except Exception as e:
+        logger.error(f"[course-kb] List collections failed for {institute_id!r}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/search")
 async def search_course_content(req: SearchRequest):
-    """Search a course's knowledge base collection (for testing / debug)."""
+    """Search a single course's collection, or all institute courses when course_id is omitted."""
     try:
-        results = search_course(institute_id=req.institute_id, course_id=req.course_id, query=req.query, limit=req.limit)
+        if req.course_id:
+            results = search_course(
+                institute_id=req.institute_id, course_id=req.course_id,
+                query=req.query, limit=req.limit,
+            )
+        else:
+            results = search_all_institute_courses(
+                institute_id=req.institute_id, query=req.query, limit=req.limit,
+            )
         if not results:
             return {"status": "no_results", "results": []}
         return {"status": "ok", "results": results}

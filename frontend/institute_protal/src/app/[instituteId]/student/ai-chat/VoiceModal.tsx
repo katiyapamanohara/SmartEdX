@@ -87,7 +87,6 @@ export default function VoiceModal({
   const [avatarState, setAvatarState] = useState<AvatarState>("idle");
   const [micMuted, setMicMuted]       = useState(false);
   const [errorMsg, setErrorMsg]       = useState("");
-  const [captionText, setCaptionText] = useState("");
   const instName = context.institute_name ?? "";
   const instLogo = instituteLogo ?? "";
   const [screenSharing, setScreenSharing] = useState(false);
@@ -116,7 +115,6 @@ export default function VoiceModal({
   const screenVideoRef   = useRef<HTMLVideoElement>(null);
   const screenCanvasRef  = useRef<HTMLCanvasElement>(null);
   const screenIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
   // ── Orb animation loop ────────────────────────────────────────────────────
   const startOrbAnimation = useCallback(() => {
     const micData  = new Uint8Array(256);
@@ -154,15 +152,36 @@ export default function VoiceModal({
     loop();
   }, []);
 
-  // ── Audio: stop all playback ───────────────────────────────────────────────
+  // ── Audio: stop all playback with smooth fade-out ────────────────────────
   const stopAllAudio = useCallback(() => {
-    playVersionRef.current += 1;
-    for (const src of activeSourcesRef.current) { try { src.stop(0); } catch { /* ignore */ } }
+    const ctx  = playCtxRef.current;
+    const gain = playMasterRef.current;
+    const nextVersion = playVersionRef.current + 1;
+    playVersionRef.current = nextVersion;
+
+    const srcsToStop = [...activeSourcesRef.current];
     activeSourcesRef.current = [];
-    const ctx = playCtxRef.current;
-    nextPlayTimeRef.current = ctx ? ctx.currentTime : 0;
+    // Advance schedule past any queued audio so the next enqueue starts fresh
+    nextPlayTimeRef.current = ctx ? ctx.currentTime + 0.07 : 0;
     isAISpeakingRef.current = false;
     setAvatarState((prev) => (prev === "speaking" ? "listening" : prev));
+
+    if (ctx && gain && srcsToStop.length > 0) {
+      // Smooth ~15 ms exponential fade-out — no click on barge-in or interrupt
+      const now = ctx.currentTime;
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setTargetAtTime(0, now, 0.015);
+      setTimeout(() => {
+        srcsToStop.forEach((s) => { try { s.stop(); } catch { /* ignore */ } });
+        // Restore gain only if no new playback started in the meantime
+        if (playVersionRef.current === nextVersion && gain && ctx) {
+          gain.gain.cancelScheduledValues(ctx.currentTime);
+          gain.gain.setValueAtTime(1, ctx.currentTime);
+        }
+      }, 70);
+    } else {
+      srcsToStop.forEach((s) => { try { s.stop(0); } catch { /* ignore */ } });
+    }
   }, []);
   stopAllAudioRef.current = stopAllAudio;
 
@@ -171,31 +190,58 @@ export default function VoiceModal({
     const ctx = playCtxRef.current;
     if (!ctx) return;
     if (ctx.state === "suspended") ctx.resume();
-    isAISpeakingRef.current = true;
-    setAvatarState("speaking");
 
     const version = playVersionRef.current;
-    
-    const rawBuf = base64ToArrayBuffer(base64Pcm);
+
+    const rawBuf     = base64ToArrayBuffer(base64Pcm);
     const int16Array = new Int16Array(rawBuf);
     const numSamples = int16Array.length;
-    
-    // Direct conversion to avoid async decoding overhead and latency
+    if (numSamples === 0) return;
+
     const audioBuffer = ctx.createBuffer(1, numSamples, 24000);
     const channelData = audioBuffer.getChannelData(0);
     for (let i = 0; i < numSamples; i++) {
       channelData[i] = int16Array[i] / 32768.0;
     }
 
+    // 6 ms micro-fade at each chunk edge eliminates click at buffer boundaries
+    const FADE = Math.min(Math.floor(24000 * 0.006), Math.floor(numSamples / 2));
+    for (let i = 0; i < FADE; i++) {
+      const t = i / FADE;
+      channelData[i]                    *= t; // fade in
+      channelData[numSamples - 1 - i]   *= t; // fade out
+    }
+
     if (playVersionRef.current !== version) return;
-    const now     = ctx.currentTime;
-    const startAt = Math.max(nextPlayTimeRef.current, now + 0.01);
+
+    const now = ctx.currentTime;
+    const LOOKAHEAD = 0.05; // 50 ms — survives typical CPU/GC pauses without latency impact
+
+    // Gap recovery: if schedule fell behind real-time reset it instead of piling up latency
+    if (nextPlayTimeRef.current < now) {
+      nextPlayTimeRef.current = now + LOOKAHEAD;
+    }
+    const startAt = Math.max(nextPlayTimeRef.current, now + LOOKAHEAD);
     nextPlayTimeRef.current = startAt + audioBuffer.duration;
-    const source  = ctx.createBufferSource();
+
+    // Restore master gain in case it was faded by a previous stopAllAudio
+    const gain = playMasterRef.current;
+    if (gain) {
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setValueAtTime(1, now);
+    }
+
+    const source = ctx.createBufferSource();
     source.buffer = audioBuffer;
-    source.connect(playMasterRef.current ?? ctx.destination);
+    source.connect(gain ?? ctx.destination);
     activeSourcesRef.current.push(source);
     source.start(startAt);
+
+    if (!isAISpeakingRef.current) {
+      isAISpeakingRef.current = true;
+      setAvatarState("speaking");
+    }
+
     source.onended = () => {
       activeSourcesRef.current = activeSourcesRef.current.filter((s) => s !== source);
       if (activeSourcesRef.current.length === 0 && playVersionRef.current === version) {
@@ -207,24 +253,13 @@ export default function VoiceModal({
 
   // ── Parse WebSocket events ─────────────────────────────────────────────────
   const handleEvent = useCallback((event: Record<string, unknown>) => {
-    if (event.interrupted === true) { stopAllAudio(); setCaptionText(""); return; }
+    if (event.interrupted === true) { stopAllAudio(); return; }
 
     if (event.type === "reminder") return;
-
-    // outputTranscription: text form of what the native-audio model spoke
-    const outTranscription = event.outputTranscription as Record<string, unknown> | undefined;
-    if (outTranscription?.text && typeof outTranscription.text === "string") {
-      setCaptionText(outTranscription.text);
-    }
 
     const parts = ((event.content as any)?.parts as any[]) ?? [];
     for (const p of parts) {
       if (p?.inlineData?.data) enqueueAudio(p.inlineData.data);
-
-      // Final text response from model (TEXT-modality or alongside audio)
-      if (typeof p?.text === "string" && p.text.trim() && !p.thought) {
-        setCaptionText(p.text.trim());
-      }
 
       // Evaluation result from voice agent
       const fnResp = p?.functionResponse as Record<string, unknown> | undefined;
@@ -233,7 +268,6 @@ export default function VoiceModal({
         if (response && !("error" in response)) {
           const result = response as EvalResult;
           stopAllAudio();
-          // Submit to backend if this is an assessment session
           if (assessmentId && instituteId) {
             instituteService.submitVoiceAssessmentResult(instituteId, assessmentId, {
               score: result.percentage,
@@ -365,8 +399,8 @@ export default function VoiceModal({
         const processor        = micCtx.createScriptProcessor(1024, 1, 1);
         processorRef.current = processor;
 
-        const BARGE_IN_THRESHOLD = 0.022;
-        const BARGE_IN_FRAMES    = 1;
+        const BARGE_IN_THRESHOLD = 0.04;  // loud enough to be intentional speech
+        const BARGE_IN_FRAMES    = 3;    // 3 consecutive frames (~192 ms) avoids false triggers
         let bargeInCount = 0;
 
         const VAD_THRESHOLD = 0.01;
@@ -459,7 +493,15 @@ export default function VoiceModal({
     } else {
       // ── Unmute: re-acquire mic and rebuild the audio pipeline ──
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } as any });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            sampleRate: 16000,
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          } as any,
+        });
         streamRef.current = stream;
 
         const micCtx      = new AudioContext({ sampleRate: 16000 });
@@ -472,8 +514,8 @@ export default function VoiceModal({
         processorRef.current   = processor;
 
         const ws = wsRef.current;
-        const BARGE_IN_THRESHOLD = 0.022;
-        const BARGE_IN_FRAMES    = 1;
+        const BARGE_IN_THRESHOLD = 0.04;  // loud enough to be intentional speech
+        const BARGE_IN_FRAMES    = 3;    // 3 consecutive frames (~192 ms) avoids false triggers
         let bargeInCount = 0;
 
         const VAD_THRESHOLD = 0.01;
@@ -704,13 +746,6 @@ export default function VoiceModal({
         </div>
       )}
 
-      {/* Caption — model's text response (visible when using text-modality or audio transcription) */}
-      {captionText && step === "session" && (
-        <div className="mb-4 w-full max-w-sm px-6 text-center text-sm leading-relaxed"
-          style={{ color: isDark ? "#d1d5db" : "#374151" }}>
-          {captionText}
-        </div>
-      )}
 
       {/* Status pill */}
       <div className="mb-12 flex items-center gap-2 px-4 py-1.5 rounded-full"

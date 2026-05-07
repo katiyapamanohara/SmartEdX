@@ -171,7 +171,11 @@ def collection_name(institute_id: str, course_id: str) -> str:
 
 
 def ensure_collection(col_name: str) -> None:
-    """Create a Qdrant collection if it does not already exist."""
+    """Create a Qdrant collection if it does not already exist.
+
+    Also creates keyword payload indexes on ``institute_id`` and ``course_id``
+    so cross-collection filters run efficiently.
+    """
     with _known_cols_lock:
         if col_name in _known_cols:
             return
@@ -188,6 +192,16 @@ def ensure_collection(col_name: str) -> None:
                 "optimizers_config": {"default_segment_number": 2},
             },
         )
+        # Keyword indexes on institute_id / course_id enable fast filtered searches
+        for field in ("institute_id", "course_id", "content_id"):
+            try:
+                _qdrant_request(
+                    "PUT",
+                    f"/collections/{col_name}/index",
+                    json={"field_name": field, "field_schema": "keyword"},
+                )
+            except Exception as idx_err:
+                logger.warning(f"Could not create index on {field!r} in {col_name!r}: {idx_err}")
         logger.info(f"Created Qdrant collection: {col_name!r}")
     with _known_cols_lock:
         _known_cols.add(col_name)
@@ -354,11 +368,14 @@ def index_content(
                 "id": str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{content_id}_chunk_{i + j}")),
                 "vector": emb,
                 "payload": {
+                    "institute_id": institute_id,
+                    "course_id": course_id,
+                    "course_name": course_name,
+                    "content_id": content_id,
+                    "title": title,
                     "content": chunk["text"],
                     "page": chunk["page"],
                     "chunk_index": chunk["chunk_index"],
-                    "content_id": content_id,
-                    "title": title,
                 },
             }
             for j, (chunk, emb) in enumerate(zip(batch_chunks, batch_embeddings))
@@ -391,6 +408,99 @@ def collection_exists(col_name: str) -> bool:
         return True
     except Exception:
         return False
+
+
+def list_course_collections(institute_id: str) -> list[str]:
+    """Return all collection names that belong to the given institute.
+
+    Collections follow the naming convention ``kb_{institute_id}_{course_id}``,
+    so we can enumerate them with a prefix filter against Qdrant's collection
+    list.
+    """
+    safe_inst = institute_id.lower().replace("-", "_")
+    prefix = f"kb_{safe_inst}_"
+    try:
+        result = _qdrant_request("GET", "/collections")
+        all_cols = [c["name"] for c in result["result"]["collections"]]
+        return [c for c in all_cols if c.startswith(prefix)]
+    except Exception as e:
+        logger.error(f"Failed to list collections for institute {institute_id!r}: {e}", exc_info=True)
+        return []
+
+
+def delete_course_collection(institute_id: str, course_id: str) -> None:
+    """Drop the entire Qdrant collection for a course.
+
+    Call this when a course is permanently deleted so no orphan data remains.
+    Safe to call even if the collection does not exist yet.
+    """
+    col = collection_name(institute_id, course_id)
+    try:
+        _qdrant_request("DELETE", f"/collections/{col}")
+        with _known_cols_lock:
+            _known_cols.discard(col)
+        logger.info(f"Deleted Qdrant collection {col!r} (course {course_id!r})")
+    except Exception as e:
+        if getattr(getattr(e, "response", None), "status_code", None) == 404:
+            logger.info(f"Collection {col!r} did not exist — nothing to delete")
+            return
+        logger.error(f"Failed to delete collection {col!r}: {e}", exc_info=True)
+        raise
+
+
+def search_all_institute_courses(institute_id: str, query: str, limit: int = 3) -> list[dict]:
+    """Search every course collection that belongs to an institute and return
+    the top-scoring results merged across all collections.
+
+    Used by the teacher agent when the teacher asks a question without
+    specifying a particular course.
+    """
+    cols = list_course_collections(institute_id)
+    if not cols:
+        logger.info(f"[Search-All] No course collections found for institute {institute_id!r}")
+        return []
+
+    cache_key = ("__all__", institute_id, query, limit)
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        logger.info(f"[Search-All] CACHE HIT → {len(cached)} results")
+        return cached
+
+    query_vector = _get_query_vector(query)
+    all_results: list[dict] = []
+
+    for col in cols:
+        try:
+            result = _qdrant_request(
+                "POST",
+                f"/collections/{col}/points/search",
+                json={
+                    "vector": query_vector,
+                    "limit": 2,
+                    "with_payload": True,
+                    "params": {"hnsw_ef": 64, "exact": False},
+                },
+            )
+            for h in result.get("result", []):
+                all_results.append({
+                    "institute_id": h["payload"].get("institute_id", institute_id),
+                    "course_id": h["payload"].get("course_id", ""),
+                    "course_name": h["payload"].get("course_name", ""),
+                    "content_id": h["payload"].get("content_id", ""),
+                    "title": h["payload"].get("title", ""),
+                    "content": h["payload"].get("content", "")[:MAX_CONTENT_CHARS],
+                    "page": h["payload"].get("page"),
+                    "score": round(h["score"], 3),
+                })
+        except Exception as e:
+            logger.warning(f"[Search-All] Skipping collection {col!r}: {e}")
+
+    # Return the globally top-scoring results
+    all_results.sort(key=lambda x: x["score"], reverse=True)
+    top = all_results[:limit]
+    logger.info(f"[Search-All] {len(top)} results from {len(cols)} collections for institute {institute_id!r}")
+    _cache_set(cache_key, top)
+    return top
 
 
 def search_course(institute_id: str, course_id: str, query: str, limit: int = 3) -> list[dict]:
@@ -448,9 +558,13 @@ def search_course(institute_id: str, course_id: str, query: str, limit: int = 3)
 
     results = [
         {
+            "institute_id": h["payload"].get("institute_id", institute_id),
+            "course_id": h["payload"].get("course_id", course_id),
+            "course_name": h["payload"].get("course_name", ""),
+            "content_id": h["payload"].get("content_id", ""),
+            "title": h["payload"].get("title", ""),
             "content": h["payload"].get("content", "")[:MAX_CONTENT_CHARS],
             "page": h["payload"].get("page"),
-            "title": h["payload"].get("title", ""),
             "score": round(h["score"], 3),
         }
         for h in hits

@@ -447,7 +447,15 @@ export default function VoiceModal({
     } else {
       // ── Unmute: re-acquire mic and rebuild the audio pipeline ──
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } as any });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            sampleRate: 16000,
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          } as any,
+        });
         streamRef.current = stream;
 
         const micCtx      = new AudioContext({ sampleRate: 16000 });

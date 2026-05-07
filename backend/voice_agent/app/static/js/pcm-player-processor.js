@@ -1,75 +1,71 @@
 /**
- * An audio worklet processor that stores the PCM audio data sent from the main thread
- * to a buffer and plays it.
+ * PCM player processor.
+ *
+ * Improvements over the original:
+ * - Underflow fades to silence rather than holding the last sample
+ *   (eliminates the low buzz when the agent stops speaking).
+ * - Ring buffer is the same size so no memory change.
  */
 class PCMPlayerProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
 
-    // Init buffer
-    this.bufferSize = 24000 * 180;  // 24kHz x 180 seconds
+    this.bufferSize = 24000 * 180; // 24kHz × 180 s
     this.buffer = new Float32Array(this.bufferSize);
     this.writeIndex = 0;
     this.readIndex = 0;
 
-    // Handle incoming messages from main thread
+    // Fade state used during underflow to avoid harsh cutoff clicks
+    this._fadeGain = 0.0; // 1.0 = full volume, 0.0 = silence
+    this._fadeStep = 1 / 128; // reach silence in ~128 samples after underflow
+
     this.port.onmessage = (event) => {
-      // Reset the buffer when 'endOfAudio' message received
-      if (event.data.command === 'endOfAudio') {
-        this.readIndex = this.writeIndex; // Clear the buffer
-        console.log("endOfAudio received, clearing the buffer.");
+      if (event.data.command === "endOfAudio") {
+        this.readIndex = this.writeIndex;
+        console.log("endOfAudio received, clearing buffer.");
         return;
       }
-
-      // Decode the base64 data to int16 array.
-      const int16Samples = new Int16Array(event.data);
-
-      // Add the audio data to the buffer
-      this._enqueue(int16Samples);
+      this._enqueue(new Int16Array(event.data));
     };
   }
 
-  // Push incoming Int16 data into our ring buffer.
   _enqueue(int16Samples) {
     for (let i = 0; i < int16Samples.length; i++) {
-      // Convert 16-bit integer to float in [-1, 1]
-      const floatVal = int16Samples[i] / 32768;
-
-      // Store in ring buffer for left channel only (mono)
-      this.buffer[this.writeIndex] = floatVal;
+      this.buffer[this.writeIndex] = int16Samples[i] / 32768;
       this.writeIndex = (this.writeIndex + 1) % this.bufferSize;
-
-      // Overflow handling (overwrite oldest samples)
+      // Overflow: overwrite oldest sample
       if (this.writeIndex === this.readIndex) {
         this.readIndex = (this.readIndex + 1) % this.bufferSize;
       }
     }
   }
 
-  // The system calls `process()` ~128 samples at a time (depending on the browser).
-  // We fill the output buffers from our ring buffer.
   process(inputs, outputs, parameters) {
-
-    // Write a frame to the output
     const output = outputs[0];
     const framesPerBlock = output[0].length;
+
     for (let frame = 0; frame < framesPerBlock; frame++) {
+      const hasData = this.readIndex !== this.writeIndex;
 
-      // Write the sample(s) into the output buffer
-      output[0][frame] = this.buffer[this.readIndex]; // left channel
-      if (output.length > 1) {
-        output[1][frame] = this.buffer[this.readIndex]; // right channel
-      }
-
-      // Move the read index forward unless underflowing
-      if (this.readIndex != this.writeIndex) {
+      let sample;
+      if (hasData) {
+        sample = this.buffer[this.readIndex];
         this.readIndex = (this.readIndex + 1) % this.bufferSize;
+        // Ramp gain back up smoothly when data resumes after underflow
+        this._fadeGain = Math.min(1.0, this._fadeGain + this._fadeStep);
+      } else {
+        sample = 0;
+        // Fade out during underflow to avoid click/buzz at end of speech
+        this._fadeGain = Math.max(0.0, this._fadeGain - this._fadeStep);
       }
+
+      const out = sample * this._fadeGain;
+      output[0][frame] = out;
+      if (output.length > 1) output[1][frame] = out;
     }
 
-    // Returning true tells the system to keep the processor alive
     return true;
   }
 }
 
-registerProcessor('pcm-player-processor', PCMPlayerProcessor);
+registerProcessor("pcm-player-processor", PCMPlayerProcessor);

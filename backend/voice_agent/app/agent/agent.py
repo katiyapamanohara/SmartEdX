@@ -360,10 +360,12 @@ def get_runner_for_institute(institute_id: str, session_service: InMemorySession
     # Fetch institute-specific config from the SmartEdX institute service
     institute_name = "SmartEdX"
     base_instructions = (
-        "You are the SmartEdX voice assistant.\n"
-        "Follow the user's instructions carefully and provide accurate information.\n"
-        "- Provide helpful and concise responses.\n"
-        "- If you don't know the answer, politely say so.\n"
+        "You are the SmartEdX educational voice assistant.\n"
+        "Your ONLY purpose is to help students and teachers with learning, course content, "
+        "academic subjects, study preparation, and educational questions.\n"
+        "- Answer only education-related questions.\n"
+        "- Redirect any off-topic request in one sentence back to learning.\n"
+        "- Be encouraging, concise, and clear.\n"
     )
 
     try:
@@ -373,11 +375,12 @@ def get_runner_for_institute(institute_id: str, session_service: InMemorySession
             base_instructions = config["voiceInstructions"]
         else:
             base_instructions = (
-                f"You are the AI voice assistant for {institute_name}.\n"
-                "Help students with their voice assessments and learning needs.\n"
-                "- Speak clearly and concisely.\n"
-                "- Be encouraging and supportive.\n"
-                "- If you don't know the answer, say so honestly.\n"
+                f"You are the AI educational voice assistant for {institute_name}.\n"
+                "Your ONLY purpose is to support student learning: course content, academic subjects, "
+                "study skills, assessments, and education-related questions.\n"
+                "- Do NOT answer questions unrelated to education or this institute's courses.\n"
+                "- If a student asks something off-topic, reply in one sentence and redirect to their coursework.\n"
+                "- Be warm, encouraging, and concise.\n"
             )
         logger.info(f"Loaded voice config for institute '{institute_name}' ({institute_id})")
     except Exception as e:
@@ -491,15 +494,19 @@ def get_runner_for_course(
 
     system_instructions = all_instructions + (
         f"You are an AI tutor for the course '{course_name}'.\n"
+        f"Your ONLY purpose is to help students understand and learn the content of this course.\n"
         f"Rules:\n"
-        f"- Greetings / chitchat / yes-no follow-ups: answer directly, no tool call.\n"
-        f"- ANY question about course content: call search_course_material IMMEDIATELY — no hesitation, no preamble.\n"
-        f"  QUERY RULE: extract the specific topic from the user's question and use that as the query.\n"
-        f"  Example — user asks 'what is photosynthesis?': query='photosynthesis'.\n"
-        f"  NEVER pass 'course content', 'course material', or any other generic phrase as the query.\n"
+        f"- Greetings and brief follow-ups: answer directly, no tool call.\n"
+        f"- ANY question about course topics, concepts, or materials: call search_course_material IMMEDIATELY.\n"
+        f"  QUERY RULE: use the specific subject keyword from the question as the query.\n"
+        f"  Example — 'what is photosynthesis?': query='photosynthesis'.\n"
+        f"  NEVER pass 'course content', 'course material', or any generic phrase as the query.\n"
         f"- After search: answer in 1-2 sentences, cite the page if available (e.g. 'Page 3 says ...').\n"
-        f"- If nothing is found: say so in one sentence and suggest the teacher.\n"
-        f"- Always be brief."
+        f"- If nothing is found: say so in one sentence and suggest the student ask their teacher.\n"
+        f"- OFF-TOPIC: if the student asks about anything unrelated to this course or education, "
+        f"reply in one sentence: 'I'm here to help with {course_name} — what would you like to learn?' "
+        f"and stop. Do NOT answer the off-topic question.\n"
+        f"- Always be brief — 1 to 2 sentences per turn."
     )
 
     safe_id = course_id.replace("-", "_")
@@ -570,7 +577,7 @@ def get_runner_for_teacher(
             return {"status": "error", "message": "Course knowledge base is not enabled."}
         try:
             import asyncio
-            from app.qdrant.course_kb import search_course
+            from app.qdrant.course_kb import search_all_institute_courses, search_course
 
             if course_id:
                 results = await asyncio.wait_for(
@@ -584,13 +591,19 @@ def get_runner_for_teacher(
                     timeout=10.0,
                 )
             else:
-                # No course_id supplied — search the general institute KB if available
-                if QDRANT_KB_ENABLED:
-                    return await search_knowledgebase(query=query, limit=limit)
-                return {"status": "error", "message": "Please provide a course_id to search course materials."}
+                # No course_id — search across every course collection for this institute
+                results = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        search_all_institute_courses,
+                        institute_id=institute_id,
+                        query=query,
+                        limit=limit,
+                    ),
+                    timeout=10.0,
+                )
 
             if not results:
-                return {"status": "no_results", "message": "No relevant information found in the course material."}
+                return {"status": "no_results", "message": "No relevant information found in the course materials."}
             return {"status": "ok", "results": results}
         except asyncio.TimeoutError:
             logger.warning(f"Teacher course KB search timed out (institute={institute_id})")
@@ -601,13 +614,17 @@ def get_runner_for_teacher(
 
     system_instructions = all_instructions + (
         "You are an AI voice assistant for teachers at SmartEdX.\n"
+        "Your ONLY purpose is to assist teachers with educational tasks: understanding course materials, "
+        "lesson planning, curriculum questions, and academic subject knowledge.\n"
         "Rules:\n"
-        "- Greetings / general conversation: answer directly, no tool call.\n"
-        "- ANY question about course content or material: call search_course_material IMMEDIATELY.\n"
-        "  QUERY RULE: use the specific topic from the teacher's question as the query\n"
+        "- Greetings and brief follow-ups: answer directly, no tool call.\n"
+        "- ANY question about course content or materials: call search_course_material IMMEDIATELY.\n"
+        "  QUERY RULE: use the specific subject keyword from the question as the query\n"
         "  (e.g. 'binary search trees', not 'course content' or 'course material').\n"
-        "- Include course_id if the teacher mentions a specific course.\n"
-        "- Answer in 1-2 sentences, cite page numbers. If not found, say so honestly."
+        "- Include course_id when the teacher specifies a course.\n"
+        "- Answer in 1-2 sentences, cite page numbers where available.\n"
+        "- OFF-TOPIC: if asked about anything unrelated to education or teaching, reply in one sentence: "
+        "'I can only assist with educational content — what would you like to explore?' and stop."
     )
 
     safe_id = teacher_id.replace("-", "_")
