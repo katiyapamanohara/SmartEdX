@@ -243,11 +243,22 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Get GKE credentials
-        uses: google-github-actions/get-gke-credentials@v2
-        with:
-          cluster_name: ${{ secrets.GKE_CLUSTER }}
-          location: ${{ secrets.GKE_ZONE }}
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
+        run: |
+          LOCATION=$(gcloud container clusters list \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --filter="name=${{ secrets.GKE_CLUSTER }}" \
+            --format="value(location)" \
+            --limit=1)
+          if [[ -z "$LOCATION" ]]; then
+            echo "❌ Cluster '${{ secrets.GKE_CLUSTER }}' not found in project '${{ secrets.GCP_PROJECT_ID }}'"
+            echo "Available clusters:"
+            gcloud container clusters list --project=${{ secrets.GCP_PROJECT_ID }} --format="table(name,location,status)"
+            exit 1
+          fi
+          echo "✅ Found cluster at location: $LOCATION"
+          gcloud container clusters get-credentials ${{ secrets.GKE_CLUSTER }} \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --location="$LOCATION"
 
       - name: Rollout restart ${{ matrix.service }}
         run: |
