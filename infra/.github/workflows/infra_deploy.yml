@@ -1,0 +1,80 @@
+# name: Terraform GCP
+
+# on:
+#   push:
+#     branches: ["main"]
+#   pull_request:
+#     branches: ["main"]
+
+# env:
+#   TF_VERSION: "1.6.6"
+#   WORKING_DIR: "infra"
+
+# jobs:
+#   terraform:
+#     name: Terraform
+#     runs-on: ubuntu-latest
+
+#     env:
+#       TF_VAR_GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+#       TF_VAR_region: us-central1
+#       TF_VAR_cluster_name: smartedx-cluster
+#       TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+#       TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+#       TF_VAR_cloudflare_zone_id: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+    
+
+
+#     steps:
+#       # Checkout code
+#       - name: Checkout
+#         uses: actions/checkout@v4
+
+#       # Setup Terraform
+#       - name: Setup Terraform
+#         uses: hashicorp/setup-terraform@v3
+#         with:
+#           terraform_version: ${{ env.TF_VERSION }}
+
+#       # Authenticate to GCP
+#       - name: Authenticate to GCP
+#         uses: google-github-actions/auth@v2
+#         with:
+#           credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+#       # Set GCP project (optional but good)
+#       - name: Set GCP Project
+#         run: gcloud config set project ${{ secrets.GCP_PROJECT_ID }}
+
+
+#       # Terraform Init
+#       - name: Terraform Init
+#         working-directory: ${{ env.WORKING_DIR }}
+#         run: terraform init -input=false
+
+#       # Terraform Format
+#       - name: Terraform Format
+#         working-directory: ${{ env.WORKING_DIR }}
+#         run: terraform fmt -check
+
+#       # Terraform Validate
+#       - name: Terraform Validate
+#         working-directory: ${{ env.WORKING_DIR }}
+#         run: terraform validate
+
+#       # Terraform Plan
+#       - name: Terraform Plan
+#         working-directory: ${{ env.WORKING_DIR }}
+#         run: terraform plan -input=false
+
+#       # Terraform Apply (ONLY on main branch)
+#       - name: Terraform Apply
+#         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+#         working-directory: ${{ env.WORKING_DIR }}
+#         run: terraform apply -auto-approve -input=false
+
+#       - name: Get ArgoCD Password
+#         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+#         working-directory: ${{ env.WORKING_DIR }}
+#         run: |
+#           echo "ArgoCD Admin Password: $(terraform output -raw argocd_admin_password)"
