@@ -204,7 +204,14 @@ async def search_knowledgebase(query: str, limit: int = 2) -> dict:
         limit: Max results (default 2).
     """
     import asyncio
-    return await asyncio.to_thread(_search_kb_sync, query=query, limit=limit)
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(_search_kb_sync, query=query, limit=limit),
+            timeout=10.0,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(f"Knowledge base search timed out for query: {query!r}")
+        return {"status": "error", "message": "Search took too long. Please try again."}
 
 
 # ── Shared tools (not institute-specific) ───────────────────────────
@@ -459,7 +466,10 @@ def get_runner_for_course(
             import asyncio
             from app.qdrant.course_kb import search_course
 
-            results = await asyncio.to_thread(search_course, institute_id=institute_id, course_id=course_id, query=query, limit=limit)
+            results = await asyncio.wait_for(
+                asyncio.to_thread(search_course, institute_id=institute_id, course_id=course_id, query=query, limit=limit),
+                timeout=10.0,
+            )
             if not results:
                 return {
                     "status": "no_results",
@@ -470,6 +480,9 @@ def get_runner_for_course(
                     ),
                 }
             return {"status": "ok", "results": results}
+        except asyncio.TimeoutError:
+            logger.warning(f"Course KB search timed out for course {course_id}")
+            return {"status": "error", "message": "Search took too long. Please try again."}
         except Exception as e:
             logger.error(f"Course KB search failed for course {course_id}: {e}", exc_info=True)
             return {"status": "error", "message": "Failed to search course material."}
@@ -553,12 +566,15 @@ def get_runner_for_teacher(
             from app.qdrant.course_kb import search_course
 
             if course_id:
-                results = await asyncio.to_thread(
-                    search_course,
-                    institute_id=institute_id,
-                    course_id=course_id,
-                    query=query,
-                    limit=limit,
+                results = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        search_course,
+                        institute_id=institute_id,
+                        course_id=course_id,
+                        query=query,
+                        limit=limit,
+                    ),
+                    timeout=10.0,
                 )
             else:
                 # No course_id supplied — search the general institute KB if available
@@ -569,6 +585,9 @@ def get_runner_for_teacher(
             if not results:
                 return {"status": "no_results", "message": "No relevant information found in the course material."}
             return {"status": "ok", "results": results}
+        except asyncio.TimeoutError:
+            logger.warning(f"Teacher course KB search timed out (institute={institute_id})")
+            return {"status": "error", "message": "Search took too long. Please try again."}
         except Exception as e:
             logger.error(f"Teacher course KB search failed: {e}", exc_info=True)
             return {"status": "error", "message": "Failed to search course material."}
