@@ -6,7 +6,7 @@ import { fadeInUp } from '@/lib/landing-animations';
 export function AnalyticsSection() {
   return (
     <section className="py-24 bg-gray-50 dark:bg-gray-900/30">
-          <div className="max-w-7xl mx-auto px-6">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6">
               <div className="flex flex-col lg:flex-row-reverse items-center gap-16">
                   <motion.div 
                     initial="hidden"
@@ -16,7 +16,7 @@ export function AnalyticsSection() {
                     className="lg:w-1/2"
                    >
                        <div className="inline-block px-3 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-xs font-bold uppercase tracking-wider mb-6">Executive Overview</div>
-                      <h2 className="text-3xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">Institutional ROI Analytics</h2>
+                      <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">Institutional ROI Analytics</h2>
                       <p className="text-lg text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
                           Track enrollment trends, faculty performance, and student retention rates in real-time. Make data-backed decisions.
                       </p>
@@ -62,7 +62,7 @@ export function AnalyticsSection() {
                                     transition={{ duration: 1, delay: i * 0.05 }}
                                     className="w-full bg-indigo-100 dark:bg-indigo-900/30 rounded-t-lg relative group overflow-hidden"
                                   >
-                                      <div className="absolute bottom-0 w-full h-full bg-gradient-to-t from-indigo-600 to-indigo-400 opacity-80 group-hover:opacity-100 transition-opacity"></div>
+                                      <div className="absolute bottom-0 w-full h-full bg-linear-to-t from-indigo-600 to-indigo-400 opacity-80 group-hover:opacity-100 transition-opacity"></div>
                                   </motion.div>
                               ))}
                           </div>

@@ -110,7 +110,7 @@ const colorMap: Record<string, { bg: string; text: string; gradient: string }> =
 export function Features() {
   return (
     <section id="features" className="py-24 bg-gray-50 dark:bg-gray-900/50 relative">
-      <div className="max-w-7xl mx-auto px-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <motion.div
           initial="hidden"
           whileInView="visible"
@@ -121,7 +121,7 @@ export function Features() {
           <div className="inline-block px-3 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-full text-xs font-bold uppercase tracking-wider mb-4">
             Platform Features
           </div>
-          <h2 className="text-4xl md:text-5xl font-bold mb-4">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4">
             Everything your institute needs,{" "}
             <span className="text-indigo-600 dark:text-indigo-400">in one place</span>
           </h2>

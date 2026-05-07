@@ -14,7 +14,7 @@ const pills = [
 
 export function Hero() {
   return (
-    <section className="h-screen overflow-hidden flex justify-center items-center">
+    <section className="min-h-screen flex justify-center items-center py-24 sm:py-0 sm:h-screen sm:overflow-hidden">
       {/* Animated Background Blobs */}
       <motion.div
         animate={{ scale: [1, 1.2, 1], rotate: [0, 90, 0], opacity: [0.3, 0.5, 0.3] }}
@@ -38,7 +38,7 @@ export function Hero() {
         className="absolute bottom-20 left-20 w-72 h-72 bg-cyan-400/20 dark:bg-cyan-500/20 rounded-full blur-[60px] -z-10"
       />
 
-      <div className="max-w-7xl mx-auto px-6 text-center">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 text-center">
         {/* Badge */}
         <motion.div
           initial="hidden"
@@ -58,7 +58,7 @@ export function Hero() {
           initial="hidden"
           animate="visible"
           variants={fadeInUp}
-          className="text-5xl md:text-7xl font-extrabold mb-6 tracking-tight leading-tight"
+          className="text-4xl sm:text-5xl md:text-7xl font-extrabold mb-6 tracking-tight leading-tight"
         >
           <span className="bg-clip-text text-transparent bg-linear-to-r from-gray-900 via-gray-700 to-gray-900 dark:from-white dark:via-gray-200 dark:to-gray-400">
             The SaaS platform for{" "}
@@ -85,7 +85,7 @@ export function Hero() {
           initial="hidden"
           animate="visible"
           variants={fadeInUp}
-          className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto mb-8 leading-relaxed"
+          className="text-base sm:text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto mb-8 leading-relaxed"
         >
           Live classes, AI-powered grading, exam proctoring, virtual labs, and a
           white-label portal — everything your institute needs, in one platform.

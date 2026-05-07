@@ -3,9 +3,9 @@
 export function Footer() {
   return (
     <footer className="bg-white dark:bg-gray-950 pt-20 pb-10 border-t border-gray-200 dark:border-gray-800">
-          <div className="max-w-7xl mx-auto px-6">
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-12">
-                  <div className="col-span-2">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-8 mb-12">
+                  <div className="sm:col-span-2">
                       <div className="flex items-center gap-2 mb-6">
                         <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold shadow-lg">S</div>
                         <span className="text-xl font-bold text-gray-900 dark:text-white">SmartEdX</span>

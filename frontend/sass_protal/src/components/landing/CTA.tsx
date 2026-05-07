@@ -14,7 +14,7 @@ const outcomes = [
 export function CTA() {
   return (
     <section className="py-20">
-      <div className="max-w-6xl mx-auto px-6">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6">
         {/* Outcome stats strip */}
         <motion.div
           initial="hidden"
@@ -40,12 +40,12 @@ export function CTA() {
           whileInView={{ scale: 1, opacity: 1 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
-          className="bg-linear-to-r from-indigo-600 to-violet-600 rounded-[2.5rem] p-12 md:p-20 text-center relative overflow-hidden shadow-2xl shadow-indigo-600/40"
+          className="bg-linear-to-r from-indigo-600 to-violet-600 rounded-[2.5rem] p-8 sm:p-12 md:p-20 text-center relative overflow-hidden shadow-2xl shadow-indigo-600/40"
         >
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
           <div className="absolute bottom-0 left-0 w-64 h-64 bg-white/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
 
-          <h2 className="text-3xl md:text-5xl font-bold text-white mb-4 relative z-10">
+          <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold text-white mb-4 relative z-10">
             Ready to digitise your institute?
           </h2>
           <p className="text-indigo-100 text-lg md:text-xl max-w-2xl mx-auto mb-10 relative z-10">
