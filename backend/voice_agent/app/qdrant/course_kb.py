@@ -18,12 +18,10 @@ Point payload schema:
     title        – content title
 """
 
-import asyncio
 import io
 import logging
 import time
 import uuid
-from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from threading import Lock
 from typing import Optional
@@ -100,8 +98,11 @@ def _get_embedding_model() -> TextEmbedding:
     if _embedding_model is None:
         with _embedding_model_lock:
             if _embedding_model is None:
-                logger.info(f"Loading FastEmbed model: {EMBEDDING_MODEL}")
-                _embedding_model = TextEmbedding(EMBEDDING_MODEL)
+                import os
+                cache_path = os.environ.get("FASTEMBED_CACHE_PATH")
+                logger.info(f"Loading FastEmbed model: {EMBEDDING_MODEL} (cache={cache_path or 'default'})")
+                kwargs = {"cache_dir": cache_path} if cache_path else {}
+                _embedding_model = TextEmbedding(EMBEDDING_MODEL, **kwargs)
                 # Force ONNX runtime to load now so first embed() call is fast
                 list(_embedding_model.embed(["warmup"]))
                 logger.info("FastEmbed model fully loaded")
@@ -382,122 +383,10 @@ def collection_exists(col_name: str) -> bool:
         return False
 
 
-# ── In-memory KB: preloaded at session start for sub-millisecond search ─
-
-
-@dataclass
-class _MemoryKB:
-    """All course vectors + payloads loaded from Qdrant into a numpy matrix."""
-    vectors: "object"   # np.ndarray shape (N, 384), float32, L2-normalised
-    payloads: list = field(default_factory=list)
-
-
-_memory_kb: dict[str, _MemoryKB] = {}   # col -> loaded KB
-_loading_cols: set[str] = set()          # collections currently being fetched
-_memory_lock = Lock()
-
-
-async def preload_course_kb(institute_id: str, course_id: str) -> None:
-    """Scroll all vectors + payloads for a course into memory.
-
-    Called as a fire-and-forget background task when a course-qa WebSocket
-    session opens.  Once loaded, search_course bypasses Qdrant entirely and
-    does a fast numpy dot-product search.
-    """
-    import numpy as np
-
-    col = collection_name(institute_id, course_id)
-
-    with _memory_lock:
-        if col in _memory_kb or col in _loading_cols:
-            return
-        _loading_cols.add(col)
-
-    try:
-        exists = await asyncio.to_thread(collection_exists, col)
-        if not exists:
-            logger.info(f"preload_course_kb: {col!r} not found, skipping")
-            return
-
-        vectors: list = []
-        payloads: list = []
-        offset = None
-
-        async with httpx.AsyncClient(timeout=60) as client:
-            while True:
-                body: dict = {"limit": 250, "with_vectors": True, "with_payload": True}
-                if offset is not None:
-                    body["offset"] = offset
-
-                r = await client.post(
-                    f"{QDRANT_URL}/collections/{col}/points/scroll",
-                    headers=_qdrant_headers(),
-                    json=body,
-                )
-                r.raise_for_status()
-                data = r.json()["result"]
-
-                for pt in data["points"]:
-                    v = pt.get("vector")
-                    if v:
-                        vectors.append(v)
-                        payloads.append(pt.get("payload", {}))
-
-                offset = data.get("next_page_offset")
-                if offset is None:
-                    break
-
-        if not vectors:
-            logger.info(f"preload_course_kb: no vectors in {col!r}")
-            return
-
-        mat = np.array(vectors, dtype=np.float32)
-        norms = np.linalg.norm(mat, axis=1, keepdims=True)
-        mat /= np.where(norms == 0, 1.0, norms)   # L2-normalise rows
-
-        with _memory_lock:
-            _memory_kb[col] = _MemoryKB(vectors=mat, payloads=payloads)
-            _loading_cols.discard(col)
-
-        logger.info(f"preload_course_kb: {len(payloads)} vectors loaded for {col!r}")
-
-    except Exception as e:
-        logger.error(f"preload_course_kb failed for {col!r}: {e}", exc_info=True)
-        with _memory_lock:
-            _loading_cols.discard(col)
-
-
-def _memory_search(kb: _MemoryKB, query_vector: list, limit: int, threshold: float) -> list[dict]:
-    """Exact cosine search against the in-memory matrix — no network I/O."""
-    import numpy as np
-
-    qv = np.array(query_vector, dtype=np.float32)
-    norm = np.linalg.norm(qv)
-    if norm > 0:
-        qv /= norm
-
-    scores = kb.vectors @ qv                           # (N,) cosine similarities
-    above = np.where(scores >= threshold)[0]
-    if len(above) == 0:
-        return []
-
-    top = above[np.argsort(-scores[above])[:limit]]
-    return [
-        {
-            "content": kb.payloads[i].get("content", "")[:MAX_CONTENT_CHARS],
-            "page": kb.payloads[i].get("page"),
-            "title": kb.payloads[i].get("title", ""),
-            "score": round(float(scores[i]), 3),
-        }
-        for i in top
-    ]
 
 
 def search_course(institute_id: str, course_id: str, query: str, limit: int = 3) -> list[dict]:
     """Semantic search within a course's dedicated Qdrant collection.
-
-    Uses the in-memory KB when available (loaded by preload_course_kb at
-    session start), otherwise falls back to Qdrant with query-level caching.
 
     Args:
         institute_id: Institute UUID (part of the collection name).
@@ -512,28 +401,12 @@ def search_course(institute_id: str, course_id: str, query: str, limit: int = 3)
     t_total = time.monotonic()
     logger.info(f"[Search] query={query!r} col={col!r} limit={limit}")
 
-    # Fast path: in-memory exact search
-    with _memory_lock:
-        kb = _memory_kb.get(col)
-    if kb is not None:
-        qv = _get_query_vector(query)
-        results = _memory_search(kb, qv, limit, threshold=0.35)
-        elapsed_ms = (time.monotonic() - t_total) * 1000
-        scores = [r["score"] for r in results]
-        logger.info(
-            f"[Search] IN-MEMORY → {len(results)} hits in {elapsed_ms:.1f}ms "
-            f"scores={scores} col={col!r}"
-        )
-        for i, r in enumerate(results):
-            logger.debug(f"  [hit {i+1}] page={r.get('page')} score={r['score']} | {r['content'][:120]!r}")
-        return results
-
-    # Fallback: Qdrant with TTL cache
+    # Result-level TTL cache — avoids repeated Qdrant round-trips for identical queries
     cache_key = (col, query, limit)
     cached = _cache_get(cache_key)
     if cached is not None:
         elapsed_ms = (time.monotonic() - t_total) * 1000
-        logger.info(f"[Search] RESULT-CACHE HIT → {len(cached)} results in {elapsed_ms:.1f}ms col={col!r}")
+        logger.info(f"[Search] CACHE HIT → {len(cached)} results in {elapsed_ms:.1f}ms col={col!r}")
         return cached
 
     with _missing_cols_lock:

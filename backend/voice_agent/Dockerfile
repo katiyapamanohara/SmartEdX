@@ -16,6 +16,15 @@ COPY pyproject.toml README.md ./
 RUN uv venv && \
     uv pip install --no-cache .
 
+# Pre-download FastEmbed ONNX model into the image so runtime never blocks on download.
+# The model (~22 MB) is baked here once; containers start with it already on disk.
+ENV FASTEMBED_CACHE_PATH=/app/.fastembed_cache
+RUN .venv/bin/python -c "\
+from fastembed import TextEmbedding; \
+m = TextEmbedding('sentence-transformers/all-MiniLM-L6-v2'); \
+list(m.embed(['warmup'])); \
+print('FastEmbed model pre-loaded OK')"
+
 # --- Runtime Stage ---
 FROM python:3.13-slim
 
@@ -25,7 +34,12 @@ WORKDIR /app
 
 # Copy the venv from builder
 COPY --from=builder /app/.venv /app/.venv
+# Copy pre-downloaded FastEmbed model cache
+COPY --from=builder /app/.fastembed_cache /app/.fastembed_cache
+
 ENV PATH="/app/.venv/bin:$PATH"
+# Point fastembed at the pre-baked cache — no network access needed at startup
+ENV FASTEMBED_CACHE_PATH=/app/.fastembed_cache
 
 # Copy source
 COPY app/ ./app/
