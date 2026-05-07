@@ -19,6 +19,9 @@ from app.agent.api import end_assistant_session, start_assistant_session
 from app.config import APP_NAME
 from app.latency import latency
 from app.observability.langfuse_client import get_langfuse, update_generation
+from app.transcription import TranscriptHandler
+
+logger = logging.getLogger(__name__)
 
 # ── Cross-reconnect session memory ────────────────────────────────────────
 # Survives WebSocket disconnects so the agent remembers what was discussed.
@@ -35,9 +38,6 @@ def _get_session_memory(session_id: str) -> list[dict]:
 def _save_session_memory(session_id: str, turns: list[dict]) -> None:
     with _session_memory_lock:
         _session_memory[session_id] = turns[-_SESSION_MEMORY_TURNS:]
-from app.transcription import TranscriptHandler
-
-logger = logging.getLogger(__name__)
 
 
 class ADKSessionManager:

@@ -230,7 +230,7 @@ async def knowledgebase_search(payload: dict):
     if not query:
         return {"status": "error", "message": "Query is required."}
     limit = min(int(payload.get("limit", 5)), 20)
-    return search_knowledgebase(query=query, limit=limit)
+    return await search_knowledgebase(query=query, limit=limit)
 
 
 @app.get("/api/stats")

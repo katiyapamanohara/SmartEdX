@@ -563,7 +563,7 @@ def get_runner_for_teacher(
             else:
                 # No course_id supplied — search the general institute KB if available
                 if QDRANT_KB_ENABLED:
-                    return await asyncio.to_thread(search_knowledgebase, query=query, limit=limit)
+                    return await search_knowledgebase(query=query, limit=limit)
                 return {"status": "error", "message": "Please provide a course_id to search course materials."}
 
             if not results:
