@@ -53,7 +53,11 @@ def _get_http_client() -> httpx.Client:
     return _http_client
 
 
-# ── Negative collection cache — avoids pre-flight GET on every search ────
+# ── Collection existence caches ───────────────────────────────────────
+# _known_cols:   collections confirmed to exist — skip ensure_collection on search
+# _missing_cols: collections confirmed absent — short-circuit search immediately
+_known_cols: set[str] = set()
+_known_cols_lock = Lock()
 _missing_cols: set[str] = set()
 _missing_cols_lock = Lock()
 
@@ -168,6 +172,10 @@ def collection_name(institute_id: str, course_id: str) -> str:
 
 def ensure_collection(col_name: str) -> None:
     """Create a Qdrant collection if it does not already exist."""
+    with _known_cols_lock:
+        if col_name in _known_cols:
+            return
+
     result = _qdrant_request("GET", "/collections")
     existing = [c["name"] for c in result["result"]["collections"]]
     if col_name not in existing:
@@ -181,6 +189,8 @@ def ensure_collection(col_name: str) -> None:
             },
         )
         logger.info(f"Created Qdrant collection: {col_name!r}")
+    with _known_cols_lock:
+        _known_cols.add(col_name)
     with _missing_cols_lock:
         _missing_cols.discard(col_name)
 
@@ -389,11 +399,14 @@ def search_course(institute_id: str, course_id: str, query: str, limit: int = 3)
 
     logger.info(f"[Search] query={query!r} col={col!r} limit={limit}")
 
-    # 1. Always ensure collection exists (prevents race condition)
-    try:
-        ensure_collection(col)
-    except Exception as e:
-        logger.warning(f"[Search] ensure_collection failed: {e}")
+    # 1. Ensure collection exists on first search; skip if already confirmed
+    with _known_cols_lock:
+        already_known = col in _known_cols
+    if not already_known:
+        try:
+            ensure_collection(col)
+        except Exception as e:
+            logger.warning(f"[Search] ensure_collection failed: {e}")
 
     # 2. Cache
     cache_key = (col, query, limit)
