@@ -1,56 +1,15 @@
-# --- Builder Stage ---
-FROM python:3.13-slim AS builder
-
-# Install uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-
-WORKDIR /app
-
-# Install build dependencies
-RUN apt-get update && apt-get install -y gcc build-essential && rm -rf /var/lib/apt/lists/*
-
-# Copy only the files needed for dependency resolution
-COPY pyproject.toml README.md ./
-
-# Install dependencies into /app/.venv
-RUN uv venv && \
-    uv pip install --no-cache .
-
-# Pre-download FastEmbed ONNX model into the image so runtime never blocks on download.
-# The model (~22 MB) is baked here once; containers start with it already on disk.
-ENV FASTEMBED_CACHE_PATH=/app/.fastembed_cache
-RUN .venv/bin/python -c "\
-from fastembed import TextEmbedding; \
-m = TextEmbedding('sentence-transformers/all-MiniLM-L6-v2'); \
-list(m.embed(['warmup'])); \
-print('FastEmbed model pre-loaded OK')"
-
-# --- Runtime Stage ---
 FROM python:3.13-slim
 
-RUN apt-get update && apt-get install -y libsndfile1 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y gcc build-essential libsndfile1 && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy the venv from builder
-COPY --from=builder /app/.venv /app/.venv
-# Copy pre-downloaded FastEmbed model cache
-COPY --from=builder /app/.fastembed_cache /app/.fastembed_cache
+COPY pyproject.toml README.md ./
+RUN pip install --no-cache-dir .
 
-ENV PATH="/app/.venv/bin:$PATH"
-# Point fastembed at the pre-baked cache — no network access needed at startup
-ENV FASTEMBED_CACHE_PATH=/app/.fastembed_cache
-
-# Copy source
 COPY app/ ./app/
 COPY assets/ ./assets/
 
-# Expose ports
-# 8000 - HTTP/WebSocket (FastAPI + SIP-over-WebSocket for testing)
-# 5060 - SIP signaling (UDP) for Kamailio
-# 20000 - RTP audio (UDP)
 EXPOSE 8000
-EXPOSE 5060/udp
-EXPOSE 20000/udp
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
