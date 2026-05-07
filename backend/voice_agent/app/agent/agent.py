@@ -1,5 +1,6 @@
 """SmartEdX Voice Agent definition with Google ADK integration — per-institute."""
 
+import asyncio
 import logging
 import threading
 import time
@@ -441,7 +442,7 @@ def get_runner_for_course(
     logger.info(f"Building course Q&A agent for course: {course_name!r} ({course_id})")
 
     # Build a course-specific search tool via closure so course_id is baked in.
-    def search_course_material(query: str, limit: int = 2) -> dict:
+    async def search_course_material(query: str, limit: int = 2) -> dict:
         """Search course material. Call immediately for any course-content question.
 
         Args:
@@ -453,7 +454,13 @@ def get_runner_for_course(
         try:
             from app.qdrant.course_kb import search_course
 
-            results = search_course(institute_id=institute_id, course_id=course_id, query=query, limit=limit)
+            results = await asyncio.to_thread(
+                search_course,
+                institute_id=institute_id,
+                course_id=course_id,
+                query=query,
+                limit=limit,
+            )
             if not results:
                 return {
                     "status": "no_results",
@@ -488,7 +495,7 @@ def get_runner_for_course(
         ],
         instruction=system_instructions,
         generate_content_config=types.GenerateContentConfig(
-            thinking_config=types.ThinkingConfig(thinking_budget=512, include_thoughts=True),
+            thinking_config=types.ThinkingConfig(thinking_budget=0, include_thoughts=False),
         ),
     )
 
@@ -532,7 +539,7 @@ def get_runner_for_teacher(
 
     logger.info(f"Building teacher agent for institute={institute_id} teacher={teacher_id}")
 
-    def search_course_material(query: str, course_id: str = "", limit: int = 2) -> dict:
+    async def search_course_material(query: str, course_id: str = "", limit: int = 2) -> dict:
         """Search course materials. Call immediately for any course-content question.
 
         Args:
@@ -546,7 +553,8 @@ def get_runner_for_teacher(
             from app.qdrant.course_kb import search_course
 
             if course_id:
-                results = search_course(
+                results = await asyncio.to_thread(
+                    search_course,
                     institute_id=institute_id,
                     course_id=course_id,
                     query=query,
@@ -555,7 +563,7 @@ def get_runner_for_teacher(
             else:
                 # No course_id supplied — search the general institute KB if available
                 if QDRANT_KB_ENABLED:
-                    return search_knowledgebase(query=query, limit=limit)
+                    return await asyncio.to_thread(search_knowledgebase, query=query, limit=limit)
                 return {"status": "error", "message": "Please provide a course_id to search course materials."}
 
             if not results:
@@ -584,7 +592,7 @@ def get_runner_for_teacher(
         ],
         instruction=system_instructions,
         generate_content_config=types.GenerateContentConfig(
-            thinking_config=types.ThinkingConfig(thinking_budget=512, include_thoughts=True),
+            thinking_config=types.ThinkingConfig(thinking_budget=0, include_thoughts=False),
         ),
     )
 
