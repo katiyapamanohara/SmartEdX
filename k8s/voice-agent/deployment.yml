@@ -23,12 +23,6 @@ spec:
             - name: http
               containerPort: 8000
               protocol: TCP
-            - name: sip-udp
-              containerPort: 5060
-              protocol: UDP
-            - name: rtp-udp
-              containerPort: 20000
-              protocol: UDP
           envFrom:
             - secretRef:
                 name: voice-agent-secret
@@ -48,7 +42,6 @@ spec:
             periodSeconds: 10
             failureThreshold: 3
 ---
-# HTTP/WebSocket traffic — routed via Cloudflare Tunnel / Ingress
 apiVersion: v1
 kind: Service
 metadata:
@@ -65,38 +58,6 @@ spec:
       targetPort: 8000
       protocol: TCP
   type: ClusterIP
----
-# SIP + RTP traffic — must bypass Cloudflare; requires direct public IP
-# GKE will provision an external L4 load balancer with a public IP for UDP
-apiVersion: v1
-kind: Service
-metadata:
-  name: voice-agent-sip
-  namespace: prod
-  labels:
-    app: voice-agent
-  annotations:
-    cloud.google.com/load-balancer-type: "External"
-    # Uncomment and set this once you have a reserved static IP in GCP:
-    # kubernetes.io/ingress.global-static-ip-name: "voice-agent-sip-ip"
-spec:
-  selector:
-    app: voice-agent
-  ports:
-    - name: sip-udp
-      port: 5060
-      targetPort: 5060
-      protocol: UDP
-    - name: rtp-udp
-      port: 20000
-      targetPort: 20000
-      protocol: UDP
-  type: LoadBalancer
-  # Keep SIP sessions on the same pod; SIP re-INVITE/BYE must reach the same instance
-  sessionAffinity: ClientIP
-  sessionAffinityConfig:
-    clientIP:
-      timeoutSeconds: 3600
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
