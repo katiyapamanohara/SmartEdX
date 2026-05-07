@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: voice-agent
+  namespace: prod
+  annotations:
+    # Required for WebSocket upgrade to pass through nginx
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/connection-proxy-header: "upgrade"
+    nginx.ingress.kubernetes.io/proxy-set-headers: "voice-agent-proxy-headers"
+    # If using Cloudflare Tunnel instead of nginx ingress, remove these annotations
+    # and configure the tunnel to forward to voice-agent:8000 directly.
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: voice.smartedx.app   # replace with your actual hostname
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: voice-agent
+                port:
+                  number: 8000
