@@ -20,8 +20,10 @@ Point payload schema:
 
 import io
 import logging
+import time
 import uuid
 from pathlib import PurePosixPath
+from threading import Lock
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -37,6 +39,30 @@ EMBEDDING_DIM = 384
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 BATCH_SIZE = 50
+MAX_CONTENT_CHARS = 500  # truncate chunks to limit tokens sent to model
+
+# ── Search result cache ────────────────────────────────────────────────
+_CACHE_TTL = 300  # seconds
+_CACHE_MAX = 256
+_search_cache: dict[tuple, tuple[float, list]] = {}
+_search_cache_lock = Lock()
+
+
+def _cache_get(key: tuple) -> list | None:
+    with _search_cache_lock:
+        entry = _search_cache.get(key)
+    if entry and (time.monotonic() - entry[0]) < _CACHE_TTL:
+        return entry[1]
+    return None
+
+
+def _cache_set(key: tuple, results: list) -> None:
+    with _search_cache_lock:
+        _search_cache[key] = (time.monotonic(), results)
+        if len(_search_cache) > _CACHE_MAX:
+            oldest = sorted(_search_cache.items(), key=lambda x: x[1][0])
+            for k, _ in oldest[:64]:
+                del _search_cache[k]
 
 _embedding_model: Optional[TextEmbedding] = None
 
@@ -82,7 +108,11 @@ def ensure_collection(col_name: str) -> None:
         _qdrant_request(
             "PUT",
             f"/collections/{col_name}",
-            json={"vectors": {"size": EMBEDDING_DIM, "distance": "Cosine"}},
+            json={
+                "vectors": {"size": EMBEDDING_DIM, "distance": "Cosine"},
+                "hnsw_config": {"m": 16, "ef_construct": 100},
+                "optimizers_config": {"default_segment_number": 2},
+            },
         )
         logger.info(f"Created Qdrant collection: {col_name!r}")
 
@@ -285,7 +315,7 @@ def collection_exists(col_name: str) -> bool:
         return False
 
 
-def search_course(institute_id: str, course_id: str, query: str, limit: int = 5) -> list[dict]:
+def search_course(institute_id: str, course_id: str, query: str, limit: int = 3) -> list[dict]:
     """Semantic search within a course's dedicated Qdrant collection.
 
     Returns an empty list (instead of raising) when the collection does not
@@ -302,6 +332,12 @@ def search_course(institute_id: str, course_id: str, query: str, limit: int = 5)
     """
     col = collection_name(institute_id, course_id)
 
+    cache_key = (col, query, limit)
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        logger.debug(f"search_course cache hit for query={query!r} col={col!r}")
+        return cached
+
     if not collection_exists(col):
         logger.info(f"Collection {col!r} does not exist — no KB indexed yet, returning empty results.")
         return []
@@ -312,14 +348,22 @@ def search_course(institute_id: str, course_id: str, query: str, limit: int = 5)
     result = _qdrant_request(
         "POST",
         f"/collections/{col}/points/search",
-        json={"vector": query_vector, "limit": limit, "with_payload": True},
+        json={
+            "vector": query_vector,
+            "limit": limit,
+            "with_payload": True,
+            "score_threshold": 0.35,
+            "params": {"hnsw_ef": 64, "exact": False},
+        },
     )
-    return [
+    results = [
         {
-            "content": h["payload"].get("content", ""),
+            "content": h["payload"].get("content", "")[:MAX_CONTENT_CHARS],
             "page": h["payload"].get("page"),
             "title": h["payload"].get("title", ""),
-            "score": h["score"],
+            "score": round(h["score"], 3),
         }
         for h in result.get("result", [])
     ]
+    _cache_set(cache_key, results)
+    return results

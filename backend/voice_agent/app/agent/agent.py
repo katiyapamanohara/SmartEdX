@@ -129,7 +129,7 @@ def end_call(tool_context: ToolContext) -> dict:
 _embedding_model = TextEmbedding("sentence-transformers/all-MiniLM-L6-v2") if QDRANT_KB_ENABLED else None
 
 
-def search_knowledgebase(query: str, limit: int = 5) -> dict:
+def search_knowledgebase(query: str, limit: int = 3) -> dict:
     """Search the knowledge base for relevant information.
     Use this tool when the user asks questions about products, services,
     pricing, installation, company details, or any domain-specific information.
@@ -153,7 +153,13 @@ def search_knowledgebase(query: str, limit: int = 5) -> dict:
         search_result = requests.post(
             f"{QDRANT_URL}/collections/{QDRANT_COLLECTION_NAME}/points/search",
             headers=headers,
-            json={"vector": query_vector, "limit": limit, "with_payload": True},
+            json={
+                "vector": query_vector,
+                "limit": limit,
+                "with_payload": True,
+                "score_threshold": 0.35,
+                "params": {"hnsw_ef": 64, "exact": False},
+            },
             timeout=15,
         )
         search_result.raise_for_status()
@@ -163,7 +169,11 @@ def search_knowledgebase(query: str, limit: int = 5) -> dict:
             return {"status": "no_results", "message": "No relevant information found."}
 
         results = [
-            {"content": h["payload"].get("content", ""), "page": h["payload"].get("page"), "score": h["score"]}
+            {
+                "content": h["payload"].get("content", "")[:500],
+                "page": h["payload"].get("page"),
+                "score": round(h["score"], 3),
+            }
             for h in hits
         ]
         return {"status": "ok", "results": results}
@@ -408,7 +418,7 @@ def get_runner_for_course(
     logger.info(f"Building course Q&A agent for course: {course_name!r} ({course_id})")
 
     # Build a course-specific search tool via closure so course_id is baked in.
-    def search_course_material(query: str, limit: int = 5) -> dict:
+    def search_course_material(query: str, limit: int = 3) -> dict:
         """Search the course material for information relevant to the student's question.
 
         Use this tool whenever the student asks about any topic, concept, or
@@ -417,7 +427,7 @@ def get_runner_for_course(
 
         Args:
             query: Natural-language description of the information to find.
-            limit: Maximum number of results to return (default 5).
+            limit: Maximum number of results to return (default 3).
 
         Returns:
             Matching excerpts from the course material with page references.
@@ -507,7 +517,7 @@ def get_runner_for_teacher(
 
     logger.info(f"Building teacher agent for institute={institute_id} teacher={teacher_id}")
 
-    def search_course_material(query: str, course_id: str = "", limit: int = 5) -> dict:
+    def search_course_material(query: str, course_id: str = "", limit: int = 3) -> dict:
         """Search course materials stored in Qdrant.
 
         Use this tool whenever the teacher asks about course content, lesson topics,
@@ -517,7 +527,7 @@ def get_runner_for_teacher(
             query:     Natural-language description of the information to find.
             course_id: Optional specific course UUID to narrow the search.
                        Leave empty to search across all indexed courses.
-            limit:     Maximum number of results to return (default 5).
+            limit:     Maximum number of results to return (default 3).
 
         Returns:
             Matching excerpts from course materials with page references.

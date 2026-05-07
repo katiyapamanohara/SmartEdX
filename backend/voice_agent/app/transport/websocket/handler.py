@@ -279,9 +279,14 @@ async def websocket_endpoint(
 
                 event_json = event.model_dump_json(exclude_none=True, by_alias=True)
 
+                # Parse once; reused for audio-clip suppression, reminder logic, and logging
+                try:
+                    evt = json.loads(event_json)
+                except Exception:
+                    evt = {}
+
                 if AUDIO_CLIP_TOOL_MAP:
                     try:
-                        evt = json.loads(event_json)
                         parts = (evt.get("content") or {}).get("parts") or []
                         # Start suppressing when the model calls an audio clip tool
                         if any((p.get("functionCall") or {}).get("name") in AUDIO_CLIP_TOOL_MAP for p in parts):
@@ -305,25 +310,14 @@ async def websocket_endpoint(
                 has_text = '"text"' in event_json
                 has_usage = '"usageMetadata"' in event_json
 
-
-                # --- Reminder logic ---
-                # If a question is sent (text from agent), start reminder task
+                # --- Reminder logic (reuses already-parsed evt) ---
                 try:
-                    evt = json.loads(event_json)
                     author = evt.get("author")
-                    content = (evt.get("content") or {}).get("parts") or []
-                    # Detect agent question (agent text, not system or user)
-                    if author in ("agent", "bot") and any(p.get("text") for p in content):
+                    parts = (evt.get("content") or {}).get("parts") or []
+                    if author in ("agent", "bot") and any(p.get("text") for p in parts):
                         cancel_reminder()
                         reminder_task = asyncio.create_task(send_reminder_after_timeout())
-                except Exception:
-                    pass
-
-                # If user responds, cancel reminder
-                try:
-                    evt = json.loads(event_json)
-                    author = evt.get("author")
-                    if author == "user":
+                    elif author == "user":
                         cancel_reminder()
                 except Exception:
                     pass
@@ -336,7 +330,7 @@ async def websocket_endpoint(
                 elif has_usage:
                     logger.info(f"WS {session_id}: sending usageMetadata event")
                 else:
-                    logger.debug(f"WS {session_id}: sending other event keys={list(json.loads(event_json).keys())}")
+                    logger.debug(f"WS {session_id}: sending other event keys={list(evt.keys())}")
 
                 await websocket.send_text(event_json)
 
