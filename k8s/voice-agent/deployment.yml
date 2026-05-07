@@ -26,6 +26,13 @@ spec:
           envFrom:
             - secretRef:
                 name: voice-agent-secret
+          env:
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /var/secrets/google/key.json
+          volumeMounts:
+            - name: gcp-key
+              mountPath: /var/secrets/google
+              readOnly: true
           resources:
             requests:
               memory: "512Mi"
@@ -47,6 +54,10 @@ spec:
             initialDelaySeconds: 60
             periodSeconds: 30
             failureThreshold: 3
+      volumes:
+        - name: gcp-key
+          secret:
+            secretName: voice-agent-gcp-key
       terminationGracePeriodSeconds: 30
 ---
 apiVersion: v1
