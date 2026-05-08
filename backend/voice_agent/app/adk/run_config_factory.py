@@ -20,12 +20,13 @@ _VAD_CONFIG = types.RealtimeInputConfig(
     automatic_activity_detection=types.AutomaticActivityDetection(
         # High start sensitivity catches speech fast even in noisy rooms.
         start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_HIGH,
-        # Low end sensitivity avoids cutting off mid-sentence on brief noise gaps.
-        end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_LOW,
-        # 200ms padding captures speech onset cleanly with background noise.
-        prefix_padding_ms=200,
-        # 500ms silence before end-of-turn — feels natural, won't trigger on pauses.
-        silence_duration_ms=500,
+        # High end sensitivity so the model stops listening and starts responding sooner.
+        end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_HIGH,
+        # 100ms padding still captures speech onset cleanly without adding buffer delay.
+        prefix_padding_ms=100,
+        # 300ms silence before end-of-turn — tight enough to feel instant, long enough
+        # to not cut off natural mid-sentence pauses.
+        silence_duration_ms=300,
     )
 )
 

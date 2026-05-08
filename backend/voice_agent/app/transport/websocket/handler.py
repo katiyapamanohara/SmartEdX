@@ -282,13 +282,9 @@ async def websocket_endpoint(
                     latency.stop_timer("first_response", t_first_response, session_id)
                     first_response_recorded = True
 
-                event_json = event.model_dump_json(exclude_none=True, by_alias=True)
-
-                # Parse once; reused for audio-clip suppression, reminder logic, and logging
-                try:
-                    evt = json.loads(event_json)
-                except Exception:
-                    evt = {}
+                # Build dict once — avoids model_dump_json() + json.loads() round-trip.
+                # event_json is produced once at the send point.
+                evt = event.model_dump(exclude_none=True, by_alias=True)
 
                 if AUDIO_CLIP_TOOL_MAP:
                     try:
@@ -303,17 +299,22 @@ async def websocket_endpoint(
                             logger.debug(f"WS {session_id}: turn complete — model audio suppression lifted")
                         # Strip inlineData (model speech) while suppression is active
                         if suppress_model_audio:
-                            filtered = [p for p in parts if "inlineData" not in p]
-                            if len(filtered) != len(parts):
-                                if evt.get("content"):
-                                    evt["content"]["parts"] = filtered
-                                event_json = json.dumps(evt)
+                            content = evt.get("content")
+                            if content:
+                                content["parts"] = [p for p in content.get("parts", []) if "inlineData" not in p]
                     except Exception:
                         pass
 
-                has_audio = '"inlineData"' in event_json
-                has_text = '"text"' in event_json
-                has_usage = '"usageMetadata"' in event_json
+                _parts = (evt.get("content") or {}).get("parts") or []
+                has_audio = any("inlineData" in p for p in _parts)
+                has_text = (
+                    any("text" in p for p in _parts)
+                    or "inputTranscription" in evt
+                    or "outputTranscription" in evt
+                    or "turnComplete" in evt
+                    or "interrupted" in evt
+                )
+                has_usage = "usageMetadata" in evt
 
                 # ── Log model reasoning (thought parts) ──────────────────
                 try:
@@ -354,7 +355,7 @@ async def websocket_endpoint(
                 # --- End reminder logic ---
 
                 if has_audio:
-                    logger.info(f"WS {session_id}: sending audio event ({len(event_json)} bytes)")
+                    logger.debug(f"WS {session_id}: sending audio event")
                 elif has_text:
                     logger.info(f"WS {session_id}: sending text event")
                 elif has_usage:
@@ -362,10 +363,12 @@ async def websocket_endpoint(
                 else:
                     logger.debug(f"WS {session_id}: sending other event keys={list(evt.keys())}")
 
+                # Serialize once here — dict was built (and possibly modified) above.
+                event_json = json.dumps(evt)
                 await websocket.send_text(event_json)
 
                 if not has_audio or has_text:
-                    mgr.transcript_handler.process_event(event_json)
+                    mgr.transcript_handler.process_event(evt)
         except Exception as e:
             logger.warning(f"WS {session_id}: Gemini live connection ended: {e}")
             try:
