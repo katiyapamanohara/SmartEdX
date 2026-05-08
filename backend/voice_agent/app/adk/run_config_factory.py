@@ -55,6 +55,10 @@ def build_run_config(
             proactivity=types.ProactivityConfig(proactive_audio=proactivity),
             enable_affective_dialog=affective_dialog if affective_dialog else None,
             tool_thread_pool_config=_TOOL_THREAD_POOL,
+            context_window_compression=types.ContextWindowCompressionConfig(
+                trigger_tokens=8000,
+                sliding_window=types.SlidingWindow(target_tokens=4000),
+            ),
         )
         logger.debug(
             f"Native audio model: {model_name}, AUDIO modality, "
@@ -84,4 +88,8 @@ def build_sip_run_config() -> RunConfig:
         session_resumption=types.SessionResumptionConfig(),
         proactivity=types.ProactivityConfig(proactive_audio=False),
         tool_thread_pool_config=_TOOL_THREAD_POOL,
+        context_window_compression=types.ContextWindowCompressionConfig(
+            trigger_tokens=8000,
+            sliding_window=types.SlidingWindow(target_tokens=4000),
+        ),
     )

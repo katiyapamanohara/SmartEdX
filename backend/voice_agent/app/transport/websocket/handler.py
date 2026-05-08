@@ -25,6 +25,15 @@ from app.observability.langfuse_client import observe_decorator, update_trace
 logger = logging.getLogger(__name__)
 
 
+class _BytesEncoder(json.JSONEncoder):
+    def default(self, obj: object) -> object:
+        if isinstance(obj, bytes):
+            return base64.b64encode(obj).decode()
+        if isinstance(obj, set):
+            return list(obj)
+        return super().default(obj)
+
+
 @observe_decorator(name="Voice Agent Execution", as_type="generation")
 async def websocket_endpoint(
     websocket: WebSocket,
@@ -364,7 +373,8 @@ async def websocket_endpoint(
                     logger.debug(f"WS {session_id}: sending other event keys={list(evt.keys())}")
 
                 # Serialize once here — dict was built (and possibly modified) above.
-                event_json = json.dumps(evt)
+                # _BytesEncoder converts any bytes fields (e.g. inlineData audio) to base64 strings.
+                event_json = json.dumps(evt, cls=_BytesEncoder)
                 await websocket.send_text(event_json)
 
                 if not has_audio or has_text:

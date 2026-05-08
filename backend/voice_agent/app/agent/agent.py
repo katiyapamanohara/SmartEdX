@@ -467,6 +467,19 @@ def get_runner_for_course(
         """
         if not COURSE_KB_ENABLED:
             return {"status": "error", "message": "Course knowledge base is not enabled."}
+        _GENERIC = {
+            "course content", "course material", "course materials", "content",
+            "material", "materials", "information", "topic", "topics", "subject",
+            "the course", "this course", "course",
+        }
+        if not query or query.strip().lower() in _GENERIC or len(query.strip()) < 3:
+            return {
+                "status": "error",
+                "message": (
+                    "Query is too generic. Extract the specific subject keyword "
+                    "from the user's question and call again with that keyword."
+                ),
+            }
         try:
             import asyncio
             from app.qdrant.course_kb import search_course
@@ -575,6 +588,19 @@ def get_runner_for_teacher(
         """
         if not COURSE_KB_ENABLED:
             return {"status": "error", "message": "Course knowledge base is not enabled."}
+        _GENERIC = {
+            "course content", "course material", "course materials", "content",
+            "material", "materials", "information", "topic", "topics", "subject",
+            "the course", "this course", "course",
+        }
+        if not query or query.strip().lower() in _GENERIC or len(query.strip()) < 3:
+            return {
+                "status": "error",
+                "message": (
+                    "Query is too generic. Extract the specific subject keyword "
+                    "from the teacher's question and call again with that keyword."
+                ),
+            }
         try:
             import asyncio
             from app.qdrant.course_kb import search_all_institute_courses, search_course
