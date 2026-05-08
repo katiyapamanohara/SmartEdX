@@ -29,13 +29,7 @@ spec:
           env:
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: /var/secrets/google/key.json
-          resources:
-            requests:
-              cpu: 100m
-              memory: 512Mi
-            limits:
-              cpu: "1"
-              memory: 1Gi
+      
           volumeMounts:
             - name: gcp-key
               mountPath: /var/secrets/google

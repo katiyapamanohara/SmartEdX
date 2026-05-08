@@ -24,13 +24,7 @@ spec:
           envFrom:
             - secretRef:
                 name: facial-recognition-secret
-          resources:
-            requests:
-              cpu: 100m
-              memory: 400Mi
-            limits:
-              cpu: "1"
-              memory: 768Mi
+      
           livenessProbe:
             httpGet:
               path: /health
