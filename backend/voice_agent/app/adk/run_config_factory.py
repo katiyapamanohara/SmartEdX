@@ -18,15 +18,14 @@ def _make_speech_config(voice_name: str) -> types.SpeechConfig:
 
 _VAD_CONFIG = types.RealtimeInputConfig(
     automatic_activity_detection=types.AutomaticActivityDetection(
-        # High start sensitivity catches speech fast even in noisy rooms.
         start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_HIGH,
-        # High end sensitivity so the model stops listening and starts responding sooner.
-        end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_HIGH,
-        # 100ms padding still captures speech onset cleanly without adding buffer delay.
-        prefix_padding_ms=100,
-        # 300ms silence before end-of-turn — tight enough to feel instant, long enough
-        # to not cut off natural mid-sentence pauses.
-        silence_duration_ms=300,
+        # LOW end sensitivity waits for more definitive silence before declaring end-of-turn,
+        # preventing the VAD from getting stuck when there's background noise or breathing.
+        end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_LOW,
+        prefix_padding_ms=800,
+        # 600ms gives enough silence buffer for natural speech patterns without a noisy environment
+        # preventing end-of-turn from ever triggering.
+        silence_duration_ms=1,
     )
 )
 
