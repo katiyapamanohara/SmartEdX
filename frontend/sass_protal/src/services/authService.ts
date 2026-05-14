@@ -266,7 +266,8 @@ export const authService = {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch institutes');
+        const body = await response.text().catch(() => '');
+        throw new Error(`Failed to fetch institutes (${response.status})${body ? ': ' + body : ''}`);
       }
 
       return await response.json();

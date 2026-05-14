@@ -24,6 +24,7 @@ out/
 .env.test.local
 .env.production.local
 
+config-files/
 # IDEs and editors
 .vscode/
 .idea/
@@ -151,3 +152,23 @@ site/
 .eggs/
 *.egg-info/
 pip-wheel-metadata/
+
+
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+*.tfstate.*.backup
+*.tfplan
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc

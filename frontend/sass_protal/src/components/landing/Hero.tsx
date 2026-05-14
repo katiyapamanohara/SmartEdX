@@ -14,31 +14,31 @@ const pills = [
 
 export function Hero() {
   return (
-    <section className="h-screen overflow-hidden flex justify-center items-center">
+    <section className="relative min-h-[100dvh] flex justify-center items-center pt-32 pb-20 sm:pt-0 sm:py-0 sm:min-h-screen overflow-hidden">
       {/* Animated Background Blobs */}
       <motion.div
-        animate={{ scale: [1, 1.2, 1], rotate: [0, 90, 0], opacity: [0.3, 0.5, 0.3] }}
+        animate={{ scale: [1, 1.1, 1], rotate: [0, 45, 0], opacity: [0.3, 0.5, 0.3] }}
         transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-        className="absolute top-0 left-1/4 w-200 h-200 bg-indigo-500/10 dark:bg-indigo-500/20 rounded-full blur-[100px] -z-10"
+        className="absolute top-0 right-0 md:left-1/4 w-[300px] h-[300px] md:w-[600px] md:h-[600px] bg-indigo-500/10 dark:bg-indigo-500/20 rounded-full blur-[80px] md:blur-[100px] -z-10"
       />
       <motion.div
-        animate={{ scale: [1, 1.1, 1], rotate: [0, -60, 0], opacity: [0.2, 0.4, 0.2] }}
+        animate={{ scale: [1, 1.1, 1], rotate: [0, -45, 0], opacity: [0.2, 0.4, 0.2] }}
         transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-        className="absolute bottom-0 right-1/4 w-150 h-150 bg-violet-500/10 dark:bg-violet-500/20 rounded-full blur-[80px] -z-10"
+        className="absolute bottom-0 left-0 md:right-1/4 w-[250px] h-[250px] md:w-[500px] md:h-[500px] bg-violet-500/10 dark:bg-violet-500/20 rounded-full blur-[60px] md:blur-[80px] -z-10"
       />
       <FloatingParticles />
       <motion.div
-        animate={{ x: [0, 100, 0], y: [0, -50, 0], opacity: [0.3, 0.6, 0.3] }}
+        animate={{ x: [0, 40, 0], y: [0, -30, 0], opacity: [0.3, 0.6, 0.3] }}
         transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
-        className="absolute top-20 right-20 w-64 h-64 bg-pink-400/20 dark:bg-pink-500/20 rounded-full blur-[60px] -z-10"
+        className="absolute top-10 right-10 md:top-20 md:right-20 w-48 h-48 md:w-64 md:h-64 bg-pink-400/20 dark:bg-pink-500/20 rounded-full blur-[40px] md:blur-[60px] -z-10"
       />
       <motion.div
-        animate={{ x: [0, -80, 0], y: [0, 60, 0], opacity: [0.3, 0.6, 0.3] }}
+        animate={{ x: [0, -40, 0], y: [0, 40, 0], opacity: [0.3, 0.6, 0.3] }}
         transition={{ duration: 22, repeat: Infinity, ease: "linear" }}
-        className="absolute bottom-20 left-20 w-72 h-72 bg-cyan-400/20 dark:bg-cyan-500/20 rounded-full blur-[60px] -z-10"
+        className="absolute bottom-10 left-10 md:bottom-20 md:left-20 w-56 h-56 md:w-72 md:h-72 bg-cyan-400/20 dark:bg-cyan-500/20 rounded-full blur-[40px] md:blur-[60px] -z-10"
       />
 
-      <div className="max-w-7xl mx-auto px-6 text-center">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 text-center relative z-10">
         {/* Badge */}
         <motion.div
           initial="hidden"
@@ -58,7 +58,7 @@ export function Hero() {
           initial="hidden"
           animate="visible"
           variants={fadeInUp}
-          className="text-5xl md:text-7xl font-extrabold mb-6 tracking-tight leading-tight"
+          className="text-4xl sm:text-5xl md:text-7xl font-extrabold mb-6 tracking-tight leading-tight"
         >
           <span className="bg-clip-text text-transparent bg-linear-to-r from-gray-900 via-gray-700 to-gray-900 dark:from-white dark:via-gray-200 dark:to-gray-400">
             The SaaS platform for{" "}
@@ -85,7 +85,7 @@ export function Hero() {
           initial="hidden"
           animate="visible"
           variants={fadeInUp}
-          className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto mb-8 leading-relaxed"
+          className="text-base sm:text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto mb-8 leading-relaxed"
         >
           Live classes, AI-powered grading, exam proctoring, virtual labs, and a
           white-label portal — everything your institute needs, in one platform.

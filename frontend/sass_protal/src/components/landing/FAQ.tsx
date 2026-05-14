@@ -37,7 +37,7 @@ const faqs = [
 export function FAQ() {
   return (
     <section id="faq" className="py-24">
-      <div className="max-w-3xl mx-auto px-6">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6">
         <motion.div
           initial="hidden"
           whileInView="visible"

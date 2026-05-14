@@ -20,8 +20,10 @@ Point payload schema:
 
 import io
 import logging
+import time
 import uuid
 from pathlib import PurePosixPath
+from threading import Lock
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -30,6 +32,35 @@ from fastembed import TextEmbedding
 
 from app.config import QDRANT_API_KEY, QDRANT_URL
 
+# ── Persistent HTTP client — reuses connections across all Qdrant calls ──
+_http_client: Optional[httpx.Client] = None
+_http_client_lock = Lock()
+
+
+def _get_http_client() -> httpx.Client:
+    global _http_client
+    if _http_client is None:
+        with _http_client_lock:
+            if _http_client is None:
+                _http_client = httpx.Client(
+                    timeout=8.0,
+                    limits=httpx.Limits(
+                        max_keepalive_connections=10,
+                        max_connections=20,
+                        keepalive_expiry=30,
+                    ),
+                )
+    return _http_client
+
+
+# ── Collection existence caches ───────────────────────────────────────
+# _known_cols:   collections confirmed to exist — skip ensure_collection on search
+# _missing_cols: collections confirmed absent — short-circuit search immediately
+_known_cols: set[str] = set()
+_known_cols_lock = Lock()
+_missing_cols: set[str] = set()
+_missing_cols_lock = Lock()
+
 logger = logging.getLogger(__name__)
 
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
@@ -37,16 +68,78 @@ EMBEDDING_DIM = 384
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 BATCH_SIZE = 50
+MAX_CONTENT_CHARS = 300  # truncate chunks to limit tokens sent to model
+
+# ── Search result cache ────────────────────────────────────────────────
+_CACHE_TTL = 300  # seconds
+_CACHE_MAX = 256
+_search_cache: dict[tuple, tuple[float, list]] = {}
+_search_cache_lock = Lock()
+
+
+def _cache_get(key: tuple) -> list | None:
+    with _search_cache_lock:
+        entry = _search_cache.get(key)
+    if entry and (time.monotonic() - entry[0]) < _CACHE_TTL:
+        return entry[1]
+    return None
+
+
+def _cache_set(key: tuple, results: list) -> None:
+    with _search_cache_lock:
+        _search_cache[key] = (time.monotonic(), results)
+        if len(_search_cache) > _CACHE_MAX:
+            oldest = sorted(_search_cache.items(), key=lambda x: x[1][0])
+            for k, _ in oldest[:64]:
+                del _search_cache[k]
 
 _embedding_model: Optional[TextEmbedding] = None
+_embedding_model_lock = Lock()
 
 
 def _get_embedding_model() -> TextEmbedding:
     global _embedding_model
     if _embedding_model is None:
-        logger.info(f"Loading FastEmbed model: {EMBEDDING_MODEL}")
-        _embedding_model = TextEmbedding(EMBEDDING_MODEL)
+        with _embedding_model_lock:
+            if _embedding_model is None:
+                import os
+                cache_path = os.environ.get("FASTEMBED_CACHE_PATH")
+                logger.info(f"Loading FastEmbed model: {EMBEDDING_MODEL} (cache={cache_path or 'default'})")
+                kwargs = {"cache_dir": cache_path} if cache_path else {}
+                _embedding_model = TextEmbedding(EMBEDDING_MODEL, **kwargs)
+                # Force ONNX runtime to load now so first embed() call is fast
+                list(_embedding_model.embed(["warmup"]))
+                logger.info("FastEmbed model fully loaded")
     return _embedding_model
+
+
+# ── Query-vector cache — skips ONNX inference for repeated queries ────────
+_qvec_cache: dict[str, list] = {}
+_qvec_lock = Lock()
+_QVEC_MAX = 256
+
+
+def _get_query_vector(query: str) -> list:
+    """Return the embedding vector for query, using cache when possible."""
+    with _qvec_lock:
+        if query in _qvec_cache:
+            logger.info(f"[Embed] Cache HIT for query: {query!r}")
+            return _qvec_cache[query]
+
+    logger.info(f"[Embed] Cache MISS — running FastEmbed inference for: {query!r}")
+    t0 = time.monotonic()
+    vec = list(_get_embedding_model().embed([query]))[0].tolist()
+    elapsed_ms = (time.monotonic() - t0) * 1000
+    logger.info(f"[Embed] Inference done in {elapsed_ms:.1f}ms (dim={len(vec)})")
+
+    with _qvec_lock:
+        if len(_qvec_cache) >= _QVEC_MAX:
+            try:
+                del _qvec_cache[next(iter(_qvec_cache))]
+            except StopIteration:
+                pass
+        _qvec_cache[query] = vec
+    return vec
 
 
 def _qdrant_headers() -> dict:
@@ -58,10 +151,13 @@ def _qdrant_headers() -> dict:
 
 def _qdrant_request(method: str, path: str, **kwargs) -> dict:
     url = f"{QDRANT_URL}{path}"
-    with httpx.Client(timeout=30) as client:
-        r = client.request(method, url, headers=_qdrant_headers(), **kwargs)
-        r.raise_for_status()
-        return r.json()
+    t0 = time.monotonic()
+    logger.debug(f"[Qdrant→] {method} {path}")
+    r = _get_http_client().request(method, url, headers=_qdrant_headers(), **kwargs)
+    elapsed_ms = (time.monotonic() - t0) * 1000
+    logger.info(f"[Qdrant←] {method} {path} → HTTP {r.status_code} in {elapsed_ms:.1f}ms")
+    r.raise_for_status()
+    return r.json()
 
 
 def collection_name(institute_id: str, course_id: str) -> str:
@@ -75,16 +171,42 @@ def collection_name(institute_id: str, course_id: str) -> str:
 
 
 def ensure_collection(col_name: str) -> None:
-    """Create a Qdrant collection if it does not already exist."""
+    """Create a Qdrant collection if it does not already exist.
+
+    Also creates keyword payload indexes on ``institute_id`` and ``course_id``
+    so cross-collection filters run efficiently.
+    """
+    with _known_cols_lock:
+        if col_name in _known_cols:
+            return
+
     result = _qdrant_request("GET", "/collections")
     existing = [c["name"] for c in result["result"]["collections"]]
     if col_name not in existing:
         _qdrant_request(
             "PUT",
             f"/collections/{col_name}",
-            json={"vectors": {"size": EMBEDDING_DIM, "distance": "Cosine"}},
+            json={
+                "vectors": {"size": EMBEDDING_DIM, "distance": "Cosine"},
+                "hnsw_config": {"m": 16, "ef_construct": 100},
+                "optimizers_config": {"default_segment_number": 2},
+            },
         )
+        # Keyword indexes on institute_id / course_id enable fast filtered searches
+        for field in ("institute_id", "course_id", "content_id"):
+            try:
+                _qdrant_request(
+                    "PUT",
+                    f"/collections/{col_name}/index",
+                    json={"field_name": field, "field_schema": "keyword"},
+                )
+            except Exception as idx_err:
+                logger.warning(f"Could not create index on {field!r} in {col_name!r}: {idx_err}")
         logger.info(f"Created Qdrant collection: {col_name!r}")
+    with _known_cols_lock:
+        _known_cols.add(col_name)
+    with _missing_cols_lock:
+        _missing_cols.discard(col_name)
 
 
 # ── Text extraction ────────────────────────────────────────────────────
@@ -246,11 +368,14 @@ def index_content(
                 "id": str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{content_id}_chunk_{i + j}")),
                 "vector": emb,
                 "payload": {
+                    "institute_id": institute_id,
+                    "course_id": course_id,
+                    "course_name": course_name,
+                    "content_id": content_id,
+                    "title": title,
                     "content": chunk["text"],
                     "page": chunk["page"],
                     "chunk_index": chunk["chunk_index"],
-                    "content_id": content_id,
-                    "title": title,
                 },
             }
             for j, (chunk, emb) in enumerate(zip(batch_chunks, batch_embeddings))
@@ -285,41 +410,171 @@ def collection_exists(col_name: str) -> bool:
         return False
 
 
-def search_course(institute_id: str, course_id: str, query: str, limit: int = 5) -> list[dict]:
-    """Semantic search within a course's dedicated Qdrant collection.
+def list_course_collections(institute_id: str) -> list[str]:
+    """Return all collection names that belong to the given institute.
 
-    Returns an empty list (instead of raising) when the collection does not
-    exist yet — this happens when no course material has been uploaded/indexed.
-
-    Args:
-        institute_id: Institute UUID (part of the collection name).
-        course_id:    Course UUID (part of the collection name).
-        query:        Natural-language search query.
-        limit:        Maximum number of results to return.
-
-    Returns:
-        List of dicts with keys: content, page, title, score.
+    Collections follow the naming convention ``kb_{institute_id}_{course_id}``,
+    so we can enumerate them with a prefix filter against Qdrant's collection
+    list.
     """
-    col = collection_name(institute_id, course_id)
-
-    if not collection_exists(col):
-        logger.info(f"Collection {col!r} does not exist — no KB indexed yet, returning empty results.")
+    safe_inst = institute_id.lower().replace("-", "_")
+    prefix = f"kb_{safe_inst}_"
+    try:
+        result = _qdrant_request("GET", "/collections")
+        all_cols = [c["name"] for c in result["result"]["collections"]]
+        return [c for c in all_cols if c.startswith(prefix)]
+    except Exception as e:
+        logger.error(f"Failed to list collections for institute {institute_id!r}: {e}", exc_info=True)
         return []
 
-    model = _get_embedding_model()
-    query_vector = list(model.embed([query]))[0].tolist()
 
-    result = _qdrant_request(
-        "POST",
-        f"/collections/{col}/points/search",
-        json={"vector": query_vector, "limit": limit, "with_payload": True},
-    )
-    return [
+def delete_course_collection(institute_id: str, course_id: str) -> None:
+    """Drop the entire Qdrant collection for a course.
+
+    Call this when a course is permanently deleted so no orphan data remains.
+    Safe to call even if the collection does not exist yet.
+    """
+    col = collection_name(institute_id, course_id)
+    try:
+        _qdrant_request("DELETE", f"/collections/{col}")
+        with _known_cols_lock:
+            _known_cols.discard(col)
+        logger.info(f"Deleted Qdrant collection {col!r} (course {course_id!r})")
+    except Exception as e:
+        if getattr(getattr(e, "response", None), "status_code", None) == 404:
+            logger.info(f"Collection {col!r} did not exist — nothing to delete")
+            return
+        logger.error(f"Failed to delete collection {col!r}: {e}", exc_info=True)
+        raise
+
+
+def search_all_institute_courses(institute_id: str, query: str, limit: int = 3) -> list[dict]:
+    """Search every course collection that belongs to an institute and return
+    the top-scoring results merged across all collections.
+
+    Used by the teacher agent when the teacher asks a question without
+    specifying a particular course.
+    """
+    cols = list_course_collections(institute_id)
+    if not cols:
+        logger.info(f"[Search-All] No course collections found for institute {institute_id!r}")
+        return []
+
+    cache_key = ("__all__", institute_id, query, limit)
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        logger.info(f"[Search-All] CACHE HIT → {len(cached)} results")
+        return cached
+
+    query_vector = _get_query_vector(query)
+    all_results: list[dict] = []
+
+    for col in cols:
+        try:
+            result = _qdrant_request(
+                "POST",
+                f"/collections/{col}/points/search",
+                json={
+                    "vector": query_vector,
+                    "limit": 2,
+                    "with_payload": True,
+                    "params": {"hnsw_ef": 64, "exact": False},
+                },
+            )
+            for h in result.get("result", []):
+                all_results.append({
+                    "institute_id": h["payload"].get("institute_id", institute_id),
+                    "course_id": h["payload"].get("course_id", ""),
+                    "course_name": h["payload"].get("course_name", ""),
+                    "content_id": h["payload"].get("content_id", ""),
+                    "title": h["payload"].get("title", ""),
+                    "content": h["payload"].get("content", "")[:MAX_CONTENT_CHARS],
+                    "page": h["payload"].get("page"),
+                    "score": round(h["score"], 3),
+                })
+        except Exception as e:
+            logger.warning(f"[Search-All] Skipping collection {col!r}: {e}")
+
+    # Return the globally top-scoring results
+    all_results.sort(key=lambda x: x["score"], reverse=True)
+    top = all_results[:limit]
+    logger.info(f"[Search-All] {len(top)} results from {len(cols)} collections for institute {institute_id!r}")
+    _cache_set(cache_key, top)
+    return top
+
+
+def search_course(institute_id: str, course_id: str, query: str, limit: int = 3) -> list[dict]:
+    col = collection_name(institute_id, course_id)
+    t_total = time.monotonic()
+
+    logger.info(f"[Search] query={query!r} col={col!r} limit={limit}")
+
+    # 1. Ensure collection exists on first search; skip if already confirmed
+    with _known_cols_lock:
+        already_known = col in _known_cols
+    if not already_known:
+        try:
+            ensure_collection(col)
+        except Exception as e:
+            logger.warning(f"[Search] ensure_collection failed: {e}")
+
+    # 2. Cache
+    cache_key = (col, query, limit)
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        logger.info(f"[Search] CACHE HIT → {len(cached)} results")
+        return cached
+
+    # 3. DO NOT permanently skip collections (removed _missing_cols logic)
+
+    # 4. Embedding
+    query_vector = _get_query_vector(query)
+
+    logger.info(f"[Search] Sending vector search → Qdrant col={col!r}")
+
+    try:
+        result = _qdrant_request(
+            "POST",
+            f"/collections/{col}/points/search",
+            json={
+                "vector": query_vector,
+                "limit": limit,
+                "with_payload": True,
+                # IMPORTANT: removed score_threshold completely
+                "params": {
+                    "hnsw_ef": 64,
+                    "exact": False
+                },
+            },
+        )
+    except httpx.HTTPStatusError as e:
+        logger.error(f"[Search] Qdrant HTTP error: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"[Search] Unexpected error: {e}")
+        return []
+
+    hits = result.get("result", [])
+
+    results = [
         {
-            "content": h["payload"].get("content", ""),
-            "page": h["payload"].get("page"),
+            "institute_id": h["payload"].get("institute_id", institute_id),
+            "course_id": h["payload"].get("course_id", course_id),
+            "course_name": h["payload"].get("course_name", ""),
+            "content_id": h["payload"].get("content_id", ""),
             "title": h["payload"].get("title", ""),
-            "score": h["score"],
+            "content": h["payload"].get("content", "")[:MAX_CONTENT_CHARS],
+            "page": h["payload"].get("page"),
+            "score": round(h["score"], 3),
         }
-        for h in result.get("result", [])
+        for h in hits
     ]
+
+    logger.info(
+        f"[Search] QDRANT → {len(results)} hits in "
+        f"{(time.monotonic() - t_total)*1000:.1f}ms"
+    )
+
+    _cache_set(cache_key, results)
+    return results  
+

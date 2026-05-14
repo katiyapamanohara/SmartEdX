@@ -2,11 +2,11 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: institute-portal
-  namespace: smartedx
+  namespace: prod
   labels:
     app: institute-portal
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: institute-portal
@@ -17,26 +17,17 @@ spec:
     spec:
       containers:
         - name: institute-portal
-          image: ghcr.io/smartedx/institute-portal:latest
+          image: us-central1-docker.pkg.dev/lively-synapse-495509-t0/smartedx-docker-repo/institute-portal:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 3000
-          env:
-            - name: NODE_ENV
-              value: production
-            - name: NEXT_TELEMETRY_DISABLED
-              value: "1"
-            - name: NEXT_PUBLIC_API_URL
-              value: "https://api.smartedx.com"
-            - name: NEXT_PUBLIC_MINIO_ENDPOINT
-              value: "https://storage.smartedx.com"
-          resources:
-            requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              cpu: 500m
-              memory: 512Mi
+          # resources:
+          #   requests:
+          #     cpu: 100m
+          #     memory: 128Mi
+          #   limits:
+          #     cpu: 500m
+          #     memory: 512Mi
           livenessProbe:
             httpGet:
               path: /api/health
@@ -56,7 +47,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: institute-portal
-  namespace: smartedx
+  namespace: prod
   labels:
     app: institute-portal
 spec:
@@ -73,13 +64,13 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: institute-portal-hpa
-  namespace: smartedx
+  namespace: prod
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: institute-portal
-  minReplicas: 2
+  minReplicas: 1
   maxReplicas: 6
   metrics:
     - type: Resource

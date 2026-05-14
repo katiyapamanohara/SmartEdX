@@ -20,13 +20,13 @@ import { InstituteRole } from '../../modules/auth/entities/institute-role.entity
         database: configService.get<string>('DB_DATABASE', 'api_gateway'),
         entities: [User, Role, Institute, InstituteUser, InstituteRole],
         autoLoadEntities: true,
-        synchronize: true, // Auto-sync for dev
+        synchronize: false,
         logging: configService.get<string>('NODE_ENV') === 'development',
-        migrations: [__dirname + '/migrations/*.ts'],
-        migrationsRun: true, // Auto-run migrations on startup
-        ssl: configService.get<string>('DB_SSL') === 'false'
-          ? false
-          : { rejectUnauthorized: false }, // Required for Supabase connections
+        migrations: [__dirname + '/migrations/*.{ts,js}'],
+        migrationsRun: true,
+        ssl: configService.get<string>('DB_SSL') === 'true'
+          ? { rejectUnauthorized: false }
+          : false,
       }),
       inject: [ConfigService],
     }),

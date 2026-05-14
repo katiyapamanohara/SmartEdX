@@ -2,7 +2,7 @@
 
 import logging
 
-from google.adk.agents.run_config import RunConfig, StreamingMode
+from google.adk.agents.run_config import RunConfig, StreamingMode, ToolThreadPoolConfig
 from google.genai import types
 
 from app.config import AGENT_VOICE
@@ -19,17 +19,26 @@ def _make_speech_config(voice_name: str) -> types.SpeechConfig:
 _VAD_CONFIG = types.RealtimeInputConfig(
     automatic_activity_detection=types.AutomaticActivityDetection(
         start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_HIGH,
-        end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_HIGH,
-        prefix_padding_ms=100,
-        silence_duration_ms=180, # Dropped from 300 to 150ms for lightning-fast turn taking
+        # LOW end sensitivity waits for more definitive silence before declaring end-of-turn,
+        # preventing the VAD from getting stuck when there's background noise or breathing.
+        end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_LOW,
+        prefix_padding_ms=800,
+        # 600ms gives enough silence buffer for natural speech patterns without a noisy environment
+        # preventing end-of-turn from ever triggering.
+        silence_duration_ms=1,
     )
 )
+
+# Run tools in a thread pool so the audio event loop is never blocked during
+# Qdrant searches or embedding inference — interruptions stay instant.
+_TOOL_THREAD_POOL = ToolThreadPoolConfig(max_workers=4)
+
 
 def build_run_config(
     model_name: str,
     *,
     proactivity: bool = False,
-    affective_dialog: bool = False,
+    affective_dialog: bool = True,
 ) -> RunConfig:
     is_native_audio = "native-audio" in model_name.lower()
 
@@ -42,8 +51,13 @@ def build_run_config(
             input_audio_transcription=types.AudioTranscriptionConfig(),
             output_audio_transcription=types.AudioTranscriptionConfig(),
             session_resumption=types.SessionResumptionConfig(),
-            proactivity=(types.ProactivityConfig(proactive_audio=True) if proactivity else None),
+            proactivity=types.ProactivityConfig(proactive_audio=proactivity),
             enable_affective_dialog=affective_dialog if affective_dialog else None,
+            tool_thread_pool_config=_TOOL_THREAD_POOL,
+            context_window_compression=types.ContextWindowCompressionConfig(
+                trigger_tokens=8000,
+                sliding_window=types.SlidingWindow(target_tokens=4000),
+            ),
         )
         logger.debug(
             f"Native audio model: {model_name}, AUDIO modality, "
@@ -56,9 +70,11 @@ def build_run_config(
             input_audio_transcription=None,
             output_audio_transcription=None,
             session_resumption=types.SessionResumptionConfig(),
+            tool_thread_pool_config=_TOOL_THREAD_POOL,
         )
         logger.debug(f"Half-cascade model: {model_name}, TEXT modality")
     return run_config
+
 
 def build_sip_run_config() -> RunConfig:
     return RunConfig(
@@ -69,4 +85,10 @@ def build_sip_run_config() -> RunConfig:
         input_audio_transcription=types.AudioTranscriptionConfig(),
         output_audio_transcription=types.AudioTranscriptionConfig(),
         session_resumption=types.SessionResumptionConfig(),
+        proactivity=types.ProactivityConfig(proactive_audio=False),
+        tool_thread_pool_config=_TOOL_THREAD_POOL,
+        context_window_compression=types.ContextWindowCompressionConfig(
+            trigger_tokens=8000,
+            sliding_window=types.SlidingWindow(target_tokens=4000),
+        ),
     )

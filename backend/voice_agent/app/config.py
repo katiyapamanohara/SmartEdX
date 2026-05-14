@@ -55,6 +55,11 @@ MINIO_URL = os.getenv("MINIO_URL", "http://localhost:9000")
 MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "")
 
+# ── Language features ────────────────────────────────────────────────
+# Set true to include Sinhala number-pronunciation rules in every agent's
+# system prompt (~350 tokens).  Only needed for Sinhala-language deployments.
+SINHALA_RULES_ENABLED = os.getenv("SINHALA_RULES_ENABLED", "true").lower() == "true"
+
 # ── Course Knowledge Base (Qdrant) ───────────────────────────────────
 # Separate collection that stores course-specific content (PDFs, Word docs).
 # Enabled independently of the general KB so course Q&A works even when
@@ -87,10 +92,10 @@ TRANSPORT_SIP_WS = os.getenv("TRANSPORT_SIP_WS", "false").lower() == "true"
 DASHBOARD_ENABLED = os.getenv("DASHBOARD_ENABLED", "true").lower() == "true"
 
 # ── Audio / Barge-in ────────────────────────────────────────────────
-HARD_MUTE_SECONDS = float(os.getenv("HARD_MUTE_SECONDS", "2.5"))
-SILENCE_FLUSH_MS = int(os.getenv("SILENCE_FLUSH_MS", "1500"))
-INTERRUPT_SILENCE_MS = int(os.getenv("INTERRUPT_SILENCE_MS", "500"))
-SILENCE_END_FRAMES = int(os.getenv("SILENCE_END_FRAMES", "75"))
+HARD_MUTE_SECONDS = float(os.getenv("HARD_MUTE_SECONDS", "1.5"))
+SILENCE_FLUSH_MS = int(os.getenv("SILENCE_FLUSH_MS", "1000"))
+INTERRUPT_SILENCE_MS = int(os.getenv("INTERRUPT_SILENCE_MS", "250"))
+SILENCE_END_FRAMES = int(os.getenv("SILENCE_END_FRAMES", "50"))
 INTERRUPT_TIMEOUT_SECONDS = float(os.getenv("INTERRUPT_TIMEOUT_SECONDS", "8.0"))
 MIN_USER_TURNS_BEFORE_END_CALL = int(os.getenv("MIN_USER_TURNS_BEFORE_END_CALL", "3"))
 END_CALL_INTERRUPT_COOLDOWN = float(os.getenv("END_CALL_INTERRUPT_COOLDOWN", "5.0"))

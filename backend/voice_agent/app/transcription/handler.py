@@ -64,14 +64,14 @@ class TranscriptHandler:
         """
         self.record_message("bot", greeting_message)
 
-    def process_event(self, event_json: str) -> None:
+    def process_event(self, event_data) -> None:
         """Process an ADK event and extract transcript information.
 
         Args:
-            event_json: JSON string of the ADK event
+            event_data: Parsed event dict (preferred) or raw JSON string.
         """
         try:
-            data = json.loads(event_json)
+            data = event_data if isinstance(event_data, dict) else json.loads(event_data)
 
             # Handle interruptions early to drop partial agent output
             self._handle_interruption(data)

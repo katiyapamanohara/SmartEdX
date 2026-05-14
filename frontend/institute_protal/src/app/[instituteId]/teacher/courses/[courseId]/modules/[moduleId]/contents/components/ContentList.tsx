@@ -36,6 +36,11 @@ const contentTypeConfig: Record<ContentType, { icon: React.ReactNode; label: str
     label: "Link",
     color: "bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400",
   },
+  simulation: {
+    icon: <FiFileText className="w-5 h-5" />,
+    label: "Simulation",
+    color: "bg-cyan-50 text-cyan-600 dark:bg-cyan-900/20 dark:text-cyan-400",
+  },
 };
 
 const ContentList: React.FC<ContentListProps> = ({

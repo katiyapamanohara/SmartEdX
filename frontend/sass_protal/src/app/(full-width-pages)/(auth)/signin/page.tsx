@@ -4,8 +4,8 @@ import { Metadata } from "next";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Next.js SignIn Page | TailAdmin - Next.js Dashboard Template",
-  description: "This is Next.js Signin Page TailAdmin Dashboard Template",
+  title: "Next.js SignIn Page | SmartEdX - Next.js Dashboard Template",
+  description: "This is Next.js Signin Page SmartEdX Dashboard Template",
 };
 
 export default function SignIn() {

@@ -49,6 +49,12 @@ export class Institute {
   defaultModel: string;
 
   @Column({ type: 'text', nullable: true })
+  voiceInstructions: string;
+
+  @Column({ type: 'text', nullable: true })
+  voiceGreeting: string;
+
+  @Column({ type: 'text', nullable: true })
   logo: string;
 
   @Column({ default: true })

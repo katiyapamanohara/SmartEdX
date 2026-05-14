@@ -11,6 +11,19 @@ async function bootstrap() {
     bodyParser: true,
   });
 
+  const logger = new Logger('Bootstrap');
+
+  // Enable CORS before any proxy middleware so all routes get CORS headers
+  const corsOrigin = process.env.CORS_ORIGIN;
+  app.enableCors({
+    origin: !corsOrigin || corsOrigin === '*' ? true : corsOrigin.split(','),
+    credentials: true,
+  });
+
+  // Increase JSON / URL-encoded body size limit (for base64 cover images etc.)
+  app.use(require('express').json({ limit: '50mb' }));
+  app.use(require('express').urlencoded({ limit: '50mb', extended: true }));
+
   // ── Voice Agent proxy (HTTP + WebSocket) ──────────────────────────────────
   const voiceAgentTarget =
     process.env.VOICE_AGENT_URL || 'http://localhost:8002';
@@ -38,17 +51,6 @@ async function bootstrap() {
     if (req.url?.startsWith('/voice-agent')) {
       (voiceAgentWsProxy as any).upgrade(req, socket, head);
     }
-  });
-
-  // Increase JSON / URL-encoded body size limit (for base64 cover images etc.)
-  app.use(require('express').json({ limit: '50mb' }));
-  app.use(require('express').urlencoded({ limit: '50mb', extended: true }));
-  const logger = new Logger('Bootstrap');
-
-  // Enable CORS
-  app.enableCors({
-    origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
-    credentials: true,
   });
 
   // Global validation pipe

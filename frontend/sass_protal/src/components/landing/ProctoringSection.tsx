@@ -6,7 +6,7 @@ import { fadeInUp } from '@/lib/landing-animations';
 export function ProctoringSection() {
   return (
     <section className="py-24 overflow-hidden relative">
-          <div className="max-w-7xl mx-auto px-6">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6">
               <div className="flex flex-col lg:flex-row items-center gap-16">
                   <motion.div 
                     initial="hidden"
@@ -16,7 +16,7 @@ export function ProctoringSection() {
                     className="lg:w-1/2"
                   >
                       <div className="inline-block px-3 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-full text-xs font-bold uppercase tracking-wider mb-6">Compliance & Integrity</div>
-                      <h2 className="text-3xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">AI Accreditation & Proctoring</h2>
+                      <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">AI Accreditation & Proctoring</h2>
                       <p className="text-lg text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
                           Automate compliance reporting and ensure academic integrity across thousands of students simultaneously.
                       </p>

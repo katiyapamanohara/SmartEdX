@@ -2,11 +2,11 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: saas-service
-  namespace: smartedx
+  namespace: prod
   labels:
     app: saas-service
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: saas-service
@@ -17,76 +17,20 @@ spec:
     spec:
       containers:
         - name: saas-service
-          image: ghcr.io/smartedx/saas-service:latest
+          image: us-central1-docker.pkg.dev/lively-synapse-495509-t0/smartedx-docker-repo/saas-service:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 5002
-          env:
-            - name: NODE_ENV
-              value: production
-            - name: PORT
-              value: "5002"
-            - name: DB_HOST
-              valueFrom:
-                secretKeyRef:
-                  name: saas-db-secret
-                  key: host
-            - name: DB_PORT
-              value: "5432"
-            - name: DB_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: saas-db-secret
-                  key: username
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: saas-db-secret
-                  key: password
-            - name: DB_DATABASE
-              valueFrom:
-                secretKeyRef:
-                  name: saas-db-secret
-                  key: database
-            - name: JWT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: saas-app-secret
-                  key: jwt-secret
-            - name: REDIS_HOST
-              value: "redis"
-            - name: REDIS_PORT
-              value: "6379"
-            - name: MINIO_ENDPOINT
-              value: "minio"
-            - name: MINIO_PORT
-              value: "9000"
-            - name: MINIO_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: saas-minio-secret
-                  key: access-key
-            - name: MINIO_SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: saas-minio-secret
-                  key: secret-key
-            - name: MINIO_BUCKET
-              value: "smartedx-bucket"
-            - name: FIREBASE_SERVICE_ACCOUNT
-              valueFrom:
-                secretKeyRef:
-                  name: saas-firebase-secret
-                  key: service-account-json
-            - name: CORS_ORIGIN
-              value: "https://institute.smartedx.com,https://saas.smartedx.com"
+          envFrom:
+            - secretRef:
+                name: saas-service-secret
           resources:
-            requests:
-              cpu: 250m
-              memory: 512Mi
-            limits:
-              cpu: 1000m
-              memory: 1Gi
+            # requests:
+            #   cpu: 100m
+            #   memory: 512Mi
+            # limits:
+            #   cpu: 1000m
+            #   memory: 1Gi
           livenessProbe:
             httpGet:
               path: /api/health
@@ -106,7 +50,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: saas-service
-  namespace: smartedx
+  namespace: prod
   labels:
     app: saas-service
 spec:
@@ -123,7 +67,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: saas-service-hpa
-  namespace: smartedx
+  namespace: prod
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

@@ -24,8 +24,9 @@ async function bootstrap() {
   app.use(urlencoded({ extended: true, limit: '50mb' }));
 
   // Enable CORS
+  const corsOrigin = process.env.CORS_ORIGIN;
   app.enableCors({
-    origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
+    origin: !corsOrigin || corsOrigin === '*' ? true : corsOrigin.split(','),
     credentials: true,
   });
 

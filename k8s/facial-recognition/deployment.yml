@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: facial-recognition
-  namespace: smartedx
+  namespace: prod
   labels:
     app: facial-recognition
 spec:
@@ -17,28 +17,14 @@ spec:
     spec:
       containers:
         - name: facial-recognition
-          image: ghcr.io/smartedx/facial-recognition:latest
+          image: us-central1-docker.pkg.dev/lively-synapse-495509-t0/smartedx-docker-repo/facial-recognition:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8002
-          env:
-            - name: PORT
-              value: "8002"
-            - name: FACE_MODEL
-              value: "Facenet512"
-            - name: DETECTOR_BACKEND
-              value: "retinaface"
-            - name: DISTANCE_THRESHOLD
-              value: "0.30"
-            - name: CORS_ORIGINS
-              value: "https://institute.smartedx.com,https://saas.smartedx.com"
-          resources:
-            requests:
-              cpu: 500m
-              memory: 1Gi
-            limits:
-              cpu: 2000m
-              memory: 4Gi
+          envFrom:
+            - secretRef:
+                name: facial-recognition-secret
+      
           livenessProbe:
             httpGet:
               path: /health
@@ -58,7 +44,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: facial-recognition
-  namespace: smartedx
+  namespace: prod
   labels:
     app: facial-recognition
 spec:
@@ -75,7 +61,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: facial-recognition-hpa
-  namespace: smartedx
+  namespace: prod
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

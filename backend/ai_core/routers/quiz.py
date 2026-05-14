@@ -7,8 +7,8 @@ from pydantic import BaseModel
 
 from agents.quiz_generator import _is_rate_limit_error  # noqa: WPS450
 from agents.quiz_generator import (
+    MCQQuestionOut,
     QuizOut,
-    QuizQuestionOut,
     UnifiedQuestion,
     UnifiedQuizOut,
     generate_quiz,
@@ -30,7 +30,7 @@ SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".doc", ".pptx", ".ppt"}
 
 
 class GenerateResponse(BaseModel):
-    questions: list[QuizQuestionOut]
+    questions: list[MCQQuestionOut]
 
 
 class GenerateUnifiedResponse(BaseModel):

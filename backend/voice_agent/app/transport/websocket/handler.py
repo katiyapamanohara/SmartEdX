@@ -25,6 +25,15 @@ from app.observability.langfuse_client import observe_decorator, update_trace
 logger = logging.getLogger(__name__)
 
 
+class _BytesEncoder(json.JSONEncoder):
+    def default(self, obj: object) -> object:
+        if isinstance(obj, bytes):
+            return base64.b64encode(obj).decode()
+        if isinstance(obj, set):
+            return list(obj)
+        return super().default(obj)
+
+
 @observe_decorator(name="Voice Agent Execution", as_type="generation")
 async def websocket_endpoint(
     websocket: WebSocket,
@@ -89,18 +98,23 @@ async def websocket_endpoint(
     # models wait silently for user speech before saying anything.
     # Suppressed for assessment sessions which send their own init prompt.
     if greet:
-        greeting_trigger = types.Content(
-            parts=[types.Part(text=(
-                "[SESSION STARTED] This is a LIVE voice conversation — respond like a real person talking, not a formal assistant.\n"
-                "Rules for this session:\n"
-                "- Keep EVERY response to 1-2 short sentences maximum.\n"
-                "- Speak at normal conversational speed — do NOT slow down.\n"
-                "- No preamble, no 'Great question!', no filler. Just answer directly.\n"
-                "- After answering, stop and wait — do not add follow-up questions unless necessary.\n"
-                "Now: greet the student in one short sentence and ask what they need."
-            ))],
-            role="user",
-        )
+        if mgr.has_prior_memory:
+            # Returning user — skip intro, pick up where we left off
+            greeting_trigger = types.Content(
+                parts=[types.Part(text=(
+                    "[SESSION RESUMED] The user is back. Greet them briefly by acknowledging you remember "
+                    "your conversation, then ask how you can help. One sentence only."
+                ))],
+                role="user",
+            )
+        else:
+            greeting_trigger = types.Content(
+                parts=[types.Part(text=(
+                    "[SESSION START] Live voice call. Be natural, warm, and brief.\n"
+                    "Greet in ONE short sentence. Then stop and wait for the user to speak."
+                ))],
+                role="user",
+            )
         live_request_queue.send_content(greeting_trigger)
 
     # Register audio clip queue for this session (no-op overhead if map is empty)
@@ -277,11 +291,12 @@ async def websocket_endpoint(
                     latency.stop_timer("first_response", t_first_response, session_id)
                     first_response_recorded = True
 
-                event_json = event.model_dump_json(exclude_none=True, by_alias=True)
+                # Build dict once — avoids model_dump_json() + json.loads() round-trip.
+                # event_json is produced once at the send point.
+                evt = event.model_dump(exclude_none=True, by_alias=True)
 
                 if AUDIO_CLIP_TOOL_MAP:
                     try:
-                        evt = json.loads(event_json)
                         parts = (evt.get("content") or {}).get("parts") or []
                         # Start suppressing when the model calls an audio clip tool
                         if any((p.get("functionCall") or {}).get("name") in AUDIO_CLIP_TOOL_MAP for p in parts):
@@ -293,55 +308,77 @@ async def websocket_endpoint(
                             logger.debug(f"WS {session_id}: turn complete — model audio suppression lifted")
                         # Strip inlineData (model speech) while suppression is active
                         if suppress_model_audio:
-                            filtered = [p for p in parts if "inlineData" not in p]
-                            if len(filtered) != len(parts):
-                                if evt.get("content"):
-                                    evt["content"]["parts"] = filtered
-                                event_json = json.dumps(evt)
+                            content = evt.get("content")
+                            if content:
+                                content["parts"] = [p for p in content.get("parts", []) if "inlineData" not in p]
                     except Exception:
                         pass
 
-                has_audio = '"inlineData"' in event_json
-                has_text = '"text"' in event_json
-                has_usage = '"usageMetadata"' in event_json
+                _parts = (evt.get("content") or {}).get("parts") or []
+                has_audio = any("inlineData" in p for p in _parts)
+                has_text = (
+                    any("text" in p for p in _parts)
+                    or "inputTranscription" in evt
+                    or "outputTranscription" in evt
+                    or "turnComplete" in evt
+                    or "interrupted" in evt
+                )
+                has_usage = "usageMetadata" in evt
 
-
-                # --- Reminder logic ---
-                # If a question is sent (text from agent), start reminder task
+                # ── Log model reasoning (thought parts) ──────────────────
                 try:
-                    evt = json.loads(event_json)
-                    author = evt.get("author")
-                    content = (evt.get("content") or {}).get("parts") or []
-                    # Detect agent question (agent text, not system or user)
-                    if author in ("agent", "bot") and any(p.get("text") for p in content):
-                        cancel_reminder()
-                        reminder_task = asyncio.create_task(send_reminder_after_timeout())
+                    parts = (evt.get("content") or {}).get("parts") or []
+                    for p in parts:
+                        if p.get("thought"):
+                            thought_text = (p.get("text") or "")[:400]
+                            logger.info(f"[Reasoning] {thought_text!r}")
+                        fc = p.get("functionCall")
+                        if fc:
+                            logger.info(f"[ToolCall] {fc.get('name')} args={fc.get('args')}")
+                        fr = p.get("functionResponse")
+                        if fr:
+                            resp_preview = str(fr.get("response", ""))[:300]
+                            logger.info(f"[ToolResponse] {fr.get('name')} → {resp_preview}")
+                    if has_usage:
+                        usage = evt.get("usageMetadata", {})
+                        logger.info(
+                            f"[Tokens] prompt={usage.get('promptTokenCount')} "
+                            f"thoughts={usage.get('thoughtsTokenCount')} "
+                            f"candidates={usage.get('candidatesTokenCount')} "
+                            f"total={usage.get('totalTokenCount')}"
+                        )
                 except Exception:
                     pass
 
-                # If user responds, cancel reminder
+                # --- Reminder logic (reuses already-parsed evt) ---
                 try:
-                    evt = json.loads(event_json)
                     author = evt.get("author")
-                    if author == "user":
+                    parts = (evt.get("content") or {}).get("parts") or []
+                    if author in ("agent", "bot") and any(p.get("text") for p in parts):
+                        cancel_reminder()
+                        reminder_task = asyncio.create_task(send_reminder_after_timeout())
+                    elif author == "user":
                         cancel_reminder()
                 except Exception:
                     pass
                 # --- End reminder logic ---
 
                 if has_audio:
-                    logger.info(f"WS {session_id}: sending audio event ({len(event_json)} bytes)")
+                    logger.debug(f"WS {session_id}: sending audio event")
                 elif has_text:
                     logger.info(f"WS {session_id}: sending text event")
                 elif has_usage:
                     logger.info(f"WS {session_id}: sending usageMetadata event")
                 else:
-                    logger.debug(f"WS {session_id}: sending other event keys={list(json.loads(event_json).keys())}")
+                    logger.debug(f"WS {session_id}: sending other event keys={list(evt.keys())}")
 
+                # Serialize once here — dict was built (and possibly modified) above.
+                # _BytesEncoder converts any bytes fields (e.g. inlineData audio) to base64 strings.
+                event_json = json.dumps(evt, cls=_BytesEncoder)
                 await websocket.send_text(event_json)
 
                 if not has_audio or has_text:
-                    mgr.transcript_handler.process_event(event_json)
+                    mgr.transcript_handler.process_event(evt)
         except Exception as e:
             logger.warning(f"WS {session_id}: Gemini live connection ended: {e}")
             try:
@@ -364,17 +401,33 @@ async def websocket_endpoint(
                 logger.debug(f"WS {session_id}: audio injection task ended: {e}")
                 break
 
-    tasks = [upstream_task(), downstream_task()]
+    all_tasks = [
+        asyncio.create_task(upstream_task()),
+        asyncio.create_task(downstream_task()),
+    ]
     if audio_clip_queue is not None:
-        tasks.append(audio_clip_injection_task())
+        all_tasks.append(asyncio.create_task(audio_clip_injection_task()))
 
     try:
-        await asyncio.gather(*tasks)
+        # Stop all tasks as soon as any one finishes (e.g. Gemini connection drops)
+        done, pending = await asyncio.wait(all_tasks, return_when=asyncio.FIRST_COMPLETED)
+        for t in pending:
+            t.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+        for t in done:
+            if not t.cancelled():
+                exc = t.exception()
+                if exc is not None and not isinstance(exc, WebSocketDisconnect):
+                    raise exc
     except WebSocketDisconnect:
         logger.debug("Client disconnected normally")
     except Exception as e:
         logger.error(f"Streaming error: {e}", exc_info=True)
     finally:
+        for t in all_tasks:
+            if not t.done():
+                t.cancel()
+        await asyncio.gather(*all_tasks, return_exceptions=True)
         if audio_clip_queue is not None:
             unregister_session_audio_queue(session_id)
         await mgr.finalize()

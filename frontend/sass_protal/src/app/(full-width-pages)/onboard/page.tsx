@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { authService } from '@/services/authService';
@@ -123,82 +125,67 @@ const useCases = [
   'Hostel'
 ];
 
-const ThemeToggleWrapper = React.memo(() => (
-  <div className="fixed top-4 right-4 z-50">
-    <ThemeToggle />
-  </div>
-));
-ThemeToggleWrapper.displayName = 'ThemeToggleWrapper';
-
 const ProgressBar = React.memo(({ currentStep, onBack, onSkip }: { 
   currentStep: number; 
   onBack: () => void; 
   onSkip: () => void; 
 }) => (
-  <>
-  <ThemeToggleWrapper />
-  <div className="fixed top-0 left-0 right-0 flex justify-between items-center w-full h-[120px] sm:h-[120px] px-3 sm:px-4 z-10">
-    <AnimatePresence>
-      {currentStep > 1 ? (
+  <div className="absolute top-0 left-0 right-0 w-full z-50 px-3 sm:px-6 md:px-10 py-3 sm:py-4 flex items-center justify-between gap-2">
+    <div className="flex items-center min-w-11 sm:min-w-25 sm:pl-9">
+      <AnimatePresence>
         <motion.button
           key="back-button"
           onClick={onBack}
-          className="flex items-center text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors duration-300 w-[50px] sm:w-[80px] justify-start text-[12px] sm:text-[14px]"
+          className="inline-flex items-center text-sm font-medium text-gray-500 transition-colors hover:text-brand-500 dark:text-gray-400 dark:hover:text-brand-400 group relative z-50 bg-white/50 dark:bg-gray-900/50 backdrop-blur-md px-2 py-1.5 sm:px-3 sm:py-2 md:px-4 rounded-full border border-gray-200 dark:border-gray-800 justify-start"
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -20 }}
           transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] as const }}
-          whileHover={{ scale: 1.05, x: -2 }}
-          whileTap={{ scale: 0.95 }}
         >
-          <motion.svg 
-            width="16" 
-            height="16" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="currentColor" 
-            strokeWidth="2" 
-            strokeLinecap="round" 
+          <motion.svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
             strokeLinejoin="round"
-            className="mr-1 sm:mr-2"
-            whileHover={{ x: -2 }}
-            transition={{ duration: 0.2 }}
+            className="sm:w-5 sm:h-5 sm:mr-2 group-hover:-translate-x-1 transition-transform"
           >
             <path d="m15 18-6-6 6-6"/>
           </motion.svg>
           <span className="hidden sm:inline">Back</span>
         </motion.button>
-      ) : (
-        <div className="w-[60px] sm:w-[80px]"></div>
-      )}
-    </AnimatePresence>
-    
-    <div className="flex space-x-2 sm:space-x-3 flex-1 justify-center items-center relative">
-      <div className="absolute inset-0 flex space-x-2 sm:space-x-3 justify-center items-center">
+      </AnimatePresence>
+    </div>
+
+    <div className="flex space-x-1.5 sm:space-x-2 md:space-x-3 flex-1 justify-center items-center relative sm:absolute sm:left-1/2 sm:-translate-x-1/2 pointer-events-none">
+      <div className="absolute inset-0 flex space-x-1.5 sm:space-x-2 md:space-x-3 justify-center items-center">
         {[1, 2, 3, 4, 5].map((step) => (
           <div
             key={`bg-${step}`}
             className="rounded-sm bg-gray-200 dark:bg-gray-800 transition-all duration-500 ease-out"
             style={{
-              width: step === currentStep ? 48 : 32,
-              height: step === currentStep ? 12 : 8,
+              width: step === currentStep ? 40 : 24,
+              height: step === currentStep ? 10 : 6,
             }}
           />
         ))}
       </div>
-      
+
       {[1, 2, 3, 4, 5].map((step) => (
         <motion.div
           key={step}
           className="relative rounded-sm overflow-hidden"
           initial={{
-            width: 32,
-            height: 8,
+            width: 24,
+            height: 6,
             scale: 1,
           }}
           animate={{
-            width: step === currentStep ? 48 : 32,
-            height: step === currentStep ? 12 : 8,
+            width: step === currentStep ? 40 : 24,
+            height: step === currentStep ? 10 : 6,
             scale: step === currentStep ? 1.05 : 1,
           }}
           transition={{
@@ -252,8 +239,6 @@ const ProgressBar = React.memo(({ currentStep, onBack, onSkip }: {
             />
           )}
           
-
-          
           {step === currentStep && (
             <motion.div
               className="absolute inset-0 rounded-sm"
@@ -274,44 +259,38 @@ const ProgressBar = React.memo(({ currentStep, onBack, onSkip }: {
       ))}
     </div>
     
-    <AnimatePresence>
-      {(currentStep === 3) ? (
-        <motion.button
-          key="skip-button"
-          onClick={onSkip}
-          className="text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors duration-300 text-[12px] sm:text-[15px] w-[50px] sm:w-[80px] text-right"
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: 20 }}
-          transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] as const }}
-          whileHover={{ scale: 1.05, x: 2 }}
-          whileTap={{ scale: 0.95 }}
-        >
-          <motion.span
-            whileHover={{ x: 2 }}
-            transition={{ duration: 0.2 }}
+    <div className="flex items-center justify-end gap-2 sm:gap-3 min-w-11 sm:min-w-25 z-50 sm:pr-9">
+      <AnimatePresence>
+        {(currentStep === 3) ? (
+          <motion.button
+            key="skip-button"
+            onClick={onSkip}
+            className="inline-flex items-center text-xs sm:text-sm font-medium text-gray-500 transition-colors hover:text-brand-500 dark:text-gray-400 dark:hover:text-brand-400 group relative z-50 bg-white/50 dark:bg-gray-900/50 backdrop-blur-md px-2 py-1.5 sm:px-3 sm:py-2 md:px-4 rounded-full border border-gray-200 dark:border-gray-800 justify-center"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] as const }}
           >
-            Skip
-          </motion.span>
-        </motion.button>
-      ) : (
-        <div className="w-[50px] sm:w-[80px]"></div>
-      )}
-    </AnimatePresence>
+            <motion.span className="group-hover:translate-x-1 transition-transform">
+              Skip
+            </motion.span>
+          </motion.button>
+        ) : null}
+      </AnimatePresence>
+      <div className="relative flex items-center justify-center bg-white/50 dark:bg-gray-900/50 backdrop-blur-md px-2 py-1.5 sm:px-3 sm:py-2 md:px-4 md:py-2.5 rounded-full border border-gray-200 dark:border-gray-800">
+        <ThemeToggle />
+      </div>
+    </div>
   </div>
-  </>
 ));
 
 ProgressBar.displayName = 'ProgressBar';
 
 const Logo = React.memo(() => (
   <div className="fixed top-[140px] sm:top-[160px] left-0 right-0 flex items-center justify-center h-[60px] z-10">
-    <div className="flex items-center gap-2">
-      <div className="w-8 h-8 sm:w-10 sm:h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/20">
-        <span className="text-white font-bold text-lg sm:text-xl">S</span>
-      </div>
-      <span className="text-2xl sm:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400">SmartEdX</span>
-    </div>
+    <span className="text-4xl sm:text-5xl font-black tracking-tighter text-brand-950 dark:text-white drop-shadow-sm transition-all hover:scale-105">
+      SmartEdX
+    </span>
   </div>
 ));
 
@@ -720,6 +699,8 @@ const ArticomOnboarding = () => {
   const handleBack = () => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
+    } else {
+      router.push('/');
     }
   };
 
@@ -836,7 +817,7 @@ const ArticomOnboarding = () => {
               </motion.div>
 
               <motion.p 
-                className="text-white/[0.6] text-[13px]"
+                className="text-gray-500 dark:text-white/60 text-[13px]"
                 variants={itemVariants}
               >
                 For secure access and quick support when you need it.
@@ -911,7 +892,7 @@ const ArticomOnboarding = () => {
               </motion.div>
 
               <motion.p 
-                className="text-white/[0.6] text-[13px]"
+                className="text-gray-500 dark:text-white/60 text-[13px]"
                 variants={itemVariants}
               >
                 We&apos;ll customize the experience based on your scale.
@@ -977,7 +958,7 @@ const ArticomOnboarding = () => {
               </motion.div>
 
               <motion.p 
-                className="text-white/[0.6] text-[13px]"
+                className="text-gray-500 dark:text-white/60 text-[13px]"
                 variants={itemVariants}
               >
                 This helps us improve our outreach and serve you better.

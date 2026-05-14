@@ -95,6 +95,16 @@ const TYPE_META: Record<
     descPlaceholder: "Describe what students will find at this link…",
     showUrl: true,
   },
+  simulation: {
+    label: "Simulation",
+    icon: <FiFileText className="w-5 h-5" />,
+    color: "bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400",
+    urlLabel: "Simulation URL",
+    urlPlaceholder: "https://…",
+    urlRequired: false as boolean,
+    descPlaceholder: "Describe this simulation…",
+    showUrl: true,
+  },
 };
 
 const CONTENT_TYPES = Object.entries(TYPE_META).map(([value, meta]) => ({

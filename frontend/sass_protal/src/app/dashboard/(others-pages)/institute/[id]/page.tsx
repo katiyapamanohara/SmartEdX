@@ -1,6 +1,9 @@
 "use client";
+
+export const dynamic = "force-dynamic";
+
 import React, { useState, useEffect, Suspense } from "react";
-import Alert from "@/components/ui/alert/Alert";
+import { Modal } from "@/components/ui/modal";
 import { useParams, useSearchParams, useRouter, usePathname } from "next/navigation";
 import { authService } from "@/services/authService";
 
@@ -54,13 +57,16 @@ function InstituteCustomizeContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
 
+  type AlertVariant = "success" | "error" | "warning" | "info";
+  const [alertModal, setAlertModal] = useState<{ variant: AlertVariant; title: string; message: string } | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
+
+  const showAlert = (variant: AlertVariant, title: string, message: string) => setAlertModal({ variant, title, message });
+  const showConfirm = (title: string, message: string, onConfirm: () => void) => setConfirmModal({ title, message, onConfirm });
+
   // Assign User State
   const [assignEmail, setAssignEmail] = useState("");
-  const [assignRole, setAssignRole] = useState("instructor");
-  const [rolesList, setRolesList] = useState<any[]>([
-    { id: 'default-1', name: 'instructor' },
-    { id: 'default-2', name: 'student' }
-  ]);
+  const [assignRole] = useState("instructor");
   const [isAssigning, setIsAssigning] = useState(false);
   const [assignedUsers, setAssignedUsers] = useState<any[]>([]);
   const [isUsersLoading, setIsUsersLoading] = useState(false);
@@ -104,28 +110,6 @@ function InstituteCustomizeContent() {
     fetchInstituteDetails();
   }, [instituteId]);
 
-  useEffect(() => {
-    const fetchRoles = async () => {
-      try {
-        const roles = await authService.getRoles();
-        // Filter roles to only include 'instructor'
-        const allowedRoles = ['instructor'];
-        const filteredRoles = roles.filter((r: any) => allowedRoles.includes(r.name));
-        
-        setRolesList(filteredRoles);
-        
-        if (filteredRoles.length > 0) {
-          // Default to instructor if available, otherwise first available
-          const instructorRole = filteredRoles.find((r: any) => r.name === 'instructor');
-          setAssignRole(instructorRole?.name || filteredRoles[0].name);
-        }
-      } catch (error) {
-        console.error("Error fetching roles:", error);
-      }
-    };
-
-    fetchRoles();
-  }, []);
 
   const fetchUsers = async () => {
     if (!instituteId) return;
@@ -175,11 +159,11 @@ function InstituteCustomizeContent() {
         const result = await authService.uploadInstituteLogo(instituteId, file);
         if (result && result.url) {
           setLogo(result.url);
-          alert("Logo uploaded successfully!");
+          showAlert("success", "Upload Successful", "Logo uploaded successfully!");
         }
       } catch (error) {
         console.error("Failed to upload logo:", error);
-        alert("Failed to upload logo. Please try again.");
+        showAlert("error", "Upload Failed", "Failed to upload logo. Please try again.");
       } finally {
         setIsUploading(false);
       }
@@ -227,10 +211,10 @@ function InstituteCustomizeContent() {
         currency,
         primaryUseCases: JSON.stringify(primaryUseCases),
       });
-      alert("Changes saved successfully!");
+      showAlert("success", "Changes Saved", "Changes saved successfully!");
     } catch (error) {
       console.error("Failed to update institute:", error);
-      alert("Failed to save changes. Please try again.");
+      showAlert("error", "Save Failed", "Failed to save changes. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -238,7 +222,7 @@ function InstituteCustomizeContent() {
 
   const handleAssignUser = async () => {
     if (!assignEmail || !assignRole) {
-      alert("Please enter email and select a role");
+      showAlert("warning", "Missing Fields", "Please enter email and select a role.");
       return;
     }
 
@@ -248,29 +232,34 @@ function InstituteCustomizeContent() {
         email: assignEmail,
         roleName: assignRole,
       });
-      alert("User assigned successfully!");
+      showAlert("success", "User Assigned", "User assigned successfully!");
       setAssignEmail("");
-      fetchUsers(); // Refresh list after assignment
+      fetchUsers();
     } catch (error: any) {
       console.error("Failed to assign user:", error);
-      alert(error.message || "Failed to assign user. Please try again.");
+      showAlert("error", "Assignment Failed", error.message || "Failed to assign user. Please try again.");
     } finally {
       setIsAssigning(false);
     }
   };
 
-  const handleDeleteUser = async (userId: string) => {
-    if (!confirm("Are you sure you want to remove this user from the institute?")) return;
-    try {
-      setDeletingIds(prev => [...prev, userId]);
-      await authService.deleteInstituteUser(instituteId, userId);
-      setAssignedUsers(assignedUsers.filter((u) => u.id !== userId));
-    } catch (error) {
-      console.error("Failed to delete user:", error);
-      alert("Failed to remove user");
-    } finally {
-      setDeletingIds(prev => prev.filter(id => id !== userId));
-    }
+  const handleDeleteUser = (userId: string) => {
+    showConfirm(
+      "Remove User",
+      "Are you sure you want to remove this user from the institute? This action cannot be undone.",
+      async () => {
+        try {
+          setDeletingIds(prev => [...prev, userId]);
+          await authService.deleteInstituteUser(instituteId, userId);
+          setAssignedUsers(prev => prev.filter((u) => u.id !== userId));
+        } catch (error) {
+          console.error("Failed to delete user:", error);
+          showAlert("error", "Deletion Failed", "Failed to remove user.");
+        } finally {
+          setDeletingIds(prev => prev.filter(id => id !== userId));
+        }
+      }
+    );
   };
 
   const handleToggleStatus = async (userId: string) => {
@@ -284,7 +273,7 @@ function InstituteCustomizeContent() {
       );
     } catch (error) {
       console.error("Failed to toggle status:", error);
-      alert("Failed to update status");
+      showAlert("error", "Update Failed", "Failed to update user status.");
     } finally {
       setTogglingIds(prev => prev.filter(id => id !== userId));
     }
@@ -294,10 +283,10 @@ function InstituteCustomizeContent() {
     try {
       setIsSavingFeatures(true);
       await authService.updateInstituteFeatures(instituteId, { plan, enabledFeatures });
-      alert("Features updated successfully!");
+      showAlert("success", "Features Updated", "Features updated successfully!");
     } catch (error) {
       console.error("Failed to update features:", error);
-      alert("Failed to update features. Please try again.");
+      showAlert("error", "Update Failed", "Failed to update features. Please try again.");
     } finally {
       setIsSavingFeatures(false);
     }
@@ -485,17 +474,12 @@ function InstituteCustomizeContent() {
                   value={assignEmail} 
                   onChange={setAssignEmail} 
                 />
-                <Select 
-                  label="Assign Role" 
-                  value={assignRole} 
-                  onChange={setAssignRole}
-                >
-                  {rolesList.map((role) => (
-                    <option key={role.id} value={role.name}>
-                      {role.name.charAt(0).toUpperCase() + role.name.slice(1)}
-                    </option>
-                  ))}
-                </Select>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Assign Role</label>
+                  <div className="px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl cursor-not-allowed select-none">
+                    {assignRole.charAt(0).toUpperCase() + assignRole.slice(1)}
+                  </div>
+                </div>
               </div>
 
               <div className="flex justify-start">
@@ -518,8 +502,7 @@ function InstituteCustomizeContent() {
               <div className="mt-8 p-4 bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-900/20">
                 <h4 className="text-sm font-bold text-blue-800 dark:text-blue-400 mb-2">Instructions</h4>
                 <p className="text-xs text-blue-600 dark:text-blue-500 leading-relaxed">
-                  Enter the email address of the user you want to assign. The user must already have a SmartEdX account. 
-                  Once assigned, the user will have access to this institute with the specified role.
+                  Enter the email address of the user you want to assign. Once assigned, the user will have access to this institute with the specified role.
                 </p>
               </div>
 
@@ -851,6 +834,27 @@ function InstituteCustomizeContent() {
           )}
         </div>
       </div>
+
+      {alertModal && (
+        <AlertModal
+          variant={alertModal.variant}
+          title={alertModal.title}
+          message={alertModal.message}
+          onClose={() => setAlertModal(null)}
+        />
+      )}
+
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          onConfirm={() => {
+            confirmModal.onConfirm();
+            setConfirmModal(null);
+          }}
+          onClose={() => setConfirmModal(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1026,4 +1030,110 @@ function ModelOption({ name, desc, active, onClick }: { name: string; desc: stri
 // Icons
 const InstituteIcon = () => <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>;
 const UploadIcon = () => <svg className="w-10 h-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>;
+
+// Modal Components
+
+type AlertVariant = "success" | "error" | "warning" | "info";
+
+const ALERT_CONFIG: Record<AlertVariant, { bg: string; border: string; icon: string; btn: string; iconPath: string }> = {
+  success: {
+    bg: "bg-green-50 dark:bg-green-900/20",
+    border: "border-green-200 dark:border-green-800",
+    icon: "text-green-500",
+    btn: "bg-green-600 hover:bg-green-700 focus:ring-green-500",
+    iconPath: "M5 13l4 4L19 7",
+  },
+  error: {
+    bg: "bg-red-50 dark:bg-red-900/20",
+    border: "border-red-200 dark:border-red-800",
+    icon: "text-red-500",
+    btn: "bg-red-600 hover:bg-red-700 focus:ring-red-500",
+    iconPath: "M6 18L18 6M6 6l12 12",
+  },
+  warning: {
+    bg: "bg-amber-50 dark:bg-amber-900/20",
+    border: "border-amber-200 dark:border-amber-800",
+    icon: "text-amber-500",
+    btn: "bg-amber-500 hover:bg-amber-600 focus:ring-amber-500",
+    iconPath: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z",
+  },
+  info: {
+    bg: "bg-blue-50 dark:bg-blue-900/20",
+    border: "border-blue-200 dark:border-blue-800",
+    icon: "text-blue-500",
+    btn: "bg-blue-600 hover:bg-blue-700 focus:ring-blue-500",
+    iconPath: "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
+  },
+};
+
+function AlertModal({ variant, title, message, onClose }: {
+  variant: AlertVariant;
+  title: string;
+  message: string;
+  onClose: () => void;
+}) {
+  const c = ALERT_CONFIG[variant];
+  return (
+    <Modal isOpen onClose={onClose} showCloseButton={false} className="w-[calc(100vw-2rem)] max-w-sm">
+      <div className={`p-6 sm:p-8 rounded-3xl border ${c.bg} ${c.border}`}>
+        <div className="flex flex-col items-center text-center gap-5">
+          <div className={`w-14 h-14 rounded-full flex items-center justify-center border-2 ${c.bg} ${c.border}`}>
+            <svg className={`w-7 h-7 ${c.icon}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d={c.iconPath} />
+            </svg>
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-base font-bold text-gray-800 dark:text-white">{title}</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{message}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className={`w-full py-2.5 px-6 rounded-xl text-sm font-bold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${c.btn}`}
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function ConfirmModal({ title, message, onConfirm, onClose }: {
+  title: string;
+  message: string;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal isOpen onClose={onClose} showCloseButton={false} className="w-[calc(100vw-2rem)] max-w-sm">
+      <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
+        <div className="flex flex-col items-center text-center gap-5">
+          <div className="w-14 h-14 rounded-full flex items-center justify-center bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800">
+            <svg className="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-base font-bold text-gray-800 dark:text-white">{title}</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{message}</p>
+          </div>
+          <div className="flex gap-3 w-full">
+            <button
+              onClick={onClose}
+              className="flex-1 py-2.5 px-4 rounded-xl text-sm font-bold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onConfirm}
+              className="flex-1 py-2.5 px-4 rounded-xl text-sm font-bold text-white bg-red-600 hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+            >
+              Remove
+            </button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
 

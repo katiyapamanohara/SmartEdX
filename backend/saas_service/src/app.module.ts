@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { HealthController } from './core/health/health.controller';
 import { DatabaseModule } from './infra/database/database.module';
 import { FirebaseModule } from './infra/firebase/firebase.module';
 import { MinioModule } from './infra/storage/minio.module';
@@ -27,7 +28,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     AuthModule,
     PayhereModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, HealthController],
   providers: [
     AppService,
     {

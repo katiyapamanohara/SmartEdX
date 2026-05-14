@@ -3,15 +3,17 @@
 import logging
 import threading
 import time
+from typing import Optional
 
-import requests
-from fastembed import TextEmbedding
+import httpx
 from google.adk.agents import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.adk.tools import FunctionTool, ToolContext
+from google.genai import types
 
 from app.agent.api import fetch_institute_config
+from app.qdrant.course_kb import _get_query_vector
 from app.agent.assessment_tools import evaluate_voice_assessment
 from app.agent.audio_clips import create_audio_clip_tool
 from app.agent.custom_tools import CustomToolHelper
@@ -77,17 +79,8 @@ def unregister_call_guard(session_id: str) -> None:
 
 
 def end_call(tool_context: ToolContext) -> dict:
-    """End the current phone call. ONLY call this tool when the user has EXPLICITLY said goodbye, bye, hang up, or clearly indicated they want to end the call with an unambiguous farewell.
-
-    DO NOT call this tool if:
-    - The user's speech was unclear, garbled, or too short to understand.
-    - You are unsure what the user said.
-    - The user asked a question or made a request.
-    - There was silence or background noise.
-    - You just want to wrap up — always wait for the user to end the conversation.
-
-    Returns:
-        Status of the call termination.
+    """End the current call. Only call when the user has EXPLICITLY said goodbye or asked to hang up.
+    Never call on unclear speech, silence, or after answering a question.
     """
     session_id = tool_context.session.id if tool_context.session else None
     with _guard_lock:
@@ -126,50 +119,99 @@ def end_call(tool_context: ToolContext) -> dict:
 
 # ── Qdrant knowledge base search ────────────────────────────────────
 
-_embedding_model = TextEmbedding("sentence-transformers/all-MiniLM-L6-v2") if QDRANT_KB_ENABLED else None
+# Persistent HTTP client for institute-level KB — reuses TCP connections.
+_kb_http_client: Optional[httpx.Client] = None
+_kb_http_lock = threading.Lock()
 
 
-def search_knowledgebase(query: str, limit: int = 5) -> dict:
-    """Search the knowledge base for relevant information.
-    Use this tool when the user asks questions about products, services,
-    pricing, installation, company details, or any domain-specific information.
+def _get_kb_http_client() -> httpx.Client:
+    global _kb_http_client
+    if _kb_http_client is None:
+        with _kb_http_lock:
+            if _kb_http_client is None:
+                _kb_http_client = httpx.Client(
+                    timeout=5.0,
+                    limits=httpx.Limits(
+                        max_keepalive_connections=5,
+                        max_connections=10,
+                        keepalive_expiry=30,
+                    ),
+                )
+    return _kb_http_client
 
-    Args:
-        query: The search query describing what information to find.
-        limit: Maximum number of results to return.
 
-    Returns:
-        A dict with matching results from the knowledge base.
-    """
-    if not QDRANT_KB_ENABLED or _embedding_model is None:
+def _search_kb_sync(query: str, limit: int) -> dict:
+    if not QDRANT_KB_ENABLED:
         return {"status": "error", "message": "Knowledge base is not enabled."}
+    t_total = time.monotonic()
+    logger.info(f"[KB Search] query={query!r} collection={QDRANT_COLLECTION_NAME!r} limit={limit}")
     try:
-        query_vector = list(_embedding_model.embed([query]))[0].tolist()
+        query_vector = _get_query_vector(query)
 
         headers = {"Content-Type": "application/json"}
         if QDRANT_API_KEY:
             headers["api-key"] = QDRANT_API_KEY
 
-        search_result = requests.post(
+        t_req = time.monotonic()
+        logger.info(f"[KB Search] Sending vector search → Qdrant {QDRANT_URL}/collections/{QDRANT_COLLECTION_NAME}")
+        search_result = _get_kb_http_client().post(
             f"{QDRANT_URL}/collections/{QDRANT_COLLECTION_NAME}/points/search",
             headers=headers,
-            json={"vector": query_vector, "limit": limit, "with_payload": True},
-            timeout=15,
+            json={
+                "vector": query_vector,
+                "limit": limit,
+                "with_payload": True,
+                "score_threshold": 0.35,
+                "params": {"hnsw_ef": 32, "exact": False},
+            },
         )
+        req_ms = (time.monotonic() - t_req) * 1000
         search_result.raise_for_status()
         hits = search_result.json().get("result", [])
 
+        total_ms = (time.monotonic() - t_total) * 1000
+        scores = [round(h["score"], 3) for h in hits]
+        logger.info(
+            f"[KB Search] QDRANT → {len(hits)} hits in {req_ms:.1f}ms (total {total_ms:.1f}ms) "
+            f"scores={scores}"
+        )
+
         if not hits:
+            logger.info("[KB Search] No results above threshold 0.35")
             return {"status": "no_results", "message": "No relevant information found."}
 
         results = [
-            {"content": h["payload"].get("content", ""), "page": h["payload"].get("page"), "score": h["score"]}
+            {
+                "content": h["payload"].get("content", "")[:300],
+                "page": h["payload"].get("page"),
+                "score": round(h["score"], 3),
+            }
             for h in hits
         ]
+        for i, r in enumerate(results):
+            logger.debug(f"  [hit {i+1}] page={r.get('page')} score={r['score']} | {r['content'][:120]!r}")
         return {"status": "ok", "results": results}
     except Exception as e:
-        logger.error(f"Knowledge base search failed: {e}", exc_info=True)
+        logger.error(f"[KB Search] FAILED: {e}", exc_info=True)
         return {"status": "error", "message": "Failed to search knowledge base."}
+
+
+async def search_knowledgebase(query: str, limit: int = 2) -> dict:
+    """Search the knowledge base. Call this for any domain-specific question.
+
+    Args:
+        query: What to search for.
+        limit: Max results (default 2).
+    """
+    import asyncio
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(_search_kb_sync, query=query, limit=limit),
+            timeout=10.0,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(f"Knowledge base search timed out for query: {query!r}")
+        return {"status": "error", "message": "Search took too long. Please try again."}
 
 
 # ── Shared tools (not institute-specific) ───────────────────────────
@@ -318,10 +360,12 @@ def get_runner_for_institute(institute_id: str, session_service: InMemorySession
     # Fetch institute-specific config from the SmartEdX institute service
     institute_name = "SmartEdX"
     base_instructions = (
-        "You are the SmartEdX voice assistant.\n"
-        "Follow the user's instructions carefully and provide accurate information.\n"
-        "- Provide helpful and concise responses.\n"
-        "- If you don't know the answer, politely say so.\n"
+        "You are the SmartEdX educational voice assistant.\n"
+        "Your ONLY purpose is to help students and teachers with learning, course content, "
+        "academic subjects, study preparation, and educational questions.\n"
+        "- Answer only education-related questions.\n"
+        "- Redirect any off-topic request in one sentence back to learning.\n"
+        "- Be encouraging, concise, and clear.\n"
     )
 
     try:
@@ -331,11 +375,12 @@ def get_runner_for_institute(institute_id: str, session_service: InMemorySession
             base_instructions = config["voiceInstructions"]
         else:
             base_instructions = (
-                f"You are the AI voice assistant for {institute_name}.\n"
-                "Help students with their voice assessments and learning needs.\n"
-                "- Speak clearly and concisely.\n"
-                "- Be encouraging and supportive.\n"
-                "- If you don't know the answer, say so honestly.\n"
+                f"You are the AI educational voice assistant for {institute_name}.\n"
+                "Your ONLY purpose is to support student learning: course content, academic subjects, "
+                "study skills, assessments, and education-related questions.\n"
+                "- Do NOT answer questions unrelated to education or this institute's courses.\n"
+                "- If a student asks something off-topic, reply in one sentence and redirect to their coursework.\n"
+                "- Be warm, encouraging, and concise.\n"
             )
         logger.info(f"Loaded voice config for institute '{institute_name}' ({institute_id})")
     except Exception as e:
@@ -353,6 +398,9 @@ def get_runner_for_institute(institute_id: str, session_service: InMemorySession
         model=DEMO_AGENT_MODEL,
         tools=_shared_tools,
         instruction=system_instructions,
+        generate_content_config=types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_budget=512, include_thoughts=True),
+        ),
     )
 
     institute_runner = Runner(
@@ -408,26 +456,38 @@ def get_runner_for_course(
     logger.info(f"Building course Q&A agent for course: {course_name!r} ({course_id})")
 
     # Build a course-specific search tool via closure so course_id is baked in.
-    def search_course_material(query: str, limit: int = 5) -> dict:
-        """Search the course material for information relevant to the student's question.
-
-        Use this tool whenever the student asks about any topic, concept, or
-        content covered in this course.  Always search before answering to
-        ensure accuracy.
+    async def search_course_material(query: str, limit: int = 2) -> dict:
+        """Search course material. Call immediately for any course-content question.
 
         Args:
-            query: Natural-language description of the information to find.
-            limit: Maximum number of results to return (default 5).
-
-        Returns:
-            Matching excerpts from the course material with page references.
+            query: Specific topic or keywords from the user's question (e.g. 'algorithms',
+                   'photosynthesis', 'World War 2'). NEVER use generic phrases like
+                   'course content' or 'course material' — always use the actual subject.
+            limit: Max results (default 2).
         """
         if not COURSE_KB_ENABLED:
             return {"status": "error", "message": "Course knowledge base is not enabled."}
+        _GENERIC = {
+            "course content", "course material", "course materials", "content",
+            "material", "materials", "information", "topic", "topics", "subject",
+            "the course", "this course", "course",
+        }
+        if not query or query.strip().lower() in _GENERIC or len(query.strip()) < 3:
+            return {
+                "status": "error",
+                "message": (
+                    "Query is too generic. Extract the specific subject keyword "
+                    "from the user's question and call again with that keyword."
+                ),
+            }
         try:
+            import asyncio
             from app.qdrant.course_kb import search_course
 
-            results = search_course(institute_id=institute_id, course_id=course_id, query=query, limit=limit)
+            results = await asyncio.wait_for(
+                asyncio.to_thread(search_course, institute_id=institute_id, course_id=course_id, query=query, limit=limit),
+                timeout=10.0,
+            )
             if not results:
                 return {
                     "status": "no_results",
@@ -438,21 +498,28 @@ def get_runner_for_course(
                     ),
                 }
             return {"status": "ok", "results": results}
+        except asyncio.TimeoutError:
+            logger.warning(f"Course KB search timed out for course {course_id}")
+            return {"status": "error", "message": "Search took too long. Please try again."}
         except Exception as e:
             logger.error(f"Course KB search failed for course {course_id}: {e}", exc_info=True)
             return {"status": "error", "message": "Failed to search course material."}
 
     system_instructions = all_instructions + (
         f"You are an AI tutor for the course '{course_name}'.\n"
-        f"Your role is to help students understand the course material and answer their questions.\n"
-        f"- Use the search_course_material tool to look up relevant information before answering.\n"
-        f"- Give clear, concise, and helpful explanations based on the retrieved content.\n"
-        f"- Cite the page number when referencing specific material (e.g. 'According to page 3...').\n"
-        f"- If the answer is not in the course material, say so honestly and suggest the student\n"
-        f"  consult their teacher or course notes.\n"
-        f"- Be encouraging and supportive — you are a tutor, not just a search engine.\n"
-        f"\nCOURSE MATERIAL SEARCH: Only call search_course_material if the user asks a specific question\n"
-        f"about facts, topics, or details from the course content. Do not use it for general conversation."
+        f"Your ONLY purpose is to help students understand and learn the content of this course.\n"
+        f"Rules:\n"
+        f"- Greetings and brief follow-ups: answer directly, no tool call.\n"
+        f"- ANY question about course topics, concepts, or materials: call search_course_material IMMEDIATELY.\n"
+        f"  QUERY RULE: use the specific subject keyword from the question as the query.\n"
+        f"  Example — 'what is photosynthesis?': query='photosynthesis'.\n"
+        f"  NEVER pass 'course content', 'course material', or any generic phrase as the query.\n"
+        f"- After search: answer in 1-2 sentences, cite the page if available (e.g. 'Page 3 says ...').\n"
+        f"- If nothing is found: say so in one sentence and suggest the student ask their teacher.\n"
+        f"- OFF-TOPIC: if the student asks about anything unrelated to this course or education, "
+        f"reply in one sentence: 'I'm here to help with {course_name} — what would you like to learn?' "
+        f"and stop. Do NOT answer the off-topic question.\n"
+        f"- Always be brief — 1 to 2 sentences per turn."
     )
 
     safe_id = course_id.replace("-", "_")
@@ -462,9 +529,11 @@ def get_runner_for_course(
         tools=[
             FunctionTool(func=search_course_material),
             FunctionTool(func=end_call),
-            FunctionTool(func=evaluate_voice_assessment),
         ],
         instruction=system_instructions,
+        generate_content_config=types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_budget=128, include_thoughts=True),
+        ),
     )
 
     course_runner = Runner(
@@ -507,56 +576,81 @@ def get_runner_for_teacher(
 
     logger.info(f"Building teacher agent for institute={institute_id} teacher={teacher_id}")
 
-    def search_course_material(query: str, course_id: str = "", limit: int = 5) -> dict:
-        """Search course materials stored in Qdrant.
-
-        Use this tool whenever the teacher asks about course content, lesson topics,
-        or any information that may be in the course materials.
+    async def search_course_material(query: str, course_id: str = "", limit: int = 2) -> dict:
+        """Search course materials. Call immediately for any course-content question.
 
         Args:
-            query:     Natural-language description of the information to find.
-            course_id: Optional specific course UUID to narrow the search.
-                       Leave empty to search across all indexed courses.
-            limit:     Maximum number of results to return (default 5).
-
-        Returns:
-            Matching excerpts from course materials with page references.
+            query:     Specific topic or keywords from the teacher's question (e.g.
+                       'sorting algorithms', 'cell division'). NEVER use generic phrases
+                       like 'course content' — always use the actual subject being asked about.
+            course_id: Specific course UUID (leave empty to search all courses).
+            limit:     Max results (default 2).
         """
         if not COURSE_KB_ENABLED:
             return {"status": "error", "message": "Course knowledge base is not enabled."}
+        _GENERIC = {
+            "course content", "course material", "course materials", "content",
+            "material", "materials", "information", "topic", "topics", "subject",
+            "the course", "this course", "course",
+        }
+        if not query or query.strip().lower() in _GENERIC or len(query.strip()) < 3:
+            return {
+                "status": "error",
+                "message": (
+                    "Query is too generic. Extract the specific subject keyword "
+                    "from the teacher's question and call again with that keyword."
+                ),
+            }
         try:
-            from app.qdrant.course_kb import search_course
+            import asyncio
+            from app.qdrant.course_kb import search_all_institute_courses, search_course
 
             if course_id:
-                results = search_course(
-                    institute_id=institute_id,
-                    course_id=course_id,
-                    query=query,
-                    limit=limit,
+                results = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        search_course,
+                        institute_id=institute_id,
+                        course_id=course_id,
+                        query=query,
+                        limit=limit,
+                    ),
+                    timeout=10.0,
                 )
             else:
-                # No course_id supplied — search the general institute KB if available
-                if QDRANT_KB_ENABLED and _embedding_model is not None:
-                    return search_knowledgebase(query=query, limit=limit)
-                return {"status": "error", "message": "Please provide a course_id to search course materials."}
+                # No course_id — search across every course collection for this institute
+                results = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        search_all_institute_courses,
+                        institute_id=institute_id,
+                        query=query,
+                        limit=limit,
+                    ),
+                    timeout=10.0,
+                )
 
             if not results:
-                return {"status": "no_results", "message": "No relevant information found in the course material."}
+                return {"status": "no_results", "message": "No relevant information found in the course materials."}
             return {"status": "ok", "results": results}
+        except asyncio.TimeoutError:
+            logger.warning(f"Teacher course KB search timed out (institute={institute_id})")
+            return {"status": "error", "message": "Search took too long. Please try again."}
         except Exception as e:
             logger.error(f"Teacher course KB search failed: {e}", exc_info=True)
             return {"status": "error", "message": "Failed to search course material."}
 
     system_instructions = all_instructions + (
         "You are an AI voice assistant for teachers at SmartEdX.\n"
-        "Your role is to help teachers with course content, lesson planning, and curriculum questions.\n"
-        "- Use the search_course_material tool to look up information from course materials in Qdrant.\n"
-        "- When searching, provide a course_id if the teacher mentions a specific course.\n"
-        "- Give clear, concise answers based on the retrieved content.\n"
-        "- Cite page numbers when referencing specific material.\n"
-        "- If the answer is not in the course material, say so honestly.\n"
-        "- Be professional, supportive, and focused on helping the teacher.\n"
-        "\nCOURSE MATERIAL SEARCH: Use search_course_material before answering questions about course content."
+        "Your ONLY purpose is to assist teachers with educational tasks: understanding course materials, "
+        "lesson planning, curriculum questions, and academic subject knowledge.\n"
+        "Rules:\n"
+        "- Greetings and brief follow-ups: answer directly, no tool call.\n"
+        "- ANY question about course content or materials: call search_course_material IMMEDIATELY.\n"
+        "  QUERY RULE: use the specific subject keyword from the question as the query\n"
+        "  (e.g. 'binary search trees', not 'course content' or 'course material').\n"
+        "- Include course_id when the teacher specifies a course.\n"
+        "- Answer in 1-2 sentences, cite page numbers where available.\n"
+        "- OFF-TOPIC: if asked about anything unrelated to education or teaching, reply in one sentence: "
+        "'I can only assist with educational content — what would you like to explore?' and stop."
     )
 
     safe_id = teacher_id.replace("-", "_")
@@ -568,6 +662,9 @@ def get_runner_for_teacher(
             FunctionTool(func=end_call),
         ],
         instruction=system_instructions,
+        generate_content_config=types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_budget=128, include_thoughts=True),
+        ),
     )
 
     teacher_runner = Runner(

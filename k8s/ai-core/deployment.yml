@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ai-core
-  namespace: smartedx
+  namespace: prod
   labels:
     app: ai-core
 spec:
@@ -17,43 +17,20 @@ spec:
     spec:
       containers:
         - name: ai-core
-          image: ghcr.io/smartedx/ai-core:latest
+          image: us-central1-docker.pkg.dev/lively-synapse-495509-t0/smartedx-docker-repo/ai-core:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8001
-          env:
-            - name: PORT
-              value: "8001"
-            - name: AI_PROVIDER
-              value: "anthropic"
-            - name: MODEL_ID
-              value: "claude-sonnet-4-6"
-            - name: ANTHROPIC_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: ai-core-secret
-                  key: anthropic-api-key
-            - name: OPENAI_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: ai-core-secret
-                  key: openai-api-key
-            - name: GOOGLE_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: ai-core-secret
-                  key: google-api-key
-            - name: INSTITUTE_API_URL
-              value: "http://institute-service:5002"
-            - name: CORS_ORIGINS
-              value: "https://institute.smartedx.com,https://saas.smartedx.com"
-          resources:
-            requests:
-              cpu: 500m
-              memory: 512Mi
-            limits:
-              cpu: 2000m
-              memory: 2Gi
+          envFrom:
+            - secretRef:
+                name: ai-core-secret
+          # resources:
+          #   requests:
+          #     cpu: 100m
+          #     memory: 512Mi
+          #   limits:
+          #     cpu: 2000m
+          #     memory: 2Gi
           livenessProbe:
             httpGet:
               path: /health
@@ -73,7 +50,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: ai-core
-  namespace: smartedx
+  namespace: prod
   labels:
     app: ai-core
 spec:
@@ -90,7 +67,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: ai-core-hpa
-  namespace: smartedx
+  namespace: prod
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

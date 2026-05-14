@@ -2,11 +2,11 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: institute-service
-  namespace: smartedx
+  namespace: prod
   labels:
     app: institute-service
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: institute-service
@@ -17,66 +17,31 @@ spec:
     spec:
       containers:
         - name: institute-service
-          image: ghcr.io/smartedx/institute-service:latest
+          image: us-central1-docker.pkg.dev/lively-synapse-495509-t0/smartedx-docker-repo/institute-service:latest
           imagePullPolicy: Always
           ports:
-            - containerPort: 5002
-          env:
-            - name: NODE_ENV
-              value: production
-            - name: PORT
-              value: "5002"
-            - name: DB_HOST
-              valueFrom:
-                secretKeyRef:
-                  name: institute-db-secret
-                  key: host
-            - name: DB_PORT
-              value: "5432"
-            - name: DB_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: institute-db-secret
-                  key: username
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: institute-db-secret
-                  key: password
-            - name: DB_DATABASE
-              valueFrom:
-                secretKeyRef:
-                  name: institute-db-secret
-                  key: database
-            - name: JWT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: institute-app-secret
-                  key: jwt-secret
-            - name: REDIS_HOST
-              value: "redis"
-            - name: REDIS_PORT
-              value: "6379"
-            - name: CORS_ORIGIN
-              value: "https://institute.smartedx.com,https://saas.smartedx.com"
-          resources:
-            requests:
-              cpu: 250m
-              memory: 256Mi
-            limits:
-              cpu: 500m
-              memory: 512Mi
+            - containerPort: 5003
+          envFrom:
+            - secretRef:
+                name: institute-service-secret
+          # resources:
+          #   requests:
+          #     cpu: 100m
+          #     memory: 256Mi
+          #   limits:
+          #     cpu: 500m
+          #     memory: 512Mi
           livenessProbe:
             httpGet:
               path: /api/institutes/health
-              port: 5002
+              port: 5003
             initialDelaySeconds: 40
             periodSeconds: 10
             failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /api/institutes/health
-              port: 5002
+              port: 5003
             initialDelaySeconds: 20
             periodSeconds: 5
             failureThreshold: 3
@@ -85,7 +50,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: institute-service
-  namespace: smartedx
+  namespace: prod
   labels:
     app: institute-service
 spec:
@@ -93,8 +58,8 @@ spec:
     app: institute-service
   ports:
     - name: http
-      port: 5002
-      targetPort: 5002
+      port: 5003
+      targetPort: 5003
       protocol: TCP
   type: ClusterIP
 ---
@@ -102,13 +67,13 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: institute-service-hpa
-  namespace: smartedx
+  namespace: prod
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: institute-service
-  minReplicas: 2
+  minReplicas: 1
   maxReplicas: 8
   metrics:
     - type: Resource

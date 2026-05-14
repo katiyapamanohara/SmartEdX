@@ -307,17 +307,12 @@ class SIPCallSession:
                         if not self.is_active:
                             break
 
-                        event_json = event.model_dump_json(exclude_none=True, by_alias=True)
+                        # Build dict once — avoid model_dump_json() + json.loads() round-trip.
+                        data = event.model_dump(exclude_none=True, by_alias=True)
                         if not self._first_response_recorded:
                             latency_tracker.stop_timer("first_response", self._t_first_response, self.mgr.session_id)
                             self._first_response_recorded = True
-                        self.mgr.transcript_handler.process_event(event_json)
-
-                        data = None
-                        try:
-                            data = json.loads(event_json)
-                        except Exception:
-                            pass
+                        self.mgr.transcript_handler.process_event(data)
 
                         if data:
                             input_tx = data.get("inputTranscription")
