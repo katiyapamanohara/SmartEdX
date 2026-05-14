@@ -3,7 +3,7 @@ name: Build and Push to Google Artifact Registry
 on:
   push:
     branches:
-      - development
+      - cloud_deployment
     tags:
       - 'v*'
   workflow_dispatch:
