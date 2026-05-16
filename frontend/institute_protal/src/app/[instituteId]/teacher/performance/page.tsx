@@ -314,7 +314,7 @@ export default function TeacherPerformancePage() {
       </div>
 
       {/* Summary stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {summaryStats.map((s) => (
           <div
             key={s.label}

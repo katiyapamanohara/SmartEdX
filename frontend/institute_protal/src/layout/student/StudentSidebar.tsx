@@ -39,15 +39,13 @@ const FEATURE_STUDENT_NAV: { feature: string; item: NavItem }[] = [
 
 
 const StudentSidebar: React.FC = () => {
-  const { isExpanded, isMobileOpen, isHovered, setIsHovered, toggleMobileSidebar, collapseSidebar } = useSidebar();
+  const { isExpanded, isMobileOpen, isHovered, setIsHovered, toggleMobileSidebar } = useSidebar();
 
   const handleNavClick = () => {
     if (isMobileOpen) {
       toggleMobileSidebar();
-    } else {
-      collapseSidebar();
+      setIsHovered(false);
     }
-    setIsHovered(false);
   };
 
   const pathname = usePathname();

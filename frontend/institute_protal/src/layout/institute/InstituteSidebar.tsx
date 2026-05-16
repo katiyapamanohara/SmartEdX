@@ -52,15 +52,13 @@ const navItems: NavItem[] = [
 
 
 const InstituteSidebar: React.FC = () => {
-  const { isExpanded, isMobileOpen, isHovered, setIsHovered, toggleSidebar, toggleMobileSidebar, collapseSidebar } = useSidebar();
+  const { isExpanded, isMobileOpen, isHovered, setIsHovered, toggleSidebar, toggleMobileSidebar } = useSidebar();
 
   const handleNavClick = () => {
     if (isMobileOpen) {
       toggleMobileSidebar();
-    } else {
-      collapseSidebar();
+      setIsHovered(false);
     }
-    setIsHovered(false);
   };
   const pathname = usePathname();
   const params = useParams();

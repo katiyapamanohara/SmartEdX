@@ -36,7 +36,7 @@ export default function TeacherLayout({
   return (
     <InstituteFeatureProvider>
       <LiveSessionProvider>
-        <div className="min-h-screen xl:flex">
+        <div className="min-h-screen lg:flex">
           <TeacherSidebar />
           <TeacherBackdrop />
           <div className={`flex-1 transition-all duration-300 ease-in-out ${mainContentMargin}`}>

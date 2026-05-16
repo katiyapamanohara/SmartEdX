@@ -456,7 +456,7 @@ export default function StudentRecordingsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between py-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Recordings</h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -467,7 +467,7 @@ export default function StudentRecordingsPage() {
           type="button"
           onClick={() => fetchRecordings()}
           disabled={loading}
-          className="mt-1 flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10"
+          className="shrink-0 flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10"
         >
           <svg
             className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}

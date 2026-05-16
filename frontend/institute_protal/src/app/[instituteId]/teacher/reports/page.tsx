@@ -547,7 +547,7 @@ export default function TeacherReportsPage() {
             </div>
 
             {/* Summary strip */}
-            <div className="grid grid-cols-4 divide-x divide-gray-100 dark:divide-gray-700 border-b border-gray-100 dark:border-gray-700">
+            <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-gray-100 dark:divide-gray-700 border-b border-gray-100 dark:border-gray-700">
               {[
                 { label: "Overall", value: selectedStudent.overallAvg !== null ? `${selectedStudent.overallAvg}%` : "—", sub: grade(selectedStudent.overallAvg) },
                 { label: "Quiz Avg", value: selectedStudent.quizAvg !== null ? `${selectedStudent.quizAvg}%` : "—", sub: `${selectedStudent.quizzes.filter(q => q.score !== null).length} done` },

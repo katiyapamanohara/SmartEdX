@@ -286,7 +286,7 @@ function AIQuestionGenerator({ onImport }: { onImport: (qs: ExamQuestion[]) => v
       )}
 
       {/* Options */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
           <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Question Type</label>
           <select
@@ -571,7 +571,7 @@ function ExamModal({ courses, initial, onSave, onClose }: ExamModalProps) {
                 {courses.map((c) => <option key={c.id} value={c.id}>{c.name} {c.batchNumber ? `(${c.batchNumber})` : ""}</option>)}
               </select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Scheduled Date & Time</label>
                 <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)}
@@ -719,6 +719,7 @@ function AttemptsModal({ exam, onClose }: { exam: Exam; onClose: () => void }) {
           {attempts.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-8">No attempts yet.</p>
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-xs text-gray-500 dark:text-gray-400 border-b dark:border-gray-700">
@@ -758,6 +759,7 @@ function AttemptsModal({ exam, onClose }: { exam: Exam; onClose: () => void }) {
                 })}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       </div>
@@ -818,14 +820,14 @@ export default function TeacherExamsPage() {
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
-      <div className="flex items-center justify-between py-2">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Exams</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Create, schedule and manage exams for your courses</p>
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 transition-colors"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 transition-colors shrink-0"
         >
           <span className="text-lg leading-none">+</span> Create Exam
         </button>
@@ -865,6 +867,7 @@ export default function TeacherExamsPage() {
         </div>
       ) : (
         <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/3 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 dark:border-gray-800 text-xs text-gray-500 dark:text-gray-400">
@@ -909,6 +912,7 @@ export default function TeacherExamsPage() {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

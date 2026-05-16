@@ -86,7 +86,7 @@ export default function StudentDashboard() {
       <div className="grid grid-cols-12 gap-4 md:gap-6">
 
         {/* ── Welcome Banner ── */}
-        <div className="col-span-12 rounded-2xl bg-linear-to-r from-brand-500 to-indigo-600 p-6 text-white flex items-center justify-between gap-4">
+        <div className="col-span-12 rounded-2xl bg-linear-to-r from-brand-500 to-indigo-600 p-5 sm:p-6 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold">Welcome back{firstName ? `, ${firstName}` : ""}! 👋</h2>
             <p className="text-sm text-white/80 mt-1">
@@ -96,7 +96,7 @@ export default function StudentDashboard() {
             </p>
           </div>
           {hasFeature("ai_tutor") && (
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
             <Link
               href={`/${instituteId}/student/ai-chat`}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-sm font-semibold transition-colors backdrop-blur-sm border border-white/25"

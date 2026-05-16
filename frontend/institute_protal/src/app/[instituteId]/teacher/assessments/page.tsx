@@ -639,12 +639,12 @@ export default function TeacherAssessmentsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between py-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Assessments</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Quizzes across your assigned courses</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
          
           <button
             onClick={() => setCreateOpen(true)}

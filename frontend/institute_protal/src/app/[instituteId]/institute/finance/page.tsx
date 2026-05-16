@@ -230,12 +230,12 @@ export default function FinancePage() {
     <div className="flex flex-col gap-6">
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Finance</h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Revenue, payments and course earnings</p>
         </div>
-        <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-full font-medium">
+        <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-full font-medium shrink-0">
           Currency: {currency}
         </span>
       </div>
@@ -331,7 +331,7 @@ export default function FinancePage() {
       </div>
 
       {/* ── Tab navigation ── */}
-      <div className="flex gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl w-fit">
+      <div className="flex flex-wrap gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl w-fit">
         {(["overview", "transactions", "courses"] as const).map(tab => (
           <button
             key={tab}
