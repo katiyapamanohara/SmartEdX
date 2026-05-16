@@ -5,6 +5,7 @@ import {
   DollarLineIcon,
   GridIcon,
   HorizontaLDots,
+  PieChartIcon,
 } from "@/icons/index";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -23,6 +24,11 @@ const navItems: NavItem[] = [
     icon: <GridIcon />,
     name: "Dashboard",
     path: "/dashboard",
+  },
+  {
+    icon: <PieChartIcon />,
+    name: "Overview",
+    path: "/dashboard/overview",
   },
   {
     icon: <CalenderIcon />,
