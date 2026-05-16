@@ -39,7 +39,17 @@ const FEATURE_STUDENT_NAV: { feature: string; item: NavItem }[] = [
 
 
 const StudentSidebar: React.FC = () => {
-  const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
+  const { isExpanded, isMobileOpen, isHovered, setIsHovered, toggleMobileSidebar, collapseSidebar } = useSidebar();
+
+  const handleNavClick = () => {
+    if (isMobileOpen) {
+      toggleMobileSidebar();
+    } else {
+      collapseSidebar();
+    }
+    setIsHovered(false);
+  };
+
   const pathname = usePathname();
   const params = useParams();
   const instituteId = params.instituteId as string;
@@ -131,6 +141,7 @@ const StudentSidebar: React.FC = () => {
             nav.path && (
               <Link
                 href={nav.path ? `/${instituteId}${nav.path}` : "#"}
+                onClick={handleNavClick}
                 className={`menu-item group ${
                   isActive(`/${instituteId}${nav.path}`) ? "menu-item-active" : "menu-item-inactive"
                 }`}
@@ -168,6 +179,7 @@ const StudentSidebar: React.FC = () => {
                   <li key={subItem.name}>
                     <Link
                       href={`/${instituteId}${subItem.path}`}
+                      onClick={handleNavClick}
                       className={`menu-dropdown-item ${
                         isActive(`/${instituteId}${subItem.path}`)
                           ? "menu-dropdown-item-active"
