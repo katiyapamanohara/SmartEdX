@@ -135,10 +135,14 @@ class AuthService {
       }
 
       const data: AuthResponse = await response.json();
+      const userWithPicture: User = {
+        ...data.user,
+        profilePicture: data.user.profilePicture || result.user.photoURL || "",
+      };
       this.setCookie("access_token", data.access_token);
-      this.setCookie("user", JSON.stringify(data.user));
+      this.setCookie("user", JSON.stringify(userWithPicture));
 
-      return data;
+      return { ...data, user: userWithPicture };
     } catch (error) {
       console.error("AuthService.signInWithGoogle Error:", error);
       throw error;
@@ -211,12 +215,18 @@ class AuthService {
 
       const data = await response.json();
       if (data.valid && data.user) {
-        return data.user;
+        const cachedUser = this.getUser();
+        const mergedUser: User = {
+          ...data.user,
+          profilePicture: data.user.profilePicture || cachedUser?.profilePicture || "",
+        };
+        this.setCookie("user", JSON.stringify(mergedUser));
+        return mergedUser;
       }
-      return null;
+      return this.getUser();
     } catch (error) {
       console.error("AuthService.getProfile Error:", error);
-      return this.getUser(); // Fallback to cookies
+      return this.getUser();
     }
   }
 

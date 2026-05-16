@@ -175,7 +175,7 @@ export default function AIToolsPage() {
   const params = useParams();
   const instituteId = params?.instituteId as string;
   const [activeTab, setActiveTab] = useState<Tab>("chat");
-  const [chatCourse, setChatCourse] = useState<{ id: string; name: string } | null>(null);
+  const [chatCourse, setChatCourse] = useState<{ id: string; name: string; coverImage?: string } | null>(null);
 
   const { isLoading: featuresLoading } = useInstituteFeatures({
     requiredFeature: "ai_tools",
@@ -219,7 +219,7 @@ export default function AIToolsPage() {
       {/* Content */}
       <div>
         <div className={activeTab === "chat" ? "" : "hidden"}>
-          <AIChatTab instituteId={instituteId} selectedCourse={chatCourse} onCourseSelect={setChatCourse} />
+          <AIChatTab instituteId={instituteId} selectedCourse={chatCourse} onCourseSelect={(c) => setChatCourse(c)} />
         </div>
 
         <div className={activeTab !== "chat" ? "rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3" : "hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3"}>
@@ -247,11 +247,12 @@ export default function AIToolsPage() {
 
 function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
   instituteId: string;
-  selectedCourse: { id: string; name: string } | null;
-  onCourseSelect: (course: { id: string; name: string } | null) => void;
+  selectedCourse: { id: string; name: string; coverImage?: string } | null;
+  onCourseSelect: (course: { id: string; name: string; coverImage?: string } | null) => void;
 }) {
-  const [courses, setCourses]             = useState<{ id: string; name: string }[]>([]);
+  const [courses, setCourses]             = useState<{ id: string; name: string; coverImage?: string }[]>([]);
   const [coursesLoading, setCoursesLoading] = useState(true);
+  const [userProfilePicture, setUserProfilePicture] = useState<string | null>(null);
 
   const [messages, setMessages]   = useState<TeacherChatMessage[]>([]);
   const [input, setInput]         = useState("");
@@ -279,9 +280,11 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
 
   // Load all courses assigned to this teacher
   useEffect(() => {
+    const user = authService.getUser();
+    setUserProfilePicture(user?.profilePicture ?? null);
     instituteService.getMyTeacherCourses(instituteId)
       .then(courses => {
-        setCourses(courses.map(c => ({ id: c.id, name: c.name })));
+        setCourses(courses.map(c => ({ id: c.id, name: c.name, coverImage: c.coverImage })));
         setCoursesLoading(false);
       })
       .catch(() => { setCourses([]); setCoursesLoading(false); });
@@ -298,7 +301,7 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
     ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`;
   }, [input]);
 
-  function handleSelectCourse(course: { id: string; name: string }) {
+  function handleSelectCourse(course: { id: string; name: string; coverImage?: string }) {
     onCourseSelect(course);
     const user = authService.getUser();
     const name = user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() : "";
@@ -393,7 +396,13 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
               {courses.map(course => (
                 <button key={course.id} onClick={() => handleSelectCourse(course)}
                 className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl bg-brand-50 dark:bg-brand-500/10 hover:bg-brand-100 dark:hover:bg-brand-500/20 transition-all text-left border border-brand-100 dark:border-brand-800">
-                 
+                  {course.coverImage ? (
+                    <img src={course.coverImage} alt={course.name} className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-lg bg-linear-to-br from-violet-500 to-blue-400 shrink-0 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" /></svg>
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-800 dark:text-white truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">{course.name}</p>
                   </div>
@@ -427,9 +436,9 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
   })();
 
   return (
-    <div className="flex flex-col h-[calc(100vh-9rem)] rounded-2xl bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-9rem)] rounded-2xl overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-3 px-6 py-4 shrink-0 bg-linear-to-r from-brand-50 to-indigo-50 dark:from-brand-500/5 dark:to-indigo-500/5">
+      <div className="flex items-center gap-3 px-6 py-4 shrink-0 bg-linear-to-r rounded-2xl from-brand-50 to-indigo-50 dark:from-brand-500/5 dark:to-indigo-500/5">
         <button onClick={() => { onCourseSelect(null); setMessages([]); }}
           className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-white/60 dark:hover:bg-gray-800 transition-colors shrink-0"
           title="Change course">
@@ -437,7 +446,13 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
           </svg>
         </button>
-        
+        {selectedCourse.coverImage ? (
+          <img src={selectedCourse.coverImage} alt={selectedCourse.name} className="w-10 h-10 rounded-xl object-cover shrink-0 shadow-md" />
+        ) : (
+          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-linear-to-br from-brand-400 to-indigo-500 shadow-md shadow-brand-500/25 shrink-0">
+            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" /></svg>
+          </div>
+        )}
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90 truncate">{selectedCourse.name}</h3>
           <p className="text-[11px] text-gray-500 dark:text-gray-400">AI Teaching Assistant · SmartEdX</p>
@@ -450,7 +465,7 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4 custom-scrollbar">
-        {messages.map((msg, i) => <TeacherMessageBubble key={i} msg={msg} />)}
+        {messages.map((msg, i) => <TeacherMessageBubble key={i} msg={msg} userProfilePicture={userProfilePicture} />)}
         {chatLoading && <ChatTypingIndicator />}
         <div ref={bottomRef} />
       </div>
@@ -541,24 +556,34 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
   );
 }
 
-function TeacherMessageBubble({ msg }: { msg: TeacherChatMessage }) {
+function TeacherMessageBubble({ msg, userProfilePicture }: { msg: TeacherChatMessage; userProfilePicture?: string | null }) {
   const isUser = msg.role === "user";
   return (
-    <div className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
-   
-      <div className={`max-w-[80%] ${isUser ? "order-1" : ""}`}>
-        {msg.fileName && (
-          <div className="mb-1 flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
-            <span>📎</span>{msg.fileName}
-          </div>
+    <div className={`flex gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
+      <div className="shrink-0 w-7 h-7 rounded-full overflow-hidden flex items-center justify-center text-[10px] font-bold bg-linear-to-br from-brand-400 to-indigo-500 text-white">
+        {isUser ? (
+          userProfilePicture ? (
+            <img src={userProfilePicture} alt="You" className="w-full h-full object-cover" />
+          ) : (
+            "You"
+          )
+        ) : (
+          <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 9.75a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375m-13.5 3.01c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.184-4.183a1.14 1.14 0 0 1 .778-.332 48.294 48.294 0 0 0 5.83-.498c1.585-.233 2.708-1.626 2.708-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
+          </svg>
         )}
-        <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
-          isUser
-            ? "bg-brand-500 text-white rounded-br-sm"
-            : "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-bl-sm"
-        }`}>
-          {msg.content}
-        </div>
+      </div>
+      <div className={`max-w-[82%] text-sm leading-relaxed px-3.5 py-2.5 rounded-2xl whitespace-pre-wrap ${
+        isUser
+          ? "bg-linear-to-br from-brand-500 to-indigo-500 text-white rounded-tr-sm"
+          : "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-sm"
+      }`}>
+        {msg.fileName && (
+          <span className="flex items-center gap-1 text-[10px] opacity-70 mb-1">
+            <span>📎</span>{msg.fileName}
+          </span>
+        )}
+        {msg.content}
       </div>
     </div>
   );
@@ -566,12 +591,16 @@ function TeacherMessageBubble({ msg }: { msg: TeacherChatMessage }) {
 
 function ChatTypingIndicator() {
   return (
-    <div className="flex gap-3 justify-start">
-    
-      <div className="px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-800 rounded-bl-sm flex items-center gap-1.5">
-        {[0,1,2].map(i => (
-          <span key={i} className="w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-500 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-        ))}
+    <div className="flex gap-2.5">
+      <div className="w-7 h-7 rounded-full bg-linear-to-br from-brand-400 to-indigo-500 flex items-center justify-center shrink-0">
+        <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 9.75a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375m-13.5 3.01c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.184-4.183a1.14 1.14 0 0 1 .778-.332 48.294 48.294 0 0 0 5.83-.498c1.585-.233 2.708-1.626 2.708-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
+        </svg>
+      </div>
+      <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-1.5">
+        <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-bounce [animation-delay:0ms]" />
+        <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-bounce [animation-delay:150ms]" />
+        <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-bounce [animation-delay:300ms]" />
       </div>
     </div>
   );

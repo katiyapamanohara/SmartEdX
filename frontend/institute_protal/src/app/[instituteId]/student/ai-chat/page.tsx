@@ -45,6 +45,7 @@ export default function AiChatPage() {
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [context, setContext]               = useState<StudentContext>({});
   const [instituteLogo, setInstituteLogo]   = useState<string | null>(null);
+  const [userProfilePicture, setUserProfilePicture] = useState<string | null>(null);
   const [messages, setMessages]           = useState<ChatMessage[]>([]);
   const [input, setInput]                 = useState("");
   const [loading, setLoading]             = useState(false);
@@ -82,6 +83,7 @@ export default function AiChatPage() {
         ]);
         setCourses(enrolled);
         setInstituteLogo(institute?.logo ?? null);
+        setUserProfilePicture(user?.profilePicture ?? null);
         setContext({
           student_name:  user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() : undefined,
           institute_name: institute?.name,
@@ -212,7 +214,7 @@ export default function AiChatPage() {
   // ── Course selection screen ───────────────────────────────────────────────
   if (!selectedCourse) {
     return (
-      <div className="flex flex-col items-center justify-start h-[calc(100vh-8rem)] max-h-[900px] rounded-2xl bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+      <div className="flex flex-col items-center justify-start h-[calc(100vh-8rem)] max-h-[900px] rounded-2xl  dark:bg-gray-900 overflow-hidden">
         {/* Header */}
         
 
@@ -220,8 +222,30 @@ export default function AiChatPage() {
         <div className="w-full flex-1 flex items-start justify-center pt-16 px-6 pb-8">
           <div className="max-w-xl w-full">
             <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand-50 dark:bg-brand-500/10 mb-4">
-                <FiBookOpen className="w-7 h-7 text-brand-500" />
+              <div className="inline-flex items-center justify-center mb-4">
+                {(() => {
+                  const previews = courses.filter(c => c.coverImage).slice(0, 3);
+                  if (coursesLoading || previews.length === 0) {
+                    return (
+                      <div className="w-14 h-14 rounded-2xl bg-brand-50 dark:bg-brand-500/10 flex items-center justify-center">
+                        <FiBookOpen className="w-7 h-7 text-brand-500" />
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="flex items-center">
+                      {previews.map((c, i) => (
+                        <img
+                          key={c.id}
+                          src={c.coverImage!}
+                          alt={c.name}
+                          className="w-12 h-12 rounded-xl object-cover border-2 border-white dark:border-gray-900 shadow-sm"
+                          style={{ marginLeft: i === 0 ? 0 : "-10px", zIndex: previews.length - i }}
+                        />
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
               <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90 mb-1">
                 Select a Course to Start
@@ -284,10 +308,10 @@ export default function AiChatPage() {
 
   // ── Chat screen ───────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] max-h-[900px] rounded-2xl bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-8rem)] max-h-[900px] rounded-2xl overflow-hidden">
 
       {/* Header */}
-      <div className="flex items-center gap-3 px-6 py-4 shrink-0
+      <div className="flex items-center gap-3 px-6 py-4 shrink-0 rounded-2xl
         bg-linear-to-r from-brand-50 to-indigo-50 dark:from-brand-500/5 dark:to-indigo-500/5">
         <button
           onClick={() => { setSelectedCourse(null); setMessages([]); }}
@@ -298,9 +322,17 @@ export default function AiChatPage() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
           </svg>
         </button>
-        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-linear-to-br from-brand-400 to-indigo-500 shadow-md shadow-brand-500/25 shrink-0">
-          <BotIcon className="w-5 h-5 text-white" />
-        </div>
+        {selectedCourse.coverImage ? (
+          <img
+            src={selectedCourse.coverImage}
+            alt={selectedCourse.name}
+            className="w-10 h-10 rounded-xl object-cover shrink-0 shadow-md"
+          />
+        ) : (
+          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-linear-to-br from-brand-400 to-indigo-500 shadow-md shadow-brand-500/25 shrink-0">
+            <BotIcon className="w-5 h-5 text-white" />
+          </div>
+        )}
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90 truncate">
             {selectedCourse.name}
@@ -318,7 +350,7 @@ export default function AiChatPage() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4 custom-scrollbar">
         {messages.map((msg, i) => (
-          <MessageBubble key={i} msg={msg} />
+          <MessageBubble key={i} msg={msg} userProfilePicture={userProfilePicture} />
         ))}
         {loading && <TypingIndicator />}
         <div ref={bottomRef} />
@@ -415,12 +447,20 @@ export default function AiChatPage() {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function MessageBubble({ msg }: { msg: ChatMessage }) {
+function MessageBubble({ msg, userProfilePicture }: { msg: ChatMessage; userProfilePicture?: string | null }) {
   const isUser = msg.role === "user";
   return (
     <div className={`flex gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
-      <div className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold bg-linear-to-br from-brand-400 to-indigo-500 text-white">
-        {isUser ? "You" : <BotIconSm />}
+      <div className="shrink-0 w-7 h-7 rounded-full overflow-hidden flex items-center justify-center text-[10px] font-bold bg-linear-to-br from-brand-400 to-indigo-500 text-white">
+        {isUser ? (
+          userProfilePicture ? (
+            <img src={userProfilePicture} alt="You" className="w-full h-full object-cover" />
+          ) : (
+            "You"
+          )
+        ) : (
+          <BotIconSm />
+        )}
       </div>
       <div
         className={`max-w-[82%] text-sm leading-relaxed px-3.5 py-2.5 rounded-2xl whitespace-pre-wrap wrap-break-word ${
