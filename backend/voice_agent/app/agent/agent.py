@@ -12,7 +12,7 @@ from google.adk.sessions import InMemorySessionService
 from google.adk.tools import FunctionTool, ToolContext
 from google.genai import types
 
-from app.agent.api import fetch_institute_config
+from app.agent.api import fetch_institute_config, fetch_course_agent_config
 from app.qdrant.course_kb import _get_query_vector
 from app.agent.assessment_tools import evaluate_voice_assessment
 from app.agent.audio_clips import create_audio_clip_tool
@@ -455,6 +455,16 @@ def get_runner_for_course(
 
     logger.info(f"Building course Q&A agent for course: {course_name!r} ({course_id})")
 
+    # Fetch course-specific agent instructions if configured
+    course_agent_instructions: str | None = None
+    try:
+        config = fetch_course_agent_config(institute_id, course_id)
+        if config.get("studentAgentInstructions"):
+            course_agent_instructions = config["studentAgentInstructions"]
+            logger.info(f"Loaded custom student agent instructions for course {course_id!r}")
+    except Exception as e:
+        logger.warning(f"Failed to fetch agent config for course {course_id}: {e}")
+
     # Build a course-specific search tool via closure so course_id is baked in.
     async def search_course_material(query: str, limit: int = 2) -> dict:
         """Search course material. Call immediately for any course-content question.
@@ -505,7 +515,7 @@ def get_runner_for_course(
             logger.error(f"Course KB search failed for course {course_id}: {e}", exc_info=True)
             return {"status": "error", "message": "Failed to search course material."}
 
-    system_instructions = all_instructions + (
+    _default_course_instructions = (
         f"You are an AI tutor for the course '{course_name}'.\n"
         f"Your ONLY purpose is to help students understand and learn the content of this course.\n"
         f"Rules:\n"
@@ -520,6 +530,10 @@ def get_runner_for_course(
         f"reply in one sentence: 'I'm here to help with {course_name} — what would you like to learn?' "
         f"and stop. Do NOT answer the off-topic question.\n"
         f"- Always be brief — 1 to 2 sentences per turn."
+    )
+
+    system_instructions = all_instructions + (
+        course_agent_instructions if course_agent_instructions else _default_course_instructions
     )
 
     safe_id = course_id.replace("-", "_")

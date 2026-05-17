@@ -353,6 +353,18 @@ export class CourseController {
     );
   }
 
+  @Get(':courseId/agent-config')
+  @Public()
+  @ApiOperation({ summary: 'Get AI agent configuration for a course (voice + chat instructions)' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiParam({ name: 'courseId', description: 'Course ID' })
+  async getCourseAgentConfig(
+    @Param('id') instituteId: string,
+    @Param('courseId') courseId: string,
+  ) {
+    return this.courseService.getCourseAgentConfig(instituteId, courseId);
+  }
+
   @Get(':courseId/for-teacher')
   @ApiOperation({
     summary:

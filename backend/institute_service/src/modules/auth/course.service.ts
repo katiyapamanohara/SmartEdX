@@ -559,6 +559,19 @@ export class CourseService {
     return course;
   }
 
+  async getCourseAgentConfig(instituteId: string, courseId: string) {
+    const course = await this.courseRepository.findOne({
+      where: { id: courseId, instituteId } as any,
+    });
+    if (!course) throw new NotFoundException('Course not found');
+    return {
+      courseId: course.id,
+      courseName: course.name,
+      studentAgentInstructions: course.studentAgentInstructions ?? null,
+      teacherAgentInstructions: course.teacherAgentInstructions ?? null,
+    };
+  }
+
   async updateCourse(
     instituteId: string,
     courseId: string,

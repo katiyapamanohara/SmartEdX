@@ -29,6 +29,8 @@ export interface Course {
     profilePicture?: string;
   };
   modules?: CourseModule[];
+  studentAgentInstructions?: string | null;
+  teacherAgentInstructions?: string | null;
 }
 
 export interface CourseModule {

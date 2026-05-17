@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Course, instituteService } from "@/services/instituteService";
 import { FiX } from "react-icons/fi";
 import AiDescriptionField from "@/components/common/AiDescriptionField";
-
+import { useFeatures } from "@/context/InstituteFeatureContext";
 import { createPortal } from "react-dom";
 
 interface CourseModalProps {
@@ -13,6 +13,26 @@ interface CourseModalProps {
   instituteId: string;
 }
 
+const DEFAULT_STUDENT_INSTRUCTIONS =
+  "You are an AI tutor for this course.\n" +
+  "Your ONLY purpose is to help students understand and learn the content of this course.\n" +
+  "Rules:\n" +
+  "- Greetings and brief follow-ups: answer directly, no tool call.\n" +
+  "- ANY question about course topics, concepts, or materials: search course material IMMEDIATELY.\n" +
+  "- After search: answer in 1-2 sentences, cite the page if available.\n" +
+  "- If nothing is found: say so in one sentence and suggest the student ask their teacher.\n" +
+  "- OFF-TOPIC: redirect in one sentence back to the course.\n" +
+  "- Always be brief — 1 to 2 sentences per turn.";
+
+const DEFAULT_TEACHER_INSTRUCTIONS =
+  "You are an AI assistant for the teacher of this course.\n" +
+  "Your purpose is to help the teacher with lesson planning, content queries, and course material.\n" +
+  "Rules:\n" +
+  "- ANY question about course content or materials: search course material IMMEDIATELY.\n" +
+  "- Answer in 1-2 sentences, cite page numbers where available.\n" +
+  "- Help with curriculum planning, quiz creation ideas, and teaching strategies.\n" +
+  "- OFF-TOPIC: redirect in one sentence back to educational topics.";
+
 const CourseModal: React.FC<CourseModalProps> = ({
   isOpen,
   onClose,
@@ -20,12 +40,17 @@ const CourseModal: React.FC<CourseModalProps> = ({
   initialData,
   instituteId,
 }) => {
+  const { hasFeature } = useFeatures();
+  const voiceAgentEnabled = hasFeature("voice_agent");
+
   const [formData, setFormData] = useState({
     name: "",
     code: "",
     batchNumber: "",
     description: "",
     assignedTeacherId: "",
+    studentAgentInstructions: DEFAULT_STUDENT_INSTRUCTIONS,
+    teacherAgentInstructions: DEFAULT_TEACHER_INSTRUCTIONS,
   });
   const [teachers, setTeachers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,6 +74,8 @@ const CourseModal: React.FC<CourseModalProps> = ({
           batchNumber: initialData.batchNumber || "",
           description: initialData.description || "",
           assignedTeacherId: initialData.assignedTeacher?.id || "",
+          studentAgentInstructions: initialData.studentAgentInstructions || DEFAULT_STUDENT_INSTRUCTIONS,
+          teacherAgentInstructions: initialData.teacherAgentInstructions || DEFAULT_TEACHER_INSTRUCTIONS,
         });
         setCoverImage(initialData.coverImage || null);
       } else {
@@ -58,6 +85,8 @@ const CourseModal: React.FC<CourseModalProps> = ({
           batchNumber: "",
           description: "",
           assignedTeacherId: "",
+          studentAgentInstructions: DEFAULT_STUDENT_INSTRUCTIONS,
+          teacherAgentInstructions: DEFAULT_TEACHER_INSTRUCTIONS,
         });
         setCoverImage(null);
       }
@@ -265,6 +294,54 @@ const CourseModal: React.FC<CourseModalProps> = ({
               </p>
             )}
           </div>
+
+          {voiceAgentEnabled && (
+            <div className="space-y-4 rounded-xl border border-blue-100 dark:border-blue-900/40 bg-blue-50/40 dark:bg-blue-900/10 p-4">
+              <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide">
+                AI Agent Instructions — Voice &amp; Chat
+              </p>
+
+              <div>
+                <label
+                  htmlFor="studentAgentInstructions"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                >
+                  Student Agent Instructions
+                </label>
+                <textarea
+                  id="studentAgentInstructions"
+                  name="studentAgentInstructions"
+                  rows={5}
+                  value={formData.studentAgentInstructions}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-sm font-mono resize-y"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  How the AI behaves when students ask questions about this course.
+                </p>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="teacherAgentInstructions"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                >
+                  Teacher Agent Instructions
+                </label>
+                <textarea
+                  id="teacherAgentInstructions"
+                  name="teacherAgentInstructions"
+                  rows={5}
+                  value={formData.teacherAgentInstructions}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-sm font-mono resize-y"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  How the AI behaves when teachers query this course's content.
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="pt-4 flex justify-end gap-3">
             <button

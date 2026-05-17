@@ -51,4 +51,14 @@ export class CreateCourseDto {
   @IsOptional()
   @Type(() => Number)
   monthlyPrice?: number | null;
+
+  @ApiProperty({ example: 'You are an AI tutor for this course. Help students understand the syllabus topics.', description: 'Custom AI agent instructions shown to students', required: false })
+  @IsString()
+  @IsOptional()
+  studentAgentInstructions?: string | null;
+
+  @ApiProperty({ example: 'You are an AI assistant for the teacher of this course. Help with lesson planning and content queries.', description: 'Custom AI agent instructions shown to teachers', required: false })
+  @IsString()
+  @IsOptional()
+  teacherAgentInstructions?: string | null;
 }

@@ -44,6 +44,12 @@ export class Course {
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   monthlyPrice: number | null;
 
+  @Column({ type: 'text', nullable: true })
+  studentAgentInstructions: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  teacherAgentInstructions: string | null;
+
   @ManyToOne(() => Institute, (institute) => institute.courses, {
     onDelete: 'CASCADE',
   })
