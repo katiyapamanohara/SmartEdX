@@ -46,7 +46,7 @@ export class CourseService {
   ) {}
 
   private mapCourseToResponse(course: Course) {
-    const { teachers, ...rest } = course;
+    const { teachers, students, ...rest } = course;
     const assignedTeacher =
       teachers && teachers.length > 0 && teachers[0].user
         ? {
@@ -58,9 +58,18 @@ export class CourseService {
           }
         : null;
 
+    const enrolledStudents = (students ?? []).map((s) => ({
+      id: s.userId,
+      firstName: s.user?.firstName ?? '',
+      lastName: s.user?.lastName ?? '',
+      email: s.user?.email ?? '',
+    }));
+
     return {
       ...rest,
       assignedTeacher,
+      enrolledStudents,
+      enrolledCount: enrolledStudents.length,
     };
   }
 
