@@ -69,10 +69,12 @@ async def chat(body: ChatRequest):
             tracker=tracker,
         )
 
-        # Build actions list for the frontend
         actions: list[dict] = [
             {"type": "course_created", "data": c}
             for c in tracker.created_courses
+        ] + [
+            {"type": "lecturer_invited", "data": u}
+            for u in tracker.invited_lecturers
         ]
 
         return ChatResponse(reply=reply, actions=actions)
