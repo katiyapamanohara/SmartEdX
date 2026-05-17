@@ -111,7 +111,7 @@ export default function AiChatPage() {
   // ── Init chat after course is chosen ─────────────────────────────────────
   async function handleSelectCourse(course: Course) {
     setSelectedCourse(course);
-    const ctx = { ...context, selected_course: course.name };
+    const ctx = { ...context, selected_course: course.name, course_id: course.id };
     setContext(ctx);
     setMessages([{
       role: "assistant",

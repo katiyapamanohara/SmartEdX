@@ -281,12 +281,6 @@ def _build_shared_tools() -> list:
 _shared_tools = _build_shared_tools()
 
 
-# ── Per-institute agent/runner cache ────────────────────────────────
-
-_institute_cache: dict[str, tuple[Runner, str]] = {}  # institute_id -> (runner, greeting_message)
-_cache_lock = threading.Lock()
-
-
 def _build_system_instructions(base_instructions: str, custom_tools_enabled: bool) -> str:
     """Append feature-specific instruction blocks to base instructions."""
     instructions = all_instructions + base_instructions
@@ -345,16 +339,11 @@ def _build_system_instructions(base_instructions: str, custom_tools_enabled: boo
 
 
 def get_runner_for_institute(institute_id: str, session_service: InMemorySessionService) -> tuple[Runner, str]:
-    """Return a cached (Runner, greeting_message) for the given institute_id.
+    """Build a fresh Runner for the given institute, fetching the latest instructions each time.
 
-    On first call for a given institute, fetches the assistant config from the
-    SmartEdX API and builds a dedicated Agent + Runner.  Subsequent calls for
-    the same institute return the cached pair without any network I/O.
+    Instructions are always fetched live from the SmartEdX API so any changes
+    made in the admin UI take effect on the very next connection.
     """
-    with _cache_lock:
-        if institute_id in _institute_cache:
-            return _institute_cache[institute_id]
-
     logger.info(f"Building agent for institute: {institute_id}")
 
     # Fetch institute-specific config from the SmartEdX institute service
@@ -409,19 +398,7 @@ def get_runner_for_institute(institute_id: str, session_service: InMemorySession
         session_service=session_service,
     )
 
-    with _cache_lock:
-        # Double-checked locking: another thread may have populated during fetch
-        if institute_id not in _institute_cache:
-            _institute_cache[institute_id] = (institute_runner, "")
-        return _institute_cache[institute_id]
-
-
-# ── Per-course Q&A agent cache ────────────────────────────────────────
-# Students select a course and ask questions; the agent searches only that
-# course's indexed content via the course_kb Qdrant collection.
-
-_course_qa_cache: dict[str, tuple[Runner, str]] = {}  # "{institute_id}:{course_id}" -> (runner, greeting)
-_course_qa_lock = threading.Lock()
+    return (institute_runner, "")
 
 
 def get_runner_for_course(
@@ -430,26 +407,21 @@ def get_runner_for_course(
     course_name: str,
     session_service: InMemorySessionService,
 ) -> tuple[Runner, str]:
-    """Return a cached (Runner, greeting) for a course Q&A voice assistant.
+    """Build a fresh Runner for a course Q&A assistant, fetching the latest instructions each time.
 
     The agent is scoped to a single course — its ``search_course_material``
     tool automatically filters Qdrant results to the given ``course_id``.
+    Instructions are always fetched live so updates take effect immediately.
 
     Args:
-        institute_id: Institute UUID (namespaces the cache key).
-        course_id:    Course UUID (Qdrant filter + cache key).
+        institute_id: Institute UUID.
+        course_id:    Course UUID (Qdrant filter).
         course_name:  Human-readable course name used in the system prompt.
         session_service: Shared ADK session service instance.
 
     Returns:
         (runner, greeting_message) — greeting is sent to the student on connect.
     """
-    cache_key = f"{institute_id}:{course_id}"
-
-    with _course_qa_lock:
-        if cache_key in _course_qa_cache:
-            return _course_qa_cache[cache_key]
-
     if not COURSE_KB_ENABLED:
         logger.warning("Course KB is disabled (COURSE_KB_ENABLED=false) — course Q&A agent will have no search tool")
 
@@ -557,18 +529,7 @@ def get_runner_for_course(
     )
 
     greeting = f"Hello! I'm your AI tutor for {course_name}. What would you like to learn about today?"
-
-    with _course_qa_lock:
-        if cache_key not in _course_qa_cache:
-            _course_qa_cache[cache_key] = (course_runner, greeting)
-    return _course_qa_cache[cache_key]
-
-
-# ── Per-teacher agent cache ───────────────────────────────────────────────────
-# Teachers get a voice agent that can search across course materials in Qdrant.
-
-_teacher_cache: dict[str, tuple[Runner, str]] = {}  # "{institute_id}:{teacher_id}" -> (runner, greeting)
-_teacher_lock = threading.Lock()
+    return (course_runner, greeting)
 
 
 def get_runner_for_teacher(
@@ -576,18 +537,12 @@ def get_runner_for_teacher(
     teacher_id: str,
     session_service: InMemorySessionService,
 ) -> tuple[Runner, str]:
-    """Return a cached (Runner, greeting) for the teacher voice assistant.
+    """Build a fresh Runner for the teacher voice assistant, fetching the latest instructions each time.
 
     The agent can search course materials indexed in Qdrant for any course
-    that belongs to the institute, making it useful for lesson planning,
-    curriculum questions, and content queries.
+    that belongs to the institute. Instructions are always built fresh so
+    any configuration changes take effect on the very next connection.
     """
-    cache_key = f"{institute_id}:{teacher_id}"
-
-    with _teacher_lock:
-        if cache_key in _teacher_cache:
-            return _teacher_cache[cache_key]
-
     logger.info(f"Building teacher agent for institute={institute_id} teacher={teacher_id}")
 
     async def search_course_material(query: str, course_id: str = "", limit: int = 2) -> dict:
@@ -688,11 +643,7 @@ def get_runner_for_teacher(
     )
 
     greeting = "Hello! I'm your AI teaching assistant. I can search your course materials and help with lesson planning. What would you like to know?"
-
-    with _teacher_lock:
-        if cache_key not in _teacher_cache:
-            _teacher_cache[cache_key] = (teacher_runner, greeting)
-    return _teacher_cache[cache_key]
+    return (teacher_runner, greeting)
 
 
 __all__ = [

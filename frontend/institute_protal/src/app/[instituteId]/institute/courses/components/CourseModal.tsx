@@ -443,7 +443,7 @@ const CourseModal: React.FC<CourseModalProps> = ({
                     <textarea
                       id="studentAgentInstructions"
                       name="studentAgentInstructions"
-                      rows={5}
+                      rows={14}
                       value={formData.studentAgentInstructions}
                       onChange={handleChange}
                       className="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700/60 dark:text-white text-sm font-mono resize-y leading-relaxed"
@@ -457,7 +457,7 @@ const CourseModal: React.FC<CourseModalProps> = ({
                     <textarea
                       id="teacherAgentInstructions"
                       name="teacherAgentInstructions"
-                      rows={6}
+                      rows={14}
                       value={formData.teacherAgentInstructions}
                       onChange={handleChange}
                       className="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700/60 dark:text-white text-sm font-mono resize-y leading-relaxed"

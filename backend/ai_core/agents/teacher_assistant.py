@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -9,6 +10,26 @@ import httpx
 from agno.agent import Agent
 
 from config import settings
+
+logger = logging.getLogger(__name__)
+
+
+def _fetch_teacher_agent_instructions(institute_id: str, course_id: str) -> str | None:
+    """Fetch teacherAgentInstructions for a course from the institute service.
+
+    Returns the custom instructions string, or None if not set / on error.
+    """
+    try:
+        url = f"{settings.INSTITUTE_API_URL.rstrip('/')}/api/institutes/institutes/{institute_id}/courses/{course_id}/agent-config"
+        with httpx.Client(timeout=5) as client:
+            r = client.get(url)
+        if r.status_code == 404:
+            return None
+        r.raise_for_status()
+        return r.json().get("teacherAgentInstructions") or None
+    except Exception as exc:
+        logger.warning(f"Failed to fetch teacher agent instructions for course {course_id}: {exc}")
+        return None
 
 
 # ─── Action tracker ───────────────────────────────────────────────────────────
@@ -208,6 +229,7 @@ def _build_teacher_assistant(
     auth_token: str | None,
     tracker: TeacherActionTracker,
     file_content: str | None = None,
+    custom_instructions: str | None = None,
 ) -> Agent:
     ctx = teacher_context or {}
     teacher_name = ctx.get("teacher_name", "Teacher")
@@ -234,23 +256,25 @@ def _build_teacher_assistant(
         institute_id, teacher_id, auth_token, tracker
     )
 
-    return Agent(
-        model=_make_model(),
-        description=(
+    _tool_call_instructions = [
+        "Call get_my_courses when the teacher asks about their courses, teaching load, or assigned classes.",
+        "Call get_my_students when the teacher asks about their students, class roster, or attendance overview.",
+        "Call find_student when the teacher asks about a SPECIFIC student by name.",
+        "Call get_course_details when the teacher asks for detailed info about a specific course.",
+        "Never expose raw JSON or internal IDs — summarize naturally.",
+    ]
+
+    if custom_instructions:
+        base_description = custom_instructions
+        instructions = _tool_call_instructions
+    else:
+        base_description = (
             "You are an intelligent AI assistant for a SmartEdX teacher. "
             "You help teachers manage their students, plan lessons, generate educational content, "
             "analyze student data, and answer questions about their courses and students. "
             "Always be supportive, professional, and focused on improving educational outcomes."
-            + context_note
-            + file_note
-        ),
-        instructions=[
-            # ── Live tool calls ──
-            "Call get_my_courses when the teacher asks about their courses, teaching load, or assigned classes.",
-            "Call get_my_students when the teacher asks about their students, class roster, or attendance overview.",
-            "Call find_student when the teacher asks about a SPECIFIC student by name.",
-            "Call get_course_details when the teacher asks for detailed info about a specific course.",
-            # ── Generate directly — NO tool call ──
+        )
+        instructions = _tool_call_instructions + [
             "For lesson plans: generate a detailed plan with objectives, activities, materials, and assessments. "
             "Structure it with clear sections and time estimates.",
             "For quiz/assessment generation: create well-formatted questions with answer keys. "
@@ -258,12 +282,15 @@ def _build_teacher_assistant(
             "For student feedback: provide constructive, encouraging feedback templates.",
             "For announcements/emails: write professional, clear communications.",
             "For uploaded files: analyze the content and answer questions based on it directly.",
-            # ── General ──
             "After every tool call, summarize the result clearly and offer helpful next steps.",
-            "Never expose raw JSON or internal IDs — summarize naturally.",
             "Be encouraging and supportive — teachers have a demanding job.",
             "If asked to generate educational content, make it immediately usable in a classroom.",
-        ],
+        ]
+
+    return Agent(
+        model=_make_model(),
+        description=(base_description + context_note + file_note),
+        instructions=instructions,
         tools=[get_courses, get_students, find_student, get_course_details],
         show_tool_calls=False,
     )
@@ -280,13 +307,18 @@ async def chat_with_teacher_assistant(
     auth_token: str | None,
     tracker: TeacherActionTracker,
     file_content: str | None = None,
+    course_id: str | None = None,
 ) -> str:
     """
     Run the teacher assistant with conversation history and live tool access.
     Returns the assistant's reply string.
     """
+    custom_instructions: str | None = None
+    if course_id:
+        custom_instructions = _fetch_teacher_agent_instructions(institute_id, course_id)
+
     agent = _build_teacher_assistant(
-        teacher_context, institute_id, teacher_id, auth_token, tracker, file_content
+        teacher_context, institute_id, teacher_id, auth_token, tracker, file_content, custom_instructions
     )
 
     last_user_message = messages[-1]["content"] if messages else ""

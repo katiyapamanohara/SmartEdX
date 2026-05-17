@@ -91,6 +91,11 @@ TRANSPORT_SIP_WS = os.getenv("TRANSPORT_SIP_WS", "false").lower() == "true"
 # ── Dashboard ────────────────────────────────────────────────────────
 DASHBOARD_ENABLED = os.getenv("DASHBOARD_ENABLED", "true").lower() == "true"
 
+# ── Agent Cache TTL ─────────────────────────────────────────────────
+# Seconds before a cached institute/course/teacher agent is rebuilt so
+# updated instructions are picked up without a server restart.
+AGENT_CACHE_TTL = int(os.getenv("AGENT_CACHE_TTL", "300"))
+
 # ── Audio / Barge-in ────────────────────────────────────────────────
 HARD_MUTE_SECONDS = float(os.getenv("HARD_MUTE_SECONDS", "1.5"))
 SILENCE_FLUSH_MS = int(os.getenv("SILENCE_FLUSH_MS", "1000"))

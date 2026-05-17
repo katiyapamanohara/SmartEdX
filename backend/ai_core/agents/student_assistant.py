@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -9,6 +10,26 @@ import httpx
 from agno.agent import Agent
 
 from config import settings
+
+logger = logging.getLogger(__name__)
+
+
+def _fetch_student_agent_instructions(institute_id: str, course_id: str) -> str | None:
+    """Fetch studentAgentInstructions for a course from the institute service.
+
+    Returns the custom instructions string, or None if not set / on error.
+    """
+    try:
+        url = f"{settings.INSTITUTE_API_URL.rstrip('/')}/api/institutes/institutes/{institute_id}/courses/{course_id}/agent-config"
+        with httpx.Client(timeout=5) as client:
+            r = client.get(url)
+        if r.status_code == 404:
+            return None
+        r.raise_for_status()
+        return r.json().get("studentAgentInstructions") or None
+    except Exception as exc:
+        logger.warning(f"Failed to fetch student agent instructions for course {course_id}: {exc}")
+        return None
 
 
 # ─── Action tracker ───────────────────────────────────────────────────────────
@@ -228,6 +249,7 @@ def _build_student_assistant(
     student_id: str,
     auth_token: str | None,
     file_content: str | None = None,
+    custom_instructions: str | None = None,
 ) -> Agent:
     ctx = student_context or {}
     student_name = ctx.get("student_name", "Student")
@@ -253,24 +275,25 @@ def _build_student_assistant(
         institute_id, student_id, auth_token
     )
 
-    return Agent(
-        model=_make_model(),
-        description=(
+    _tool_call_instructions = [
+        "Call get_my_courses when the student asks what courses they have, their schedule, or what they're enrolled in.",
+        "Call get_course_details when the student asks about a specific course's content, syllabus, or modules.",
+        "Call get_my_teachers when the student asks who their teacher is or wants to contact their teacher.",
+        "Call search_courses when the student wants to find courses or modules related to a topic.",
+    ]
+
+    if custom_instructions:
+        base_description = custom_instructions
+        instructions = _tool_call_instructions
+    else:
+        base_description = (
             "You are a friendly, encouraging AI learning companion for a SmartEdX student. "
             "Your mission is to help the student understand concepts, navigate their courses, "
             "resolve doubts, and guide them toward academic success. "
             "Always be patient, clear, and supportive — break down complex ideas into simple steps. "
             "Celebrate progress and keep the student motivated."
-            + context_note
-            + file_note
-        ),
-        instructions=[
-            # ── Live tool calls ──
-            "Call get_my_courses when the student asks what courses they have, their schedule, or what they're enrolled in.",
-            "Call get_course_details when the student asks about a specific course's content, syllabus, or modules.",
-            "Call get_my_teachers when the student asks who their teacher is or wants to contact their teacher.",
-            "Call search_courses when the student wants to find courses or modules related to a topic.",
-            # ── Direct generation — NO tool call ──
+        )
+        instructions = _tool_call_instructions + [
             "For concept explanations: use simple language, real-world analogies, and step-by-step breakdowns. "
             "Structure: 1) Simple definition, 2) Why it matters, 3) How it works, 4) Example.",
             "For study plans: create a realistic weekly plan with specific daily goals, review sessions, and practice tasks.",
@@ -279,14 +302,18 @@ def _build_student_assistant(
             "For uploaded documents: summarise key points, identify main concepts, and answer specific questions about the content.",
             "For math/science problems: solve step-by-step, explain each step, and point out the underlying concept.",
             "For exam preparation: create a revision checklist, highlight key formulas/concepts, and suggest practice strategies.",
-            # ── Behaviour ──
             "Always encourage the student — use phrases like 'Great question!', 'You're on the right track!', "
             "'Let's work through this together.'",
             "Never give direct answers to clearly assignment/exam questions — instead guide with hints and Socratic questions.",
             "After every tool call, explain the result clearly and suggest a useful next step for the student.",
             "If a topic is not in any course, still help — students may be learning independently.",
             "Keep explanations concise but complete. Use bullet points, numbered steps, and code blocks where appropriate.",
-        ],
+        ]
+
+    return Agent(
+        model=_make_model(),
+        description=(base_description + context_note + file_note),
+        instructions=instructions,
         tools=[get_courses, get_course_details, get_teachers, search_courses],
         show_tool_calls=False,
     )
@@ -302,13 +329,18 @@ async def chat_with_student_assistant(
     student_id: str,
     auth_token: str | None,
     file_content: str | None = None,
+    course_id: str | None = None,
 ) -> str:
     """
     Run the student assistant with conversation history and live tool access.
     Returns the assistant's reply string.
     """
+    custom_instructions: str | None = None
+    if course_id:
+        custom_instructions = _fetch_student_agent_instructions(institute_id, course_id)
+
     agent = _build_student_assistant(
-        student_context, institute_id, student_id, auth_token, file_content
+        student_context, institute_id, student_id, auth_token, file_content, custom_instructions
     )
 
     last_user_message = messages[-1]["content"] if messages else ""
