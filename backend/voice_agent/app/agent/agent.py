@@ -13,6 +13,7 @@ from google.adk.tools import FunctionTool, ToolContext
 from google.genai import types
 
 from app.agent.api import fetch_institute_config, fetch_course_agent_config
+from app.agent.api_tools import make_student_api_tools, make_teacher_api_tools
 from app.qdrant.course_kb import _get_query_vector
 from app.agent.assessment_tools import evaluate_voice_assessment
 from app.agent.audio_clips import create_audio_clip_tool
@@ -281,6 +282,24 @@ def _build_shared_tools() -> list:
 _shared_tools = _build_shared_tools()
 
 
+def _substitute_placeholders(text: str, **values: str) -> str:
+    """Replace {placeholder} tokens in instruction text with actual runtime values.
+
+    Supported tokens (case-insensitive key match):
+        {teacher name}, {student name}, {course name}, {institute name}
+    """
+    _MAP = {
+        "teacher name":    values.get("teacher_name", ""),
+        "student name":    values.get("student_name", ""),
+        "course name":     values.get("course_name", ""),
+        "institute name":  values.get("institute_name", ""),
+    }
+    for token, replacement in _MAP.items():
+        if replacement:
+            text = text.replace(f"{{{token}}}", replacement)
+    return text
+
+
 def _build_system_instructions(base_instructions: str, custom_tools_enabled: bool) -> str:
     """Append feature-specific instruction blocks to base instructions."""
     instructions = all_instructions + base_instructions
@@ -385,7 +404,7 @@ def get_runner_for_institute(institute_id: str, session_service: InMemorySession
     institute_agent = Agent(
         name=f"smartedx_voice_agent_{safe_id}",
         model=DEMO_AGENT_MODEL,
-        tools=_shared_tools,
+        tools=_shared_tools + make_student_api_tools(institute_id),
         instruction=system_instructions,
         generate_content_config=types.GenerateContentConfig(
             thinking_config=types.ThinkingConfig(thinking_budget=512, include_thoughts=True),
@@ -406,6 +425,8 @@ def get_runner_for_course(
     course_id: str,
     course_name: str,
     session_service: InMemorySessionService,
+    role: str = "student",
+    user_name: str = "",
 ) -> tuple[Runner, str]:
     """Build a fresh Runner for a course Q&A assistant, fetching the latest instructions each time.
 
@@ -418,20 +439,24 @@ def get_runner_for_course(
         course_id:    Course UUID (Qdrant filter).
         course_name:  Human-readable course name used in the system prompt.
         session_service: Shared ADK session service instance.
+        role:         "student" or "teacher" — selects which instruction field to fetch.
 
     Returns:
-        (runner, greeting_message) — greeting is sent to the student on connect.
+        (runner, greeting_message) — greeting is sent to the user on connect.
     """
     if not COURSE_KB_ENABLED:
         logger.warning("Course KB is disabled (COURSE_KB_ENABLED=false) — course Q&A agent will have no search tool")
 
     logger.info(f"Building course Q&A agent for course: {course_name!r} ({course_id})")
 
-    # Fetch course-specific agent instructions if configured
+    # Fetch course-specific agent instructions based on role
     course_agent_instructions: str | None = None
     try:
         config = fetch_course_agent_config(institute_id, course_id)
-        if config.get("studentAgentInstructions"):
+        if role == "teacher" and config.get("teacherAgentInstructions"):
+            course_agent_instructions = config["teacherAgentInstructions"]
+            logger.info(f"Loaded custom teacher agent instructions for course {course_id!r}")
+        elif config.get("studentAgentInstructions"):
             course_agent_instructions = config["studentAgentInstructions"]
             logger.info(f"Loaded custom student agent instructions for course {course_id!r}")
     except Exception as e:
@@ -504,18 +529,23 @@ def get_runner_for_course(
         f"- Always be brief — 1 to 2 sentences per turn."
     )
 
-    system_instructions = all_instructions + (
-        course_agent_instructions if course_agent_instructions else _default_course_instructions
+    _raw_instructions = course_agent_instructions if course_agent_instructions else _default_course_instructions
+    _placeholder_key = "teacher_name" if role == "teacher" else "student_name"
+    _raw_instructions = _substitute_placeholders(
+        _raw_instructions,
+        course_name=course_name,
+        **{_placeholder_key: user_name},
     )
+    system_instructions = all_instructions + _raw_instructions
 
     safe_id = course_id.replace("-", "_")
     course_agent = Agent(
         name=f"smartedx_course_qa_{safe_id}",
         model=DEMO_AGENT_MODEL,
-        tools=[
-            FunctionTool(func=search_course_material),
-            FunctionTool(func=end_call),
-        ],
+        tools=(
+            [FunctionTool(func=search_course_material), FunctionTool(func=end_call)]
+            + (make_teacher_api_tools(institute_id) if role == "teacher" else make_student_api_tools(institute_id))
+        ),
         instruction=system_instructions,
         generate_content_config=types.GenerateContentConfig(
             thinking_config=types.ThinkingConfig(thinking_budget=128, include_thoughts=True),
@@ -536,14 +566,20 @@ def get_runner_for_teacher(
     institute_id: str,
     teacher_id: str,
     session_service: InMemorySessionService,
+    course_id: str = "",
+    user_name: str = "",
 ) -> tuple[Runner, str]:
     """Build a fresh Runner for the teacher voice assistant, fetching the latest instructions each time.
 
     The agent can search course materials indexed in Qdrant for any course
     that belongs to the institute. Instructions are always built fresh so
     any configuration changes take effect on the very next connection.
+
+    Args:
+        course_id: Optional course UUID — when provided, teacherAgentInstructions
+                   for that course are fetched and used as the system prompt.
     """
-    logger.info(f"Building teacher agent for institute={institute_id} teacher={teacher_id}")
+    logger.info(f"Building teacher agent for institute={institute_id} teacher={teacher_id} course={course_id or 'none'}")
 
     async def search_course_material(query: str, course_id: str = "", limit: int = 2) -> dict:
         """Search course materials. Call immediately for any course-content question.
@@ -607,7 +643,18 @@ def get_runner_for_teacher(
             logger.error(f"Teacher course KB search failed: {e}", exc_info=True)
             return {"status": "error", "message": "Failed to search course material."}
 
-    system_instructions = all_instructions + (
+    # Fetch course-specific teacher instructions if a course_id is provided
+    teacher_agent_instructions: str | None = None
+    if course_id:
+        try:
+            config = fetch_course_agent_config(institute_id, course_id)
+            if config.get("teacherAgentInstructions"):
+                teacher_agent_instructions = config["teacherAgentInstructions"]
+                logger.info(f"Loaded custom teacher agent instructions for course {course_id!r}")
+        except Exception as e:
+            logger.warning(f"Failed to fetch teacher agent config for course {course_id}: {e}")
+
+    _default_teacher_instructions = (
         "You are an AI voice assistant for teachers at SmartEdX.\n"
         "Your ONLY purpose is to assist teachers with educational tasks: understanding course materials, "
         "lesson planning, curriculum questions, and academic subject knowledge.\n"
@@ -622,14 +669,21 @@ def get_runner_for_teacher(
         "'I can only assist with educational content — what would you like to explore?' and stop."
     )
 
+    _raw_teacher_instructions = teacher_agent_instructions if teacher_agent_instructions else _default_teacher_instructions
+    _raw_teacher_instructions = _substitute_placeholders(
+        _raw_teacher_instructions,
+        teacher_name=user_name,
+    )
+    system_instructions = all_instructions + _raw_teacher_instructions
+
     safe_id = teacher_id.replace("-", "_")
     teacher_agent = Agent(
         name=f"smartedx_teacher_agent_{safe_id}",
         model=DEMO_AGENT_MODEL,
-        tools=[
-            FunctionTool(func=search_course_material),
-            FunctionTool(func=end_call),
-        ],
+        tools=(
+            [FunctionTool(func=search_course_material), FunctionTool(func=end_call)]
+            + make_teacher_api_tools(institute_id)
+        ),
         instruction=system_instructions,
         generate_content_config=types.GenerateContentConfig(
             thinking_config=types.ThinkingConfig(thinking_budget=128, include_thoughts=True),

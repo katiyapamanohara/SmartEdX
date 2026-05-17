@@ -226,6 +226,35 @@ def _make_student_tools(
     return get_my_courses, get_course_details, get_my_teachers, search_courses
 
 
+def _make_course_search_tool(institute_id: str, course_id: str):
+    """Return a search_course_material tool scoped to a specific course.
+
+    Searches Qdrant directly — same collection and embedding model used by the
+    voice agent, so both agents read the same indexed course documents.
+    """
+    from utils.qdrant_search import search_course_kb
+
+    def search_course_material(query: str) -> str:
+        """Search the course's uploaded documents and materials for relevant content.
+        Call this for ANY question about course topics, concepts, or content.
+        Args:
+            query: Specific topic or keyword from the student's question, e.g. 'photosynthesis'.
+                   Never use generic phrases like 'course content' or 'course material'.
+        """
+        results = search_course_kb(institute_id, course_id, query, limit=3)
+        if not results:
+            return f"No material found for '{query}' in the course documents. I can still explain this topic — just ask!"
+        parts = []
+        for res in results:
+            page = res.get("page")
+            content = res.get("content", "")
+            page_str = f" (Page {page})" if page else ""
+            parts.append(f"{content}{page_str}")
+        return "\n\n".join(parts)
+
+    return search_course_material
+
+
 # ─── Model factory ────────────────────────────────────────────────────────────
 
 
@@ -275,12 +304,22 @@ def _build_student_assistant(
         institute_id, student_id, auth_token
     )
 
+    # Build tool list — add course content search when a course is in context
+    course_id_ctx = ctx.get("course_id") or (custom_instructions and ctx.get("course_id"))
+    all_tools: list = [get_courses, get_course_details, get_teachers, search_courses]
+    course_search_hint = ""
+    if course_id_ctx:
+        all_tools.append(_make_course_search_tool(institute_id, str(course_id_ctx)))
+        course_search_hint = "Call search_course_material for ANY question about course topics, concepts, or uploaded materials — use the specific subject as the query, never a generic phrase."
+
     _tool_call_instructions = [
         "Call get_my_courses when the student asks what courses they have, their schedule, or what they're enrolled in.",
         "Call get_course_details when the student asks about a specific course's content, syllabus, or modules.",
         "Call get_my_teachers when the student asks who their teacher is or wants to contact their teacher.",
         "Call search_courses when the student wants to find courses or modules related to a topic.",
     ]
+    if course_search_hint:
+        _tool_call_instructions.insert(0, course_search_hint)
 
     if custom_instructions:
         base_description = custom_instructions
@@ -314,7 +353,7 @@ def _build_student_assistant(
         model=_make_model(),
         description=(base_description + context_note + file_note),
         instructions=instructions,
-        tools=[get_courses, get_course_details, get_teachers, search_courses],
+        tools=all_tools,
         show_tool_calls=False,
     )
 

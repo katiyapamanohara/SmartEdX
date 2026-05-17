@@ -11,6 +11,11 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001"
     # URL of the API gateway — used by tools that call the institute service
     INSTITUTE_API_URL: str = "http://localhost:5001"
+    # URL of the voice agent service (kept for backwards compat, not used for KB search)
+    VOICE_AGENT_URL: str = "http://localhost:8000"
+    # Qdrant — same instance used by the voice agent for course KB
+    QDRANT_URL: str = "http://localhost:6333"
+    QDRANT_API_KEY: str = ""
 
     @property
     def cors_allow_all(self) -> bool:

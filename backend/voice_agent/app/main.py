@@ -368,13 +368,22 @@ async def teacher_ws_endpoint(
     institute_id: str,
     teacher_id: str,
     session_id: str,
+    course_id: str = "",
+    user_name: str = "",
     language: Optional[str] = None,
 ) -> None:
-    """Teacher voice assistant — searches course materials in Qdrant."""
+    """Teacher voice assistant — searches course materials in Qdrant.
+
+    Query params:
+        course_id  – when provided, course-specific teacherAgentInstructions are fetched.
+        user_name  – teacher's display name; substituted into {teacher name} placeholders.
+    """
     teacher_runner, _ = get_runner_for_teacher(
         institute_id=institute_id,
         teacher_id=teacher_id,
         session_service=session_service,
+        course_id=course_id,
+        user_name=user_name,
     )
     await websocket_endpoint(
         websocket=websocket,
@@ -396,15 +405,24 @@ async def course_qa_ws_endpoint(
     user_id: str,
     session_id: str,
     course_name: str = "",
+    role: str = "student",
+    user_name: str = "",
     language: Optional[str] = None,
     greet: bool = True,
 ) -> None:
-    """Course Q&A voice assistant — answers student questions from course content."""
+    """Course Q&A voice assistant — answers questions from course content.
+
+    Query params:
+        role      – "student" (default) or "teacher".
+        user_name – display name substituted into {student name}/{teacher name} placeholders.
+    """
     course_runner, _ = get_runner_for_course(
         institute_id=institute_id,
         course_id=course_id,
         course_name=course_name or course_id,
         session_service=session_service,
+        role=role,
+        user_name=user_name,
     )
 
     await websocket_endpoint(

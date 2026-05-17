@@ -194,7 +194,7 @@ export default function AIToolsPage() {
 
   // ── Unified full-screen layout for ALL tabs ──────────────────────────────────
   return (
-    <div className="flex flex-col px-4 pt-3 pb-4 gap-3">
+    <div className={`flex flex-col gap-3 ${activeTab === "chat" ? "p-0 sm:px-4 sm:pt-3 sm:pb-4" : "px-4 pt-3 pb-4"}`}>
 
       {/* Compact pill tab switcher — hidden once chat is open */}
       {!hideTabs && (
@@ -428,17 +428,20 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
 
   // ── Chat screen (full-height, matches student layout) ────────────────────
   const voiceWsUrl = (() => {
-    const user    = authService.getUser();
-    const wsBase  = process.env.NEXT_PUBLIC_VOICE_AGENT_WS_URL ?? "ws://localhost:5001/voice-agent";
-    const userId  = user?.id ?? "teacher";
-    const session = `tva-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    return `${wsBase}/ws/course-qa/${instituteId}/${selectedCourse.id}/${userId}/${session}?course_name=${encodeURIComponent(selectedCourse.name)}&role=teacher`;
+    const user       = authService.getUser();
+    const wsBase     = process.env.NEXT_PUBLIC_VOICE_AGENT_WS_URL ?? "ws://localhost:5001/voice-agent";
+    const userId     = user?.id ?? "teacher";
+    const session    = `tva-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const teacherName = user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() : "";
+    const params = new URLSearchParams({ course_name: selectedCourse.name, role: "teacher" });
+    if (teacherName) params.set("user_name", teacherName);
+    return `${wsBase}/ws/course-qa/${instituteId}/${selectedCourse.id}/${userId}/${session}?${params.toString()}`;
   })();
 
   return (
-    <div className="flex flex-col h-[calc(100vh-9rem)] rounded-2xl overflow-hidden">
+    <div className="flex flex-col h-[calc(100dvh-6.25rem)] sm:h-[calc(100vh-9rem)] sm:rounded-2xl overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-3 px-6 py-4 shrink-0 bg-linear-to-r rounded-2xl from-brand-50 to-indigo-50 dark:from-brand-500/5 dark:to-indigo-500/5">
+      <div className="flex items-center gap-3 px-4 sm:px-6 py-4 shrink-0 bg-linear-to-r sm:rounded-2xl from-brand-50 to-indigo-50 dark:from-brand-500/5 dark:to-indigo-500/5">
         <button onClick={() => { onCourseSelect(null); setMessages([]); }}
           className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-white/60 dark:hover:bg-gray-800 transition-colors shrink-0"
           title="Change course">
@@ -464,7 +467,7 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-4 custom-scrollbar">
         {messages.map((msg, i) => <TeacherMessageBubble key={i} msg={msg} userProfilePicture={userProfilePicture} />)}
         {chatLoading && <ChatTypingIndicator />}
         <div ref={bottomRef} />
@@ -486,7 +489,7 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
       )}
 
       {/* Input */}
-      <div className="px-6 pb-6 pt-1 shrink-0">
+      <div className="px-4 sm:px-6 pb-2 sm:pb-6 pt-1 shrink-0">
         <div className="flex items-center gap-2 rounded-full bg-white dark:bg-gray-800 shadow-md px-4 py-3">
           {/* Hidden file input */}
           <input ref={fileInputRef} type="file"

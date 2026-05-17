@@ -1,5 +1,7 @@
 """SmartEdX AI Core — Agno-powered quiz generation service."""
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -15,10 +17,18 @@ from routers.teacher_tools import router as teacher_tools_router
 from routers.teacher_tools import router_ai_tools
 from routers.screen_monitor import router as screen_monitor_router
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from utils.qdrant_search import warmup_embedding_model
+    warmup_embedding_model()
+    yield
+
+
 app = FastAPI(
     title="SmartEdX AI Core",
     description="AI-powered quiz generation and institute assistant using Agno framework",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

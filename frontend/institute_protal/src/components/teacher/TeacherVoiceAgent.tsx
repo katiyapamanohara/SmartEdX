@@ -228,9 +228,11 @@ export default function TeacherVoiceAgent({ isOpen, onClose, instituteId }: Teac
 
     const teacherId = authService.getUserId() ?? "teacher";
     const sessionId = `tva-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const user = authService.getUser();
+    const teacherName = user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() : "";
 
     const voiceWsBase = process.env.NEXT_PUBLIC_VOICE_AGENT_WS_URL ?? "ws://localhost:5001/voice-agent";
-    const wsUrl = `${voiceWsBase}/ws/teacher/${instituteId}/${teacherId}/${sessionId}`;
+    const wsUrl = `${voiceWsBase}/ws/teacher/${instituteId}/${teacherId}/${sessionId}${teacherName ? `?user_name=${encodeURIComponent(teacherName)}` : ""}`;
 
     let ws: WebSocket;
     try {

@@ -202,7 +202,89 @@ def _make_teacher_tools(
         except Exception as exc:
             return f"Error fetching course details: {exc}"
 
-    return get_my_courses, get_my_students, find_student, get_course_details
+    # ── Tool: get students enrolled in a specific course ──────────────────────
+
+    def get_course_students(course_name_or_code: str) -> str:
+        """
+        Get the list of students enrolled in a specific course.
+        Use this when the teacher asks how many students are in a course or who is enrolled.
+        Args:
+            course_name_or_code: Course name or code (e.g. 'CS101', 'Python Basics').
+        """
+        try:
+            courses = _get(f"/api/institutes/institutes/{institute_id}/courses")
+            query = course_name_or_code.lower().strip()
+            matches = [
+                c for c in courses
+                if query in c.get("name", "").lower()
+                or query in c.get("code", "").lower()
+            ]
+            if not matches:
+                return f"No course found matching '{course_name_or_code}'."
+
+            c = matches[0]
+            # Check for embedded students/enrolledStudents in the course object
+            students = c.get("students") or c.get("enrolledStudents") or []
+            if students:
+                lines = [
+                    f"👥 {c.get('name')} [{c.get('code')}] — {len(students)} student(s) enrolled",
+                    "─" * 40,
+                ]
+                for s in students[:30]:
+                    name = f"{s.get('firstName', '')} {s.get('lastName', '')}".strip()
+                    lines.append(f"• {name} — {s.get('email', 'N/A')}")
+                if len(students) > 30:
+                    lines.append(f"  ... and {len(students) - 30} more")
+                return "\n".join(lines)
+
+            # No per-course enrollment data in the course object — show institute total
+            student_count = c.get("studentCount") or c.get("enrolledCount")
+            if student_count is not None:
+                return f"{c.get('name')} [{c.get('code')}] has {student_count} student(s) enrolled."
+
+            return (
+                f"{c.get('name')} [{c.get('code')}]\n"
+                f"Per-course enrollment details are not available via the API. "
+                f"Use 'get_my_students' to see all students in this institute."
+            )
+        except Exception as exc:
+            return f"Error fetching course students: {exc}"
+
+    return get_my_courses, get_my_students, find_student, get_course_details, get_course_students
+
+
+# ─── Course KB search tool ────────────────────────────────────────────────────
+
+
+def _make_course_search_tool(institute_id: str, course_id: str):
+    """Return a search_course_material tool scoped to a specific course.
+
+    Searches Qdrant directly — same collection and embedding model used by the
+    voice agent, so both agents read the same indexed course documents.
+    """
+    from utils.qdrant_search import search_course_kb
+
+    def search_course_material(query: str) -> str:
+        """Search the course's uploaded documents and materials for relevant content.
+        Call this for ANY question about course topics, lecture content, concepts, or uploaded files.
+        Args:
+            query: Specific topic or keyword from the teacher's question, e.g. 'recursion', 'photosynthesis'.
+                   Never use generic phrases like 'course content' or 'lecture material'.
+        """
+        results = search_course_kb(institute_id, course_id, query, limit=3)
+        if not results:
+            return f"No material found for '{query}' in the course documents."
+        parts = []
+        for res in results:
+            page = res.get("page")
+            content = res.get("content", "")
+            title = res.get("title", "")
+            page_str = f" (Page {page})" if page else ""
+            title_str = f"[{title}] " if title else ""
+            parts.append(f"{title_str}{content}{page_str}")
+        return "\n\n".join(parts)
+
+    return search_course_material
 
 
 # ─── Model factory ────────────────────────────────────────────────────────────
@@ -230,6 +312,7 @@ def _build_teacher_assistant(
     tracker: TeacherActionTracker,
     file_content: str | None = None,
     custom_instructions: str | None = None,
+    course_id: str | None = None,
 ) -> Agent:
     ctx = teacher_context or {}
     teacher_name = ctx.get("teacher_name", "Teacher")
@@ -252,17 +335,31 @@ def _build_teacher_assistant(
             "The teacher has uploaded a file. Use its content to answer their question."
         )
 
-    get_courses, get_students, find_student, get_course_details = _make_teacher_tools(
+    get_courses, get_students, find_student, get_course_details, get_course_students = _make_teacher_tools(
         institute_id, teacher_id, auth_token, tracker
     )
+
+    course_id_ctx = course_id or ctx.get("course_id") or None
+    all_tools: list = [get_courses, get_students, find_student, get_course_details, get_course_students]
+    course_search_hint = ""
+    if course_id_ctx:
+        all_tools.append(_make_course_search_tool(institute_id, str(course_id_ctx)))
+        course_search_hint = (
+            "Call search_course_material for ANY question about course topics, lecture content, "
+            "uploaded documents, or what was covered in a lecture — use the specific subject as the query, "
+            "never a generic phrase like 'course content'."
+        )
 
     _tool_call_instructions = [
         "Call get_my_courses when the teacher asks about their courses, teaching load, or assigned classes.",
         "Call get_my_students when the teacher asks about their students, class roster, or attendance overview.",
         "Call find_student when the teacher asks about a SPECIFIC student by name.",
         "Call get_course_details when the teacher asks for detailed info about a specific course.",
+        "Call get_course_students when the teacher asks how many students are enrolled in a course or who is in a course.",
         "Never expose raw JSON or internal IDs — summarize naturally.",
     ]
+    if course_search_hint:
+        _tool_call_instructions.insert(0, course_search_hint)
 
     if custom_instructions:
         base_description = custom_instructions
@@ -291,7 +388,7 @@ def _build_teacher_assistant(
         model=_make_model(),
         description=(base_description + context_note + file_note),
         instructions=instructions,
-        tools=[get_courses, get_students, find_student, get_course_details],
+        tools=all_tools,
         show_tool_calls=False,
     )
 
@@ -318,7 +415,7 @@ async def chat_with_teacher_assistant(
         custom_instructions = _fetch_teacher_agent_instructions(institute_id, course_id)
 
     agent = _build_teacher_assistant(
-        teacher_context, institute_id, teacher_id, auth_token, tracker, file_content, custom_instructions
+        teacher_context, institute_id, teacher_id, auth_token, tracker, file_content, custom_instructions, course_id
     )
 
     last_user_message = messages[-1]["content"] if messages else ""
