@@ -8,6 +8,8 @@ import { instituteService, Course } from "@/services/instituteService";
 import VoiceModal from "./VoiceModal";
 import { useFeatures } from "@/context/InstituteFeatureContext";
 import { useInstituteFeatures } from "@/hooks/useInstituteFeatures";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -463,9 +465,9 @@ function MessageBubble({ msg, userProfilePicture }: { msg: ChatMessage; userProf
         )}
       </div>
       <div
-        className={`max-w-[82%] text-sm leading-relaxed px-3.5 py-2.5 rounded-2xl whitespace-pre-wrap wrap-break-word ${
+        className={`max-w-[82%] text-sm leading-relaxed px-3.5 py-2.5 rounded-2xl wrap-break-word ${
           isUser
-            ? "bg-linear-to-br from-brand-500 to-indigo-500 text-white rounded-tr-sm"
+            ? "bg-linear-to-br from-brand-500 to-indigo-500 text-white rounded-tr-sm whitespace-pre-wrap"
             : "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-sm"
         }`}
       >
@@ -477,7 +479,36 @@ function MessageBubble({ msg, userProfilePicture }: { msg: ChatMessage; userProf
             {msg.fileName}
           </span>
         )}
-        {msg.content}
+        {isUser ? (
+          msg.content
+        ) : (
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+              ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-0.5">{children}</ul>,
+              ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-0.5">{children}</ol>,
+              li: ({ children }) => <li className="ml-2">{children}</li>,
+              strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+              em: ({ children }) => <em className="italic">{children}</em>,
+              h1: ({ children }) => <h1 className="text-base font-bold mb-1.5 mt-2 first:mt-0">{children}</h1>,
+              h2: ({ children }) => <h2 className="text-sm font-bold mb-1.5 mt-2 first:mt-0">{children}</h2>,
+              h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 mt-2 first:mt-0">{children}</h3>,
+              code: ({ children, className }) =>
+                className ? (
+                  <code className="block bg-gray-200 dark:bg-gray-700 rounded-lg px-3 py-2 my-1.5 text-xs font-mono overflow-x-auto whitespace-pre">{children}</code>
+                ) : (
+                  <code className="bg-gray-200 dark:bg-gray-700 rounded px-1 py-0.5 text-xs font-mono">{children}</code>
+                ),
+              pre: ({ children }) => <pre className="my-1.5 overflow-x-auto">{children}</pre>,
+              blockquote: ({ children }) => <blockquote className="border-l-2 border-brand-400 pl-3 italic opacity-80 my-1.5">{children}</blockquote>,
+              hr: () => <hr className="border-gray-300 dark:border-gray-600 my-2" />,
+              a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline opacity-80 hover:opacity-100">{children}</a>,
+            }}
+          >
+            {msg.content}
+          </ReactMarkdown>
+        )}
       </div>
     </div>
   );

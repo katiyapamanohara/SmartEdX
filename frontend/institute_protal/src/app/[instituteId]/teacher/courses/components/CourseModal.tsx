@@ -375,6 +375,7 @@ const CourseModal: React.FC<CourseModalProps> = ({
             </div>
           )}
 
+        </div>
           <div className="pt-4 flex justify-end gap-3">
             <button
               type="button"
