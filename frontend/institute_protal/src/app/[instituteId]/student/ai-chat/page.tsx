@@ -501,8 +501,12 @@ function MessageBubble({ msg, userProfilePicture }: { msg: ChatMessage; userProf
                   <code className="bg-gray-200 dark:bg-gray-700 rounded px-1 py-0.5 text-xs font-mono">{children}</code>
                 ),
               pre: ({ children }) => <pre className="my-1.5 overflow-x-auto">{children}</pre>,
-              blockquote: ({ children }) => <blockquote className="border-l-2 border-brand-400 pl-3 italic opacity-80 my-1.5">{children}</blockquote>,
-              hr: () => <hr className="border-gray-300 dark:border-gray-600 my-2" />,
+              blockquote: ({ children }) => (
+                <blockquote className="border-l-4 border-green-400 bg-green-50 dark:bg-green-900/20 pl-3 pr-2 py-1.5 rounded-r-lg my-2 text-green-800 dark:text-green-300 not-italic font-medium">
+                  {children}
+                </blockquote>
+              ),
+              hr: () => <hr className="border-gray-300 dark:border-gray-600 my-3" />,
               a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline opacity-80 hover:opacity-100">{children}</a>,
             }}
           >

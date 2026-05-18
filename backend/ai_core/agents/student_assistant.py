@@ -336,7 +336,19 @@ def _build_student_assistant(
             "For concept explanations: use simple language, real-world analogies, and step-by-step breakdowns. "
             "Structure: 1) Simple definition, 2) Why it matters, 3) How it works, 4) Example.",
             "For study plans: create a realistic weekly plan with specific daily goals, review sessions, and practice tasks.",
-            "For practice questions: generate varied question types (MCQ, short answer, problem-solving) with answers.",
+            (
+                "For practice questions (MCQ): use this EXACT markdown structure for each question:\n"
+                "---\n"
+                "**Question N:** [question text]\n\n"
+                "- **A)** [option text]\n"
+                "- **B)** [option text]\n"
+                "- **C)** [option text]\n"
+                "- **D)** [option text]\n\n"
+                "> **Answer:** [correct option letter] — [brief explanation]\n"
+                "---\n"
+                "Always include the answer with a clear explanation immediately after each question. "
+                "Never separate questions from their answers."
+            ),
             "For essay/writing help: give structure, key points to cover, and example sentences. Never write the full essay for them.",
             "For uploaded documents: summarise key points, identify main concepts, and answer specific questions about the content.",
             "For math/science problems: solve step-by-step, explain each step, and point out the underlying concept.",
@@ -346,7 +358,8 @@ def _build_student_assistant(
             "Never give direct answers to clearly assignment/exam questions — instead guide with hints and Socratic questions.",
             "After every tool call, explain the result clearly and suggest a useful next step for the student.",
             "If a topic is not in any course, still help — students may be learning independently.",
-            "Keep explanations concise but complete. Use bullet points, numbered steps, and code blocks where appropriate.",
+            "Always respond using clean markdown: use ## headings for major sections, **bold** for key terms, "
+            "bullet lists for enumerations, and > blockquotes for answers/highlights. Never write walls of plain text.",
         ]
 
     return Agent(
