@@ -17,7 +17,7 @@ from google.adk.sessions import InMemorySessionService
 # Load environment variables BEFORE importing agent (needs config at import time)
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-from app.agent import get_runner_for_course, get_runner_for_institute, get_runner_for_teacher, search_knowledgebase  # noqa: E402
+from app.agent import get_runner_for_course, get_runner_for_institute, get_runner_for_institute_admin, get_runner_for_teacher, search_knowledgebase  # noqa: E402
 from app.config import (  # noqa: E402
     APP_NAME,
     COURSE_KB_ENABLED,
@@ -398,6 +398,49 @@ async def teacher_ws_endpoint(
         language=language,
         chat_id=chat_id or None,
         course_id=course_id or None,
+        user_role="teacher",
+    )
+
+
+@app.websocket("/ws/institute-management/{institute_id}/{user_id}/{session_id}")
+async def institute_admin_ws_endpoint(
+    websocket: WebSocket,
+    institute_id: str,
+    user_id: str,
+    session_id: str,
+    institute_name: str = "",
+    user_name: str = "",
+    user_token: str = "",
+    language: Optional[str] = None,
+    chat_id: str = "",
+) -> None:
+    """Institute admin voice assistant — management tools (analytics, create course, invite lecturer).
+
+    Query params:
+        institute_name – human-readable institute name for the system prompt.
+        user_name      – admin's display name for the greeting.
+        user_token     – user JWT forwarded to write tools for proper auth.
+        chat_id        – active chat session ID.
+    """
+    admin_runner, _ = get_runner_for_institute_admin(
+        institute_id=institute_id,
+        user_id=user_id,
+        session_service=session_service,
+        user_name=user_name,
+        user_token=user_token,
+    )
+    await websocket_endpoint(
+        websocket=websocket,
+        institute_id=institute_id,
+        user_id=user_id,
+        session_id=session_id,
+        session_service=session_service,
+        transcript_store=transcript_store,
+        runner=admin_runner,
+        language=language,
+        greet=True,
+        chat_id=chat_id or None,
+        course_id=None,
         user_role="teacher",
     )
 

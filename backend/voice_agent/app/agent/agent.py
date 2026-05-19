@@ -13,7 +13,7 @@ from google.adk.tools import FunctionTool, ToolContext
 from google.genai import types
 
 from app.agent.api import fetch_institute_config, fetch_course_agent_config
-from app.agent.api_tools import make_student_api_tools, make_teacher_api_tools
+from app.agent.api_tools import make_institute_admin_api_tools, make_student_api_tools, make_teacher_api_tools
 from app.qdrant.course_kb import _get_query_vector
 from app.agent.assessment_tools import evaluate_voice_assessment
 from app.agent.audio_clips import create_audio_clip_tool
@@ -700,9 +700,89 @@ def get_runner_for_teacher(
     return (teacher_runner, greeting)
 
 
+def get_runner_for_institute_admin(
+    institute_id: str,
+    user_id: str,
+    session_service: InMemorySessionService,
+    user_name: str = "",
+    user_token: str = "",
+) -> tuple[Runner, str]:
+    """Build a Runner for the institute admin voice assistant.
+
+    This agent has full management tools: analytics, teacher performance,
+    course enrollment, create course, and invite lecturer.
+
+    Args:
+        institute_id: Institute UUID.
+        user_id:      Admin/instructor user UUID.
+        session_service: Shared ADK session service instance.
+        user_name:    Admin's display name for the system prompt greeting.
+        user_token:   User JWT — passed to write tools for proper auth.
+    """
+    logger.info(f"Building institute admin agent for institute={institute_id} user={user_id}")
+
+    institute_name = "SmartEdX"
+    try:
+        config = fetch_institute_config(institute_id)
+        institute_name = config.get("name") or institute_name
+    except Exception as exc:
+        logger.warning(f"Failed to fetch institute config for admin agent {institute_id}: {exc}")
+
+    greeting_name = f" {user_name}" if user_name else ""
+    base_instructions = (
+        f"You are the AI management voice assistant for {institute_name}.\n"
+        f"You assist the institute administrator with:\n"
+        f"- Live analytics: student counts, teacher counts, course statistics\n"
+        f"- Teacher performance: who teaches what, student counts per teacher\n"
+        f"- Course enrollment: how many students per course\n"
+        f"- Creating new courses (collect all fields and confirm before creating)\n"
+        f"- Inviting new lecturers by email (confirm name and email before inviting)\n\n"
+        f"Rules:\n"
+        f"- For ANY question about numbers, teachers, students, or courses: call the appropriate tool immediately.\n"
+        f"- For create_course: always ask for name, code, description, and batch number before calling.\n"
+        f"- For invite_lecturer: always confirm full name and email with the admin before calling.\n"
+        f"- Give short, voice-friendly answers (1-3 sentences). No markdown.\n"
+        f"- Never expose raw IDs or JSON.\n"
+        f"- Always confirm write actions (create/invite) with the admin before executing.\n"
+    )
+
+    if SYSTEM_INSTRUCTION_OVERRIDE:
+        base_instructions = SYSTEM_INSTRUCTION_OVERRIDE
+
+    system_instructions = all_instructions + base_instructions
+
+    safe_id = institute_id.replace("-", "_")
+    admin_agent = Agent(
+        name=f"smartedx_admin_agent_{safe_id}",
+        model=DEMO_AGENT_MODEL,
+        tools=(
+            [FunctionTool(func=end_call)]
+            + make_institute_admin_api_tools(institute_id, user_token=user_token)
+        ),
+        instruction=system_instructions,
+        generate_content_config=types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_budget=256, include_thoughts=True),
+        ),
+    )
+
+    admin_runner = Runner(
+        app_name=APP_NAME,
+        agent=admin_agent,
+        session_service=session_service,
+    )
+
+    greeting = (
+        f"Hello{greeting_name}! I'm your institute management assistant for {institute_name}. "
+        f"I can pull live analytics, review teacher performance, check enrollment, "
+        f"create courses, or invite lecturers. What would you like to do?"
+    )
+    return (admin_runner, greeting)
+
+
 __all__ = [
     "get_runner_for_course",
     "get_runner_for_institute",
+    "get_runner_for_institute_admin",
     "get_runner_for_teacher",
     "register_call_guard",
     "search_knowledgebase",

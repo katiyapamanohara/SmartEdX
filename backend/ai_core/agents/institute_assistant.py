@@ -203,6 +203,62 @@ def _make_live_tools(
         except Exception as exc:
             return f"Course enrollment error: {exc}"
 
+    # ── Tool: revenue analytics ───────────────────────────────────────────
+
+    def get_revenue_analytics() -> str:
+        """
+        Calculate estimated revenue for every course based on enrollment count and course pricing.
+        For fixed-price courses: enrolled students × price.
+        For monthly courses: enrolled students × monthly price (per month estimate).
+        Use when asked about revenue, income, earnings, or financial performance.
+        """
+        try:
+            institute = _get(f"/api/institutes/institutes/{institute_id}")
+            courses   = _get(f"/api/institutes/institutes/{institute_id}/courses")
+            currency  = institute.get("currency", "") if isinstance(institute, dict) else ""
+
+            if not courses:
+                return "No courses found — there is no revenue to report."
+
+            total = 0.0
+            lines = [f"💰 REVENUE ANALYTICS ({len(courses)} courses)", "─" * 44]
+
+            for c in courses:
+                enrolled     = len(c.get("enrolledStudents", []))
+                payment_type = c.get("paymentType", "fixed")
+                price        = float(c.get("price") or 0)
+                monthly      = float(c.get("monthlyPrice") or 0)
+
+                if payment_type == "monthly" and monthly:
+                    course_rev = enrolled * monthly
+                    pricing    = f"{currency}{monthly:.2f}/mo per student"
+                    note       = f"{currency}{course_rev:.2f}/mo"
+                elif price:
+                    course_rev = enrolled * price
+                    pricing    = f"{currency}{price:.2f} fixed"
+                    note       = f"{currency}{course_rev:.2f}"
+                else:
+                    course_rev = 0.0
+                    pricing    = "No price set"
+                    note       = "—"
+
+                total += course_rev
+                lines.append(
+                    f"\n📖 {c.get('name','?')} [{c.get('code','?')}]"
+                )
+                lines.append(f"   Students : {enrolled}")
+                lines.append(f"   Pricing  : {pricing}")
+                lines.append(f"   Revenue  : {note}")
+
+            lines.append("")
+            lines.append(f"{'─' * 44}")
+            lines.append(f"   TOTAL ESTIMATED REVENUE: {currency}{total:,.2f}")
+
+            return "\n".join(lines)
+
+        except Exception as exc:
+            return f"Revenue analytics error: {exc}"
+
     # ── Tool: create course ────────────────────────────────────────────────
 
     def create_course(
@@ -318,6 +374,7 @@ def _make_live_tools(
         get_institute_analytics,
         get_teacher_performance,
         get_course_enrollment,
+        get_revenue_analytics,
         create_course,
         list_courses,
         invite_lecturer_by_email,
@@ -362,6 +419,7 @@ def _build_assistant(
         get_analytics,
         get_teacher_perf,
         get_course_enroll,
+        get_revenue,
         create_course_tool,
         list_courses_tool,
         invite_lecturer_tool,
@@ -381,6 +439,7 @@ def _build_assistant(
             "Call get_institute_analytics when asked about overall metrics, performance, students, teachers, or course stats.",
             "Call get_teacher_performance when asked about teacher performance, workload, which teacher handles which course, or teacher details.",
             "Call get_course_enrollment when asked about enrollment numbers, how many students are in a course, or who teaches which course.",
+            "Call get_revenue_analytics when asked about revenue, income, earnings, total revenue, financial performance, or how much the institute is making.",
             "Call list_courses when the owner wants to see their current courses.",
             "Call create_course when the owner wants to create a course. Collect all 4 fields first: "
             "name, code (e.g. 'CS101'), description, and batch_number. Ask for missing fields before calling.",
@@ -403,6 +462,7 @@ def _build_assistant(
             get_analytics,
             get_teacher_perf,
             get_course_enroll,
+            get_revenue,
             create_course_tool,
             list_courses_tool,
             invite_lecturer_tool,

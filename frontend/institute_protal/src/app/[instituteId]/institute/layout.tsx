@@ -5,6 +5,8 @@ import InstituteHeader from "@/layout/institute/InstituteHeader";
 import InstituteSidebar from "@/layout/institute/InstituteSidebar";
 import InstituteBackdrop from "@/layout/institute/InstituteBackdrop";
 import { InstituteFeatureProvider } from "@/context/InstituteFeatureContext";
+import { VoiceAgentProvider } from "@/context/VoiceAgentContext";
+import PersistentInstituteVoiceModal from "@/components/voice/PersistentInstituteVoiceModal";
 import React, { useEffect } from "react";
 import { useParams } from "next/navigation";
 import { authService } from "@/services/authService";
@@ -33,20 +35,23 @@ export default function InstituteLayout({
 
   return (
     <InstituteFeatureProvider>
-      <div className="min-h-screen lg:flex">
-        {/* Sidebar and Backdrop */}
-        <InstituteSidebar />
-        <InstituteBackdrop />
-        {/* Main Content Area */}
-        <div
-          className={`flex-1 transition-all  duration-300 ease-in-out ${mainContentMargin}`}
-        >
-          {/* Header */}
-          <InstituteHeader />
-          {/* Page Content */}
-          <div className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">{children}</div>
+      <VoiceAgentProvider>
+        <div className="min-h-screen lg:flex">
+          {/* Sidebar and Backdrop */}
+          <InstituteSidebar />
+          <InstituteBackdrop />
+          {/* Main Content Area */}
+          <div
+            className={`flex-1 transition-all  duration-300 ease-in-out ${mainContentMargin}`}
+          >
+            {/* Header */}
+            <InstituteHeader />
+            {/* Page Content */}
+            <div className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">{children}</div>
+          </div>
         </div>
-      </div>
+        <PersistentInstituteVoiceModal />
+      </VoiceAgentProvider>
     </InstituteFeatureProvider>
   );
 }
