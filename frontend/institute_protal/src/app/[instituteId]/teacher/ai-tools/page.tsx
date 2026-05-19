@@ -317,7 +317,7 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
   const [chatLoading, setChatLoading] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
 
-  const { startSession } = useVoiceAgent();
+  const { startSession, session: voiceSession, sendTextToVoice, setTranscriptHandler, drainPendingTranscripts } = useVoiceAgent();
   const [isDark, setIsDark] = useState(false);
 
   const { hasFeature } = useFeatures();
@@ -373,6 +373,14 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
     ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`;
   }, [input]);
 
+  // Voice transcript → messages
+  useEffect(() => {
+    setTranscriptHandler((role, text) => {
+      setMessages(prev => [...prev, { role, content: text, timestamp: Date.now() / 1000 }]);
+    });
+    return () => setTranscriptHandler(null);
+  }, [setTranscriptHandler]);
+
   // Save messages to Qdrant whenever they change
   useEffect(() => {
     if (!messages.length || !activeChatId || !selectedCourse?.id) return;
@@ -427,8 +435,10 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
         chat_id:      session.chat_id,
       });
       const serverMsgs: TeacherChatMessage[] = (data?.messages ?? []) as TeacherChatMessage[];
-      if (serverMsgs.length > 0) {
-        setMessages(serverMsgs);
+      const pending = voiceSession?.chatId === session.chat_id ? drainPendingTranscripts() : [];
+      const pendingMsgs: TeacherChatMessage[] = pending.map(p => ({ role: p.role, content: p.text, timestamp: Date.now() / 1000 }));
+      if (serverMsgs.length > 0 || pendingMsgs.length > 0) {
+        setMessages([...serverMsgs, ...pendingMsgs]);
         if (session.title === "New Chat") {
           const firstUserMsg = serverMsgs.find(m => m.role === "user");
           if (firstUserMsg) {
@@ -560,6 +570,12 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
           role: "teacher", chat_id: activeChatId, title,
         }).catch(() => {});
       }
+    }
+
+    if (voiceSession && !file) {
+      setMessages(prev => [...prev, userMsg]);
+      sendTextToVoice(messageText);
+      return;
     }
 
     const updated = [...messages, userMsg];
@@ -834,9 +850,15 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
             <FiPlus className="w-3 h-3" />
             New chat
           </button>
-          <span className="flex items-center gap-1.5 text-[11px] font-medium text-success-600 dark:text-success-500 shrink-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-success-500 animate-pulse" />Ready
-          </span>
+          {voiceSession ? (
+            <span className="flex items-center gap-1.5 text-[11px] font-medium text-violet-600 dark:text-violet-400 shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />Voice active
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-[11px] font-medium text-success-600 dark:text-success-500 shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-success-500 animate-pulse" />Ready
+            </span>
+          )}
         </div>
 
         {/* Messages */}
@@ -863,7 +885,7 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
 
         {/* Input */}
         <div className="px-5 pb-5 pt-1 shrink-0">
-          <div className="flex items-center gap-2 rounded-full bg-white dark:bg-gray-800 shadow-md px-4 py-3">
+          <div className={`flex items-center gap-2 rounded-full bg-white dark:bg-gray-800 shadow-md px-4 py-3 transition-shadow ${voiceSession ? "ring-2 ring-violet-400/50" : ""}`}>
             <input ref={fileInputRef} type="file"
               accept=".pdf,.docx,.pptx,.txt,.csv,.md,.png,.jpg,.jpeg,.webp"
               onChange={handleFileChange} className="hidden" />
@@ -876,7 +898,7 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
             <textarea ref={textareaRef} rows={1} value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={pendingFile ? `Ask about ${pendingFile.name}…` : "Ask anything…"}
+              placeholder={pendingFile ? `Ask about ${pendingFile.name}…` : voiceSession ? "Message voice agent…" : "Ask anything…"}
               disabled={chatLoading}
               className="flex-1 resize-none bg-transparent text-sm text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 outline-none leading-relaxed disabled:opacity-50 max-h-[120px]" />
             <button
@@ -889,6 +911,9 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
                       studentContext: { selected_course: selectedCourse.name },
                       course: { id: selectedCourse.id, name: selectedCourse.name, code: "" } as any,
                       instituteId,
+                      chatId:   activeChatId ?? undefined,
+                      userId:   authService.getUser()?.id,
+                      userRole: "teacher",
                       wsUrl: voiceWsUrl,
                       label: "Teacher Assistant",
                     }) : undefined
