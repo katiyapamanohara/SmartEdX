@@ -193,11 +193,11 @@ def _prune(col: str, user_id: str, course_id: str) -> None:
                 },
                 "limit": MAX_HISTORY_MESSAGES + 50,
                 "with_payload": ["timestamp"],
-                "order_by": {"key": "timestamp", "direction": "asc"},
             },
         )
         points = result.get("result", {}).get("points", [])
         if len(points) > MAX_HISTORY_MESSAGES:
+            points.sort(key=lambda p: p["payload"].get("timestamp") or 0.0)
             excess = points[: len(points) - MAX_HISTORY_MESSAGES]
             ids = [p["id"] for p in excess]
             _req(
@@ -240,10 +240,10 @@ def load_messages(
                 },
                 "limit": limit,
                 "with_payload": True,
-                "order_by": {"key": "timestamp", "direction": "asc"},
             },
         )
         points = result.get("result", {}).get("points", [])
+        points.sort(key=lambda p: p["payload"].get("timestamp") or 0.0)
         msgs = [
             {
                 "role":      p["payload"]["role"],

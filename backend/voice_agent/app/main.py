@@ -371,12 +371,14 @@ async def teacher_ws_endpoint(
     course_id: str = "",
     user_name: str = "",
     language: Optional[str] = None,
+    chat_id: str = "",
 ) -> None:
     """Teacher voice assistant — searches course materials in Qdrant.
 
     Query params:
         course_id  – when provided, course-specific teacherAgentInstructions are fetched.
         user_name  – teacher's display name; substituted into {teacher name} placeholders.
+        chat_id    – active chat session ID; history is loaded from Qdrant on connect.
     """
     teacher_runner, _ = get_runner_for_teacher(
         institute_id=institute_id,
@@ -394,6 +396,9 @@ async def teacher_ws_endpoint(
         transcript_store=transcript_store,
         runner=teacher_runner,
         language=language,
+        chat_id=chat_id or None,
+        course_id=course_id or None,
+        user_role="teacher",
     )
 
 
@@ -409,12 +414,14 @@ async def course_qa_ws_endpoint(
     user_name: str = "",
     language: Optional[str] = None,
     greet: bool = True,
+    chat_id: str = "",
 ) -> None:
     """Course Q&A voice assistant — answers questions from course content.
 
     Query params:
         role      – "student" (default) or "teacher".
         user_name – display name substituted into {student name}/{teacher name} placeholders.
+        chat_id   – active chat session ID; history is loaded from Qdrant on connect.
     """
     course_runner, _ = get_runner_for_course(
         institute_id=institute_id,
@@ -435,4 +442,7 @@ async def course_qa_ws_endpoint(
         runner=course_runner,
         language=language,
         greet=greet,
+        chat_id=chat_id or None,
+        course_id=course_id or None,
+        user_role=role,
     )

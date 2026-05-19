@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect } from "react";
 import { useVoiceAgent } from "@/context/VoiceAgentContext";
+import { authService } from "@/services/authService";
 import VoiceModal from "@/app/[instituteId]/student/ai-chat/VoiceModal";
 
 /**
@@ -21,12 +22,25 @@ export default function PersistentVoiceModal() {
     [setVoiceSendFn],
   );
 
-  // Clear the send function when session ends
   useEffect(() => {
     if (!session) setVoiceSendFn(null);
   }, [session, setVoiceSendFn]);
 
   if (!session) return null;
+
+  // Build WS URL with chat_id and role so the voice agent loads the correct
+  // Qdrant chat collection for session context.
+  const wsBase = process.env.NEXT_PUBLIC_VOICE_AGENT_WS_URL ?? "ws://localhost:5001/voice-agent";
+  const userId = session.userId ?? authService.getUserId() ?? "student";
+  const sessionId = `cva-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const wsUrl = session.wsUrl ?? (() => {
+    const qs = new URLSearchParams({
+      course_name: session.course.name,
+      role:        session.userRole ?? "student",
+      ...(session.chatId ? { chat_id: session.chatId } : {}),
+    }).toString();
+    return `${wsBase}/ws/course-qa/${session.instituteId}/${session.course.id}/${userId}/${sessionId}?${qs}`;
+  })();
 
   return (
     <VoiceModal
@@ -35,6 +49,7 @@ export default function PersistentVoiceModal() {
       context={session.studentContext}
       selectedCourse={session.course}
       instituteId={session.instituteId}
+      wsUrl={wsUrl}
       onClose={endSession}
       forcePip={true}
       onTranscript={handleTranscript}

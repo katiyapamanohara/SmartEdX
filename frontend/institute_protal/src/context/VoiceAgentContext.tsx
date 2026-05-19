@@ -11,6 +11,10 @@ export interface VoiceSessionParams {
   studentContext: StudentContext;
   course: Course;
   instituteId: string;
+  /** Active chat session ID — transcripts are saved to this chat's Qdrant collection */
+  chatId?: string;
+  userId?: string;
+  userRole?: "student" | "teacher";
   wsUrl?: string;
   label?: string;
 }

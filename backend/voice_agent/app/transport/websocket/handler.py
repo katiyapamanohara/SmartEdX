@@ -48,6 +48,9 @@ async def websocket_endpoint(
     affective_dialog: bool = False,
     language: Optional[str] = None,
     greet: bool = True,
+    chat_id: Optional[str] = None,
+    course_id: Optional[str] = None,
+    user_role: str = "student",
 ) -> None:
     """WebSocket endpoint for bidirectional streaming with ADK.
 
@@ -89,6 +92,9 @@ async def websocket_endpoint(
         institute_id=institute_id,
         is_sip=False,
         language=language,
+        chat_id=chat_id or None,
+        course_id=course_id or None,
+        user_role=user_role,
     )
     live_request_queue = await mgr.initialize()
     t_first_response = latency.start_timer()

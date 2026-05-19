@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from utils.chat_history import save_messages, load_messages, clear_history
 
-router = APIRouter(prefix="/api/ai/chat-history", tags=["chat-history"])
+router = APIRouter(prefix="/chat-history", tags=["chat-history"])
 
 
 # ─── Schemas ──────────────────────────────────────────────────────────────────
@@ -51,7 +51,7 @@ async def save_history(body: SaveRequest) -> None:
         user_id=body.user_id,
         user_type=body.user_type,
         course_id=body.course_id,
-        messages=[m.model_dump() for m in body.messages],
+        messages=[m.model_dump(exclude_none=True) for m in body.messages],
     )
 
 
