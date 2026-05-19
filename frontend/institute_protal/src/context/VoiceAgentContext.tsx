@@ -52,8 +52,20 @@ export function useVoiceAgent(): VoiceAgentContextValue {
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
+const SESSION_STORAGE_KEY = "voiceAgentSession";
+
+function readStoredSession(): VoiceSessionParams | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as VoiceSessionParams) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function VoiceAgentProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<VoiceSessionParams | null>(null);
+  const [session, setSession] = useState<VoiceSessionParams | null>(readStoredSession);
   const sendFnRef             = useRef<((text: string) => void) | null>(null);
   const transcriptHandlerRef  = useRef<((role: "user" | "assistant", text: string) => void) | null>(null);
   const pendingTranscriptsRef = useRef<PendingTranscript[]>([]);
@@ -61,12 +73,14 @@ export function VoiceAgentProvider({ children }: { children: React.ReactNode }) 
   const startSession = useCallback((params: VoiceSessionParams) => {
     pendingTranscriptsRef.current = [];
     setSession(params);
+    try { sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(params)); } catch {}
   }, []);
 
   const endSession = useCallback(() => {
     pendingTranscriptsRef.current = [];
     setSession(null);
     sendFnRef.current = null;
+    try { sessionStorage.removeItem(SESSION_STORAGE_KEY); } catch {}
   }, []);
 
   const sendTextToVoice = useCallback((text: string) => {

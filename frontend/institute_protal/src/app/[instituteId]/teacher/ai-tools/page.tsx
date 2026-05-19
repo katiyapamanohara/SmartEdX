@@ -543,7 +543,11 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
     setActiveChatId(null);
     const sessions = await loadChatSessions(course);
     if (sessions.length > 0) {
-      await openChat(sessions[0]);
+      const preferredId = voiceSession?.chatId;
+      const target = preferredId
+        ? (sessions.find(s => s.chat_id === preferredId) ?? sessions[0])
+        : sessions[0];
+      await openChat(target);
     } else {
       await createNewChat(course);
     }
@@ -703,18 +707,6 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
   }
 
   const activeSession = chatSessions.find(s => s.chat_id === activeChatId);
-
-  // ── Chat screen ───────────────────────────────────────────────────────────
-  const voiceWsUrl = (() => {
-    const user       = authService.getUser();
-    const wsBase     = process.env.NEXT_PUBLIC_VOICE_AGENT_WS_URL ?? "ws://localhost:5001/voice-agent";
-    const userId     = user?.id ?? "teacher";
-    const session    = `tva-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const teacherName = user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() : "";
-    const params = new URLSearchParams({ course_name: selectedCourse.name, role: "teacher" });
-    if (teacherName) params.set("user_name", teacherName);
-    return `${wsBase}/ws/course-qa/${instituteId}/${selectedCourse.id}/${userId}/${session}?${params.toString()}`;
-  })();
 
   return (
     <div className="flex h-[calc(100vh-8rem)] max-h-[900px] rounded-2xl overflow-hidden">
@@ -914,7 +906,6 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
                       chatId:   activeChatId ?? undefined,
                       userId:   authService.getUser()?.id,
                       userRole: "teacher",
-                      wsUrl: voiceWsUrl,
                       label: "Teacher Assistant",
                     }) : undefined
               }
