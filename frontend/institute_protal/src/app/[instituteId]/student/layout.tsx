@@ -2,8 +2,10 @@
 
 import { useSidebar } from "@/context/SidebarContext";
 import { LiveSessionProvider } from "@/context/LiveSessionContext";
+import { VoiceAgentProvider } from "@/context/VoiceAgentContext";
 import { InstituteFeatureProvider } from "@/context/InstituteFeatureContext";
 import LivePipWidget from "@/components/live/LivePipWidget";
+import PersistentVoiceModal from "@/components/voice/PersistentVoiceModal";
 import StudentHeader from "@/layout/student/StudentHeader";
 import StudentSidebar from "@/layout/student/StudentSidebar";
 import StudentBackdrop from "@/layout/student/StudentBackdrop";
@@ -36,15 +38,18 @@ export default function StudentLayout({
   return (
     <InstituteFeatureProvider>
       <LiveSessionProvider>
-        <div className="min-h-screen lg:flex">
-          <StudentSidebar />
-          <StudentBackdrop />
-          <div className={`flex-1 transition-all duration-300 ease-in-out ${mainContentMargin}`}>
-            <StudentHeader />
-            <div className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">{children}</div>
+        <VoiceAgentProvider>
+          <div className="min-h-screen lg:flex">
+            <StudentSidebar />
+            <StudentBackdrop />
+            <div className={`flex-1 transition-all duration-300 ease-in-out ${mainContentMargin}`}>
+              <StudentHeader />
+              <div className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">{children}</div>
+            </div>
           </div>
-        </div>
-        <LivePipWidget />
+          <LivePipWidget />
+          <PersistentVoiceModal />
+        </VoiceAgentProvider>
       </LiveSessionProvider>
     </InstituteFeatureProvider>
   );

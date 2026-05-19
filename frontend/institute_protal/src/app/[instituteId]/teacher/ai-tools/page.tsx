@@ -6,7 +6,7 @@ import { examService, Exam } from "@/services/examService";
 import { instituteService } from "@/services/instituteService";
 import { useInstituteFeatures } from "@/hooks/useInstituteFeatures";
 import { useFeatures } from "@/context/InstituteFeatureContext";
-import VoiceModal from "../ai-tools/VoiceModal";
+import { useVoiceAgent } from "@/context/VoiceAgentContext";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -261,7 +261,7 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
   const [chatLoading, setChatLoading] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
 
-  const [voiceMode, setVoiceMode] = useState(false);
+  const { startSession } = useVoiceAgent();
   const [isDark, setIsDark]       = useState(false);
 
   const { hasFeature } = useFeatures();
@@ -519,7 +519,15 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
             onClick={() =>
               input.trim() || pendingFile
                 ? sendMessage(input, pendingFile)
-                : voiceEnabled ? setVoiceMode(true) : undefined
+                : voiceEnabled ? startSession({
+                    isDark,
+                    instituteLogo: null,
+                    studentContext: { selected_course: selectedCourse.name },
+                    course: { id: selectedCourse.id, name: selectedCourse.name, code: "" } as any,
+                    instituteId,
+                    wsUrl: voiceWsUrl,
+                    label: "Teacher Assistant",
+                  }) : undefined
             }
             disabled={chatLoading || (!input.trim() && !pendingFile && !voiceEnabled)}
             title={!voiceEnabled && !input.trim() && !pendingFile ? "Voice Agent not enabled" : undefined}
@@ -544,19 +552,6 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
         </p>
       </div>
 
-      {/* ── Full-screen voice overlay (identical to student side) ─────────────── */}
-      {voiceMode && voiceEnabled && (
-        <VoiceModal
-          isDark={isDark}
-          instituteLogo={null}
-          context={{ selected_course: selectedCourse.name }}
-          selectedCourse={{ id: selectedCourse.id, name: selectedCourse.name, code: "" } as any}
-          instituteId={instituteId}
-          wsUrl={voiceWsUrl}
-          label="Teacher Assistant"
-          onClose={() => setVoiceMode(false)}
-        />
-      )}
     </div>
   );
 }

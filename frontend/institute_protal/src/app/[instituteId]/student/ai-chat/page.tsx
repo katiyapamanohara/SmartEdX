@@ -5,8 +5,8 @@ import { useParams, useSearchParams } from "next/navigation";
 import { FiBookOpen } from "react-icons/fi";
 import { authService } from "@/services/authService";
 import { instituteService, Course } from "@/services/instituteService";
-import VoiceModal from "./VoiceModal";
 import { useFeatures } from "@/context/InstituteFeatureContext";
+import { useVoiceAgent } from "@/context/VoiceAgentContext";
 import { useInstituteFeatures } from "@/hooks/useInstituteFeatures";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -55,7 +55,7 @@ export default function AiChatPage() {
 
   const { hasFeature } = useFeatures();
   const voiceEnabled = hasFeature("voice_agent");
-  const [voiceMode, setVoiceMode] = useState(false);
+  const { startSession } = useVoiceAgent();
 
   const [isDark, setIsDark] = useState(false);
 
@@ -196,8 +196,10 @@ export default function AiChatPage() {
   }
 
   // ── Voice mode ────────────────────────────────────────────────────────────
-  function openVoiceMode()  { setVoiceMode(true);  }
-  function closeVoiceMode() { setVoiceMode(false); }
+  function openVoiceMode() {
+    if (!selectedCourse) return;
+    startSession({ isDark, instituteLogo, studentContext: context, course: selectedCourse, instituteId });
+  }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
@@ -432,17 +434,6 @@ export default function AiChatPage() {
         </p>
       </div>
 
-      {/* ── Full-screen voice overlay ─────────────────────────────────────── */}
-      {voiceMode && voiceEnabled && (
-        <VoiceModal
-          isDark={isDark}
-          instituteLogo={instituteLogo}
-          context={context}
-          selectedCourse={selectedCourse}
-          instituteId={instituteId}
-          onClose={closeVoiceMode}
-        />
-      )}
     </div>
   );
 }
