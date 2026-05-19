@@ -52,7 +52,8 @@ export function useVoiceAgent(): VoiceAgentContextValue {
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
-const SESSION_STORAGE_KEY = "voiceAgentSession";
+const SESSION_STORAGE_KEY         = "voiceAgentSession";
+const PENDING_STORAGE_KEY         = "voiceAgentPending";
 
 function readStoredSession(): VoiceSessionParams | null {
   if (typeof window === "undefined") return null;
@@ -64,23 +65,39 @@ function readStoredSession(): VoiceSessionParams | null {
   }
 }
 
+function readStoredPending(): PendingTranscript[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = sessionStorage.getItem(PENDING_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as PendingTranscript[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 export function VoiceAgentProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<VoiceSessionParams | null>(readStoredSession);
   const sendFnRef             = useRef<((text: string) => void) | null>(null);
   const transcriptHandlerRef  = useRef<((role: "user" | "assistant", text: string) => void) | null>(null);
-  const pendingTranscriptsRef = useRef<PendingTranscript[]>([]);
+  const pendingTranscriptsRef = useRef<PendingTranscript[]>(readStoredPending());
 
   const startSession = useCallback((params: VoiceSessionParams) => {
     pendingTranscriptsRef.current = [];
     setSession(params);
-    try { sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(params)); } catch {}
+    try {
+      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(params));
+      sessionStorage.removeItem(PENDING_STORAGE_KEY);
+    } catch {}
   }, []);
 
   const endSession = useCallback(() => {
     pendingTranscriptsRef.current = [];
     setSession(null);
     sendFnRef.current = null;
-    try { sessionStorage.removeItem(SESSION_STORAGE_KEY); } catch {}
+    try {
+      sessionStorage.removeItem(SESSION_STORAGE_KEY);
+      sessionStorage.removeItem(PENDING_STORAGE_KEY);
+    } catch {}
   }, []);
 
   const sendTextToVoice = useCallback((text: string) => {
@@ -99,14 +116,16 @@ export function VoiceAgentProvider({ children }: { children: React.ReactNode }) 
     if (transcriptHandlerRef.current) {
       transcriptHandlerRef.current(role, text);
     } else {
-      // No page handler registered (user navigated away) — buffer the transcript
+      // No page handler registered (user navigated away) — buffer and persist
       pendingTranscriptsRef.current.push({ role, text });
+      try { sessionStorage.setItem(PENDING_STORAGE_KEY, JSON.stringify(pendingTranscriptsRef.current)); } catch {}
     }
   }, []);
 
   const drainPendingTranscripts = useCallback((): PendingTranscript[] => {
     const pending = pendingTranscriptsRef.current;
     pendingTranscriptsRef.current = [];
+    try { sessionStorage.removeItem(PENDING_STORAGE_KEY); } catch {}
     return pending;
   }, []);
 

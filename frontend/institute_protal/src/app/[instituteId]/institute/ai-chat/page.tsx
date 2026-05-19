@@ -244,7 +244,12 @@ export default function InstituteAiChatPage() {
           const sessions: ChatSession[] = data ?? [];
           setChatSessions(sessions);
           if (sessions.length > 0) {
-            await openChatById(sessions[0], instructorName, instituteName);
+            // If a voice session is active, prefer the chat it belongs to
+            const voiceActiveId = voiceSession?.chatId;
+            const target = voiceActiveId
+              ? (sessions.find(s => s.chat_id === voiceActiveId) ?? sessions[0])
+              : sessions[0];
+            await openChatById(target, instructorName, instituteName);
           } else {
             await createNewChat(instructorName, instituteName);
           }
@@ -275,10 +280,11 @@ export default function InstituteAiChatPage() {
         user_id: user.id, role: "teacher", chat_id: session.chat_id,
       });
       const msgs: ChatMessage[] = data?.messages ?? [];
+      // Flush voice transcripts that arrived while on another page
       const pending = voiceSession?.chatId === session.chat_id
-        ? drainPendingTranscripts().map(p => ({ role: p.role, content: p.text, timestamp: Date.now() / 1000 }))
+        ? drainPendingTranscripts().map(p => ({ role: p.role as MessageRole, content: p.text, timestamp: Date.now() / 1000 }))
         : [];
-      if (msgs.length > 0) {
+      if (msgs.length > 0 || pending.length > 0) {
         setMessages([...msgs, ...pending]);
         // Retroactively rename chats still using the default title
         if (session.title === "New Chat") {
