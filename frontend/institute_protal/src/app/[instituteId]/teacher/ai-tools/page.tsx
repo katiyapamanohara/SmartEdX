@@ -1,6 +1,7 @@
   "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
+import { FiPlus, FiTrash2, FiMessageSquare, FiEdit2, FiBookOpen } from "react-icons/fi";
 import { authService } from "@/services/authService";
 import { examService, Exam } from "@/services/examService";
 import { instituteService } from "@/services/instituteService";
@@ -167,6 +168,53 @@ interface TeacherChatMessage {
   role: "user" | "assistant";
   content: string;
   fileName?: string;
+  timestamp?: number;
+}
+
+interface TeacherChatSession {
+  chat_id: string;
+  course_id: string;
+  role: string;
+  title: string;
+  created_at: number;
+  updated_at: number;
+  message_count: number;
+  msg_collection: string;
+}
+
+// ── Chat session API helpers ───────────────────────────────────────────────────
+
+async function chatApiPost(path: string, body: unknown) {
+  const token = authService.getToken();
+  const res = await fetch(`${API}/api/ai/${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(res.statusText);
+  return res.status === 204 ? null : res.json();
+}
+
+async function chatApiGet(path: string, params: Record<string, string>) {
+  const token = authService.getToken();
+  const qs = new URLSearchParams(params).toString();
+  const res = await fetch(`${API}/api/ai/${path}?${qs}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error(res.statusText);
+  return res.json();
+}
+
+async function chatApiDelete(path: string, params: Record<string, string>) {
+  const token = authService.getToken();
+  const qs = new URLSearchParams(params).toString();
+  await fetch(`${API}/api/ai/${path}?${qs}`, {
+    method: "DELETE",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -252,9 +300,17 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
   selectedCourse: { id: string; name: string; coverImage?: string } | null;
   onCourseSelect: (course: { id: string; name: string; coverImage?: string } | null) => void;
 }) {
-  const [courses, setCourses]             = useState<{ id: string; name: string; coverImage?: string }[]>([]);
+  const [courses, setCourses]               = useState<{ id: string; name: string; coverImage?: string; code?: string }[]>([]);
   const [coursesLoading, setCoursesLoading] = useState(true);
   const [userProfilePicture, setUserProfilePicture] = useState<string | null>(null);
+
+  // ── Chat session state ──────────────────────────────────────────────────
+  const [chatSessions, setChatSessions]         = useState<TeacherChatSession[]>([]);
+  const [activeChatId, setActiveChatId]         = useState<string | null>(null);
+  const [sessionsLoading, setSessionsLoading]   = useState(false);
+  const [dropdownOpen, setDropdownOpen]         = useState(false);
+  const [renamingId, setRenamingId]             = useState<string | null>(null);
+  const [renameValue, setRenameValue]           = useState("");
 
   const [messages, setMessages]   = useState<TeacherChatMessage[]>([]);
   const [input, setInput]         = useState("");
@@ -262,7 +318,7 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
 
   const { startSession } = useVoiceAgent();
-  const [isDark, setIsDark]       = useState(false);
+  const [isDark, setIsDark] = useState(false);
 
   const { hasFeature } = useFeatures();
   const voiceEnabled = hasFeature("voice_agent");
@@ -270,6 +326,7 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
   const bottomRef   = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef  = useRef<HTMLDivElement>(null);
 
   // Dark-mode detection
   useEffect(() => {
@@ -280,13 +337,26 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
     return () => obs.disconnect();
   }, []);
 
-  // Load all courses assigned to this teacher
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    if (dropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [dropdownOpen]);
+
+  // Load courses
   useEffect(() => {
     const user = authService.getUser();
     setUserProfilePicture(user?.profilePicture ?? null);
     instituteService.getMyTeacherCourses(instituteId)
-      .then(courses => {
-        setCourses(courses.map(c => ({ id: c.id, name: c.name, coverImage: c.coverImage })));
+      .then(cs => {
+        setCourses(cs.map(c => ({ id: c.id, name: c.name, coverImage: c.coverImage, code: c.code })));
         setCoursesLoading(false);
       })
       .catch(() => { setCourses([]); setCoursesLoading(false); });
@@ -303,14 +373,149 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
     ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`;
   }, [input]);
 
-  function handleSelectCourse(course: { id: string; name: string; coverImage?: string }) {
-    onCourseSelect(course);
+  // Save messages to Qdrant whenever they change
+  useEffect(() => {
+    if (!messages.length || !activeChatId || !selectedCourse?.id) return;
+    const user = authService.getUser();
+    if (!user?.id) return;
+    chatApiPost("chat-sessions/messages/save", {
+      institute_id: instituteId,
+      course_id:    selectedCourse.id,
+      user_id:      user.id,
+      role:         "teacher",
+      chat_id:      activeChatId,
+      messages:     messages.map(m => ({ role: m.role, content: m.content, timestamp: m.timestamp })),
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages]);
+
+  // ── Session CRUD ──────────────────────────────────────────────────────────
+
+  async function loadChatSessions(course: { id: string; name: string }) {
+    const user = authService.getUser();
+    if (!user?.id) return [];
+    setSessionsLoading(true);
+    try {
+      const data = await chatApiGet("chat-sessions/list", {
+        institute_id: instituteId,
+        user_id:      user.id,
+        course_id:    course.id,
+        role:         "teacher",
+      });
+      const sessions: TeacherChatSession[] = data ?? [];
+      setChatSessions(sessions);
+      return sessions;
+    } catch {
+      setChatSessions([]);
+      return [];
+    } finally {
+      setSessionsLoading(false);
+    }
+  }
+
+  async function openChat(session: TeacherChatSession) {
+    setActiveChatId(session.chat_id);
+    setMessages([]);
+    const user = authService.getUser();
+    if (!user?.id) return;
+    try {
+      const data = await chatApiGet("chat-sessions/messages/load", {
+        institute_id: instituteId,
+        course_id:    session.course_id,
+        user_id:      user.id,
+        role:         "teacher",
+        chat_id:      session.chat_id,
+      });
+      const serverMsgs: TeacherChatMessage[] = (data?.messages ?? []) as TeacherChatMessage[];
+      if (serverMsgs.length > 0) {
+        setMessages(serverMsgs);
+        if (session.title === "New Chat") {
+          const firstUserMsg = serverMsgs.find(m => m.role === "user");
+          if (firstUserMsg) {
+            const title = firstUserMsg.content.slice(0, 40).trim();
+            if (title) {
+              setChatSessions(prev => prev.map(s => s.chat_id === session.chat_id ? { ...s, title } : s));
+              chatApiPost("chat-sessions/rename", {
+                institute_id: instituteId, user_id: user.id, course_id: session.course_id,
+                role: "teacher", chat_id: session.chat_id, title,
+              }).catch(() => {});
+            }
+          }
+        }
+        return;
+      }
+    } catch { /* fall through */ }
+    showWelcome(session.course_id, selectedCourse?.name ?? "");
+  }
+
+  async function createNewChat(course: { id: string; name: string } | null = selectedCourse) {
+    if (!course) return;
+    const user = authService.getUser();
+    if (!user?.id) return;
+    try {
+      const meta: TeacherChatSession = await chatApiPost("chat-sessions/create", {
+        institute_id: instituteId,
+        course_id:    course.id,
+        user_id:      user.id,
+        role:         "teacher",
+        title:        "New Chat",
+      });
+      setChatSessions(prev => [meta, ...prev]);
+      setActiveChatId(meta.chat_id);
+      setMessages([]);
+      showWelcome(course.id, course.name);
+    } catch {
+      const localId = Math.random().toString(36).slice(2, 10);
+      setActiveChatId(localId);
+      setMessages([]);
+      showWelcome(course.id, course.name);
+    }
+  }
+
+  async function deleteChat(session: TeacherChatSession) {
+    const user = authService.getUser();
+    if (!user?.id) return;
+    try {
+      await chatApiDelete("chat-sessions/delete", {
+        institute_id: instituteId,
+        user_id:      user.id,
+        course_id:    session.course_id,
+        role:         "teacher",
+        chat_id:      session.chat_id,
+      });
+    } catch { /* ignore */ }
+    const remaining = chatSessions.filter(s => s.chat_id !== session.chat_id);
+    setChatSessions(remaining);
+    if (activeChatId === session.chat_id) {
+      if (remaining.length > 0) await openChat(remaining[0]);
+      else await createNewChat();
+    }
+  }
+
+  async function commitRename(session: TeacherChatSession) {
+    const title = renameValue.trim() || "New Chat";
+    setRenamingId(null);
+    setChatSessions(prev => prev.map(s => s.chat_id === session.chat_id ? { ...s, title } : s));
+    const user = authService.getUser();
+    if (!user?.id) return;
+    chatApiPost("chat-sessions/rename", {
+      institute_id: instituteId,
+      user_id:      user.id,
+      course_id:    session.course_id,
+      role:         "teacher",
+      chat_id:      session.chat_id,
+      title,
+    }).catch(() => {});
+  }
+
+  function showWelcome(_courseId: string, courseName: string) {
     const user = authService.getUser();
     const name = user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() : "";
     setMessages([{
       role: "assistant",
+      timestamp: Date.now() / 1000,
       content:
-        `Hi${name ? ` ${name}` : ""}! 👋 I'm your AI teaching assistant for **${course.name}**.\n\n` +
+        `Hi${name ? ` ${name}` : ""}! 👋 I'm your AI teaching assistant for **${courseName}**.\n\n` +
         `I can help you with:\n` +
         `• Craft lesson plans & structured activities\n` +
         `• Explain difficult concepts or suggest analogies\n` +
@@ -322,22 +527,48 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
     }]);
   }
 
+  async function handleSelectCourse(course: { id: string; name: string; coverImage?: string }) {
+    onCourseSelect(course);
+    setMessages([]);
+    setActiveChatId(null);
+    const sessions = await loadChatSessions(course);
+    if (sessions.length > 0) {
+      await openChat(sessions[0]);
+    } else {
+      await createNewChat(course);
+    }
+  }
+
   const sendMessage = useCallback(async (text: string, file?: File | null) => {
     const trimmed = text.trim();
     if ((!trimmed && !file) || chatLoading) return;
 
     const messageText = trimmed || `Please analyze this file: ${file!.name}`;
-    const userMsg: TeacherChatMessage = { role: "user", content: messageText, fileName: file?.name };
-    const updated = [...messages, userMsg];
-    setMessages(updated);
+    const userMsg: TeacherChatMessage = { role: "user", content: messageText, fileName: file?.name, timestamp: Date.now() / 1000 };
     setInput("");
     setPendingFile(null);
+
+    // Auto-rename on first user message
+    const isFirstUserMsg = !messages.some(m => m.role === "user");
+    if (isFirstUserMsg && activeChatId && selectedCourse?.id) {
+      const title = messageText.slice(0, 40).trim();
+      if (title) {
+        setChatSessions(prev => prev.map(s => s.chat_id === activeChatId ? { ...s, title } : s));
+        const u = authService.getUser();
+        if (u?.id) chatApiPost("chat-sessions/rename", {
+          institute_id: instituteId, user_id: u.id, course_id: selectedCourse.id,
+          role: "teacher", chat_id: activeChatId, title,
+        }).catch(() => {});
+      }
+    }
+
+    const updated = [...messages, userMsg];
+    setMessages(updated);
     setChatLoading(true);
 
     try {
       const token = getToken();
       const user  = authService.getUser();
-
       const formData = new FormData();
       formData.append("messages",    JSON.stringify(updated.map(m => ({ role: m.role, content: m.content }))));
       formData.append("institute_id", instituteId);
@@ -356,16 +587,15 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
       });
-
       if (!res.ok) throw new Error(res.statusText);
       const data: { reply: string } = await res.json();
-      setMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
+      setMessages(prev => [...prev, { role: "assistant", content: data.reply, timestamp: Date.now() / 1000 }]);
     } catch {
-      setMessages(prev => [...prev, { role: "assistant", content: "Sorry, something went wrong. Please try again!" }]);
+      setMessages(prev => [...prev, { role: "assistant", content: "Sorry, something went wrong. Please try again!", timestamp: Date.now() / 1000 }]);
     } finally {
       setChatLoading(false);
     }
-  }, [messages, chatLoading, instituteId, selectedCourse]);
+  }, [messages, chatLoading, activeChatId, instituteId, selectedCourse]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(input, pendingFile); }
@@ -378,57 +608,87 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
   // ── Course selection screen ───────────────────────────────────────────────
   if (!selectedCourse) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 px-8">
-        <div className="max-w-xl w-full">
-          <div className="text-center mb-8">
-            
-            <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90 mb-1">Select a Course to Start</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Get tailored AI teaching assistance for a specific course.</p>
-          </div>
-
-          {coursesLoading ? (
-            <div className="space-y-3">
-              {[0,1,2].map(i => <div key={i} className="h-16 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />)}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {courses.length === 0 && (
-                <p className="text-center text-sm text-gray-400 dark:text-gray-500 pb-4">No courses with students found — starting in general mode.</p>
-              )}
-              {courses.map(course => (
-                <button key={course.id} onClick={() => handleSelectCourse(course)}
-                className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl bg-brand-50 dark:bg-brand-500/10 hover:bg-brand-100 dark:hover:bg-brand-500/20 transition-all text-left border border-brand-100 dark:border-brand-800">
-                  {course.coverImage ? (
-                    <img src={course.coverImage} alt={course.name} className="w-10 h-10 rounded-lg object-cover shrink-0" />
-                  ) : (
-                    <div className="w-10 h-10 rounded-lg bg-linear-to-br from-violet-500 to-blue-400 shrink-0 flex items-center justify-center">
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" /></svg>
+      <div className="flex flex-col items-center justify-start h-[calc(100vh-8rem)] max-h-[900px] rounded-2xl dark:bg-gray-900 overflow-hidden">
+        <div className="w-full flex-1 flex items-start justify-center pt-16 px-6 pb-8">
+          <div className="max-w-xl w-full">
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center mb-4">
+                {(() => {
+                  const previews = courses.filter(c => c.coverImage).slice(0, 3);
+                  if (coursesLoading || previews.length === 0) {
+                    return (
+                      <div className="w-14 h-14 rounded-2xl bg-brand-50 dark:bg-brand-500/10 flex items-center justify-center">
+                        <FiBookOpen className="w-7 h-7 text-brand-500" />
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="flex items-center">
+                      {previews.map((c, i) => (
+                        <img key={c.id} src={c.coverImage!} alt={c.name}
+                          className="w-12 h-12 rounded-xl object-cover border-2 border-white dark:border-gray-900 shadow-sm"
+                          style={{ marginLeft: i === 0 ? 0 : "-10px", zIndex: previews.length - i }} />
+                      ))}
                     </div>
-                  )}
+                  );
+                })()}
+              </div>
+              <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90 mb-1">Select a Course to Start</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Get tailored AI teaching assistance for a specific course.</p>
+            </div>
+
+            {coursesLoading ? (
+              <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="h-16 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
+              ))}</div>
+            ) : (
+              <div className="space-y-3">
+                {courses.length === 0 && (
+                  <p className="text-center text-sm text-gray-400 dark:text-gray-500 pb-4">No courses found — starting in general mode.</p>
+                )}
+                {courses.map(course => (
+                  <button key={course.id} onClick={() => handleSelectCourse(course)}
+                    className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl bg-white dark:bg-gray-800/50 hover:bg-brand-50/50 dark:hover:bg-brand-500/5 transition-all text-left group">
+                    {course.coverImage ? (
+                      <img src={course.coverImage} alt={course.name} className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-linear-to-br from-brand-400 to-indigo-500 shrink-0 flex items-center justify-center">
+                        <FiBookOpen className="w-4 h-4 text-white" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800 dark:text-white truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">{course.name}</p>
+                      {course.code && <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{course.code}</p>}
+                    </div>
+                    <svg className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:text-brand-400 transition-colors shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                    </svg>
+                  </button>
+                ))}
+                <button onClick={() => handleSelectCourse({ id: "general", name: "General Teaching" })}
+                  className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl bg-white dark:bg-gray-800/50 hover:bg-brand-50/50 dark:hover:bg-brand-500/5 transition-all text-left group">
+                  <div className="w-10 h-10 rounded-lg bg-linear-to-br from-violet-500 to-blue-400 shrink-0 flex items-center justify-center">
+                    <FiBookOpen className="w-4 h-4 text-white" />
+                  </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800 dark:text-white truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">{course.name}</p>
+                    <p className="text-sm font-medium text-gray-800 dark:text-white">General AI Assistant</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Chat about any teaching topic</p>
                   </div>
                   <svg className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:text-brand-400 transition-colors shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                   </svg>
                 </button>
-              ))}
-              <button onClick={() => handleSelectCourse({ id: "general", name: "General Teaching" })}
-                className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl bg-brand-50 dark:bg-brand-500/10 hover:bg-brand-100 dark:hover:bg-brand-500/20 transition-all text-left border border-brand-100 dark:border-brand-800">
-               
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800 dark:text-white">General AI Assistant</p>
-                  <p className="text-xs text-gray-400 mt-0.5">Chat about any teaching topic</p>
-                </div>
-              </button>
-            </div>
-          )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
   }
 
-  // ── Chat screen (full-height, matches student layout) ────────────────────
+  const activeSession = chatSessions.find(s => s.chat_id === activeChatId);
+
+  // ── Chat screen ───────────────────────────────────────────────────────────
   const voiceWsUrl = (() => {
     const user       = authService.getUser();
     const wsBase     = process.env.NEXT_PUBLIC_VOICE_AGENT_WS_URL ?? "ws://localhost:5001/voice-agent";
@@ -441,117 +701,220 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
   })();
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-6.25rem)] sm:h-[calc(100vh-9rem)] sm:rounded-2xl overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 sm:px-6 py-4 shrink-0 bg-linear-to-r sm:rounded-2xl from-brand-50 to-indigo-50 dark:from-brand-500/5 dark:to-indigo-500/5">
-        <button onClick={() => { onCourseSelect(null); setMessages([]); }}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-white/60 dark:hover:bg-gray-800 transition-colors shrink-0"
-          title="Change course">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-          </svg>
-        </button>
-        {selectedCourse.coverImage ? (
-          <img src={selectedCourse.coverImage} alt={selectedCourse.name} className="w-10 h-10 rounded-xl object-cover shrink-0 shadow-md" />
-        ) : (
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-linear-to-br from-brand-400 to-indigo-500 shadow-md shadow-brand-500/25 shrink-0">
-            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" /></svg>
+    <div className="flex h-[calc(100vh-8rem)] max-h-[900px] rounded-2xl overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0">
+
+        {/* Header */}
+        <div className="flex items-center gap-3 px-5 py-3.5 shrink-0
+          bg-linear-to-r from-brand-50 to-indigo-50 dark:from-brand-500/5 dark:to-indigo-500/5">
+
+          {/* Chat history dropdown */}
+          <div ref={dropdownRef} className="relative">
+            <button
+              onClick={() => setDropdownOpen(v => !v)}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-white/60 dark:hover:bg-gray-800 transition-colors shrink-0"
+              title="Chat history"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+              </svg>
+            </button>
+
+            {dropdownOpen && (
+              <div className="absolute top-full left-0 mt-1 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
+                <div className="flex items-center justify-between px-3 py-2.5 border-b border-gray-200 dark:border-gray-700">
+                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Chats</span>
+                  <button
+                    onClick={() => { createNewChat(); setDropdownOpen(false); }}
+                    title="New chat"
+                    className="w-5 h-5 flex items-center justify-center rounded text-gray-400 hover:text-brand-500 hover:bg-brand-50 dark:hover:bg-brand-500/10 transition-colors"
+                  >
+                    <FiPlus className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="max-h-96 overflow-y-auto py-1 custom-scrollbar">
+                  {sessionsLoading ? (
+                    <div className="space-y-1 px-2 pt-2">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className="h-7 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                      ))}
+                    </div>
+                  ) : chatSessions.length === 0 ? (
+                    <p className="text-[11px] text-gray-400 text-center py-4">No chats yet</p>
+                  ) : (
+                    chatSessions.map(session => (
+                      <div
+                        key={session.chat_id}
+                        className={`group flex items-center gap-1.5 mx-1 my-0.5 px-2 py-1.5 rounded cursor-pointer transition-colors ${
+                          session.chat_id === activeChatId
+                            ? "bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400"
+                            : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                        }`}
+                        onClick={() => {
+                          if (renamingId !== session.chat_id) {
+                            openChat(session);
+                            setDropdownOpen(false);
+                          }
+                        }}
+                      >
+                        <FiMessageSquare className="w-3 h-3 shrink-0 opacity-60" />
+                        {renamingId === session.chat_id ? (
+                          <input
+                            autoFocus
+                            value={renameValue}
+                            onChange={e => setRenameValue(e.target.value)}
+                            onBlur={() => commitRename(session)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") commitRename(session);
+                              if (e.key === "Escape") setRenamingId(null);
+                            }}
+                            className="flex-1 text-xs bg-transparent border-b border-brand-400 outline-none"
+                            onClick={e => e.stopPropagation()}
+                          />
+                        ) : (
+                          <span className="flex-1 text-xs truncate">{session.title}</span>
+                        )}
+                        {session.chat_id === activeChatId && renamingId !== session.chat_id && (
+                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={e => { e.stopPropagation(); setRenamingId(session.chat_id); setRenameValue(session.title); }}
+                              className="w-4 h-4 flex items-center justify-center rounded hover:bg-brand-100 dark:hover:bg-brand-500/20 transition-colors"
+                            >
+                              <FiEdit2 className="w-2 h-2" />
+                            </button>
+                            <button
+                              onClick={e => { e.stopPropagation(); deleteChat(session); }}
+                              className="w-4 h-4 flex items-center justify-center rounded hover:bg-red-100 dark:hover:bg-red-500/20 text-red-400 transition-colors"
+                            >
+                              <FiTrash2 className="w-2 h-2" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Course label / back button */}
+                <div className="px-3 py-2.5 border-t border-gray-200 dark:border-gray-700">
+                  <button
+                    onClick={() => { onCourseSelect(null); setMessages([]); setActiveChatId(null); setChatSessions([]); setDropdownOpen(false); }}
+                    className="flex items-center gap-2 w-full text-left hover:opacity-70 transition-opacity"
+                  >
+                    {selectedCourse?.coverImage ? (
+                      <img src={selectedCourse.coverImage} alt="" className="w-4 h-4 rounded object-cover shrink-0" />
+                    ) : (
+                      <div className="w-4 h-4 rounded bg-brand-100 dark:bg-brand-500/20 shrink-0 flex items-center justify-center">
+                        <FiBookOpen className="w-2 h-2 text-brand-500" />
+                      </div>
+                    )}
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400 truncate">{selectedCourse?.name}</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        )}
-        <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90 truncate">{selectedCourse.name}</h3>
-          <p className="text-[11px] text-gray-500 dark:text-gray-400">AI Teaching Assistant · SmartEdX</p>
-        </div>
-        <span className="flex items-center gap-1.5 text-[11px] font-medium text-green-600 dark:text-green-500 shrink-0">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-          Ready to help
-        </span>
-      </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-4 custom-scrollbar">
-        {messages.map((msg, i) => <TeacherMessageBubble key={i} msg={msg} userProfilePicture={userProfilePicture} />)}
-        {chatLoading && <ChatTypingIndicator />}
-        <div ref={bottomRef} />
-      </div>
-
-      {/* Pending file badge */}
-      {pendingFile && (
-        <div className="mx-6 mb-2 flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-brand-50 dark:bg-brand-500/10">
-          <svg className="w-4 h-4 text-brand-500 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
-          </svg>
-          <span className="text-[11px] text-brand-700 dark:text-brand-400 flex-1 truncate">{pendingFile.name}</span>
-          <button onClick={() => setPendingFile(null)} className="text-brand-400 hover:text-brand-600 transition-colors">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-            </svg>
+          {selectedCourse.coverImage ? (
+            <img src={selectedCourse.coverImage} alt={selectedCourse.name} className="w-9 h-9 rounded-xl object-cover shrink-0 shadow-md" />
+          ) : (
+            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-linear-to-br from-brand-400 to-indigo-500 shadow-md shadow-brand-500/25 shrink-0">
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" /></svg>
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90 truncate">
+              {activeSession?.title ?? selectedCourse.name}
+            </h3>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400">AI Teaching Assistant · SmartEdX</p>
+          </div>
+          <button onClick={() => createNewChat()} title="New chat"
+            className="shrink-0 flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-brand-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors shadow-sm">
+            <FiPlus className="w-3 h-3" />
+            New chat
           </button>
+          <span className="flex items-center gap-1.5 text-[11px] font-medium text-success-600 dark:text-success-500 shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-success-500 animate-pulse" />Ready
+          </span>
         </div>
-      )}
 
-      {/* Input */}
-      <div className="px-4 sm:px-6 pb-2 sm:pb-6 pt-1 shrink-0">
-        <div className="flex items-center gap-2 rounded-full bg-white dark:bg-gray-800 shadow-md px-4 py-3">
-          {/* Hidden file input */}
-          <input ref={fileInputRef} type="file"
-            accept=".pdf,.docx,.pptx,.txt,.csv,.md,.png,.jpg,.jpeg,.webp"
-            onChange={handleFileChange} className="hidden" />
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4 custom-scrollbar">
+          {messages.map((msg, i) => <TeacherMessageBubble key={i} msg={msg} userProfilePicture={userProfilePicture} />)}
+          {chatLoading && <ChatTypingIndicator />}
+          <div ref={bottomRef} />
+        </div>
 
-          {/* Attach button */}
-          <button onClick={() => fileInputRef.current?.click()} disabled={chatLoading} title="Attach file"
-            className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-40">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        {/* Pending file badge */}
+        {pendingFile && (
+          <div className="mx-5 mb-2 flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-brand-50 dark:bg-brand-500/10">
+            <svg className="w-4 h-4 text-brand-500 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
             </svg>
-          </button>
-
-          {/* Textarea */}
-          <textarea ref={textareaRef} rows={1} value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={pendingFile ? `Ask about ${pendingFile.name}…` : "Ask anything…"}
-            disabled={chatLoading}
-            className="flex-1 resize-none bg-transparent text-sm text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 outline-none leading-relaxed disabled:opacity-50 max-h-[120px]" />
-
-          {/* Send / Mic combo — mirrors student behaviour */}
-          <button
-            onClick={() =>
-              input.trim() || pendingFile
-                ? sendMessage(input, pendingFile)
-                : voiceEnabled ? startSession({
-                    isDark,
-                    instituteLogo: null,
-                    studentContext: { selected_course: selectedCourse.name },
-                    course: { id: selectedCourse.id, name: selectedCourse.name, code: "" } as any,
-                    instituteId,
-                    wsUrl: voiceWsUrl,
-                    label: "Teacher Assistant",
-                  }) : undefined
-            }
-            disabled={chatLoading || (!input.trim() && !pendingFile && !voiceEnabled)}
-            title={!voiceEnabled && !input.trim() && !pendingFile ? "Voice Agent not enabled" : undefined}
-            className="shrink-0 w-9 h-9 rounded-full bg-gray-700 dark:bg-gray-600 hover:bg-gray-800 dark:hover:bg-gray-500 text-white flex items-center justify-center transition-all hover:scale-105 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {input.trim() || pendingFile ? (
-              /* Send arrow */
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+            <span className="text-[11px] text-brand-700 dark:text-brand-400 flex-1 truncate">{pendingFile.name}</span>
+            <button onClick={() => setPendingFile(null)} className="text-brand-400 hover:text-brand-600 transition-colors">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
               </svg>
-            ) : (
-              /* Mic icon */
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"
-                style={{ opacity: voiceEnabled ? 1 : 0.4 }}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+            </button>
+          </div>
+        )}
+
+        {/* Input */}
+        <div className="px-5 pb-5 pt-1 shrink-0">
+          <div className="flex items-center gap-2 rounded-full bg-white dark:bg-gray-800 shadow-md px-4 py-3">
+            <input ref={fileInputRef} type="file"
+              accept=".pdf,.docx,.pptx,.txt,.csv,.md,.png,.jpg,.jpeg,.webp"
+              onChange={handleFileChange} className="hidden" />
+            <button onClick={() => fileInputRef.current?.click()} disabled={chatLoading} title="Attach file"
+              className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-40">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
               </svg>
-            )}
-          </button>
+            </button>
+            <textarea ref={textareaRef} rows={1} value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={pendingFile ? `Ask about ${pendingFile.name}…` : "Ask anything…"}
+              disabled={chatLoading}
+              className="flex-1 resize-none bg-transparent text-sm text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 outline-none leading-relaxed disabled:opacity-50 max-h-[120px]" />
+            <button
+              onClick={() =>
+                input.trim() || pendingFile
+                  ? sendMessage(input, pendingFile)
+                  : voiceEnabled ? startSession({
+                      isDark,
+                      instituteLogo: null,
+                      studentContext: { selected_course: selectedCourse.name },
+                      course: { id: selectedCourse.id, name: selectedCourse.name, code: "" } as any,
+                      instituteId,
+                      wsUrl: voiceWsUrl,
+                      label: "Teacher Assistant",
+                    }) : undefined
+              }
+              disabled={chatLoading || (!input.trim() && !pendingFile && !voiceEnabled)}
+              title={!voiceEnabled && !input.trim() && !pendingFile ? "Voice Agent not enabled" : undefined}
+              className="shrink-0 w-9 h-9 rounded-full bg-gray-700 dark:bg-gray-600 hover:bg-gray-800 dark:hover:bg-gray-500 text-white flex items-center justify-center transition-all hover:scale-105 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {input.trim() || pendingFile ? (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"
+                  style={{ opacity: voiceEnabled ? 1 : 0.4 }}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+                </svg>
+              )}
+            </button>
+          </div>
+          <p className="mt-2 text-center text-[10px] text-gray-400 dark:text-gray-600">
+            This AI can make mistakes. Please verify important info.
+          </p>
         </div>
-        <p className="mt-2 text-center text-[10px] text-gray-400 dark:text-gray-600">
-          This AI can make mistakes. Please verify important info.
-        </p>
-      </div>
 
+      </div>
     </div>
   );
 }

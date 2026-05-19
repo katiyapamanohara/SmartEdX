@@ -117,7 +117,7 @@ export default function AiChatPage() {
 
   const { hasFeature }  = useFeatures();
   const voiceEnabled    = hasFeature("voice_agent");
-  const { startSession, session: voiceSession, sendTextToVoice, setTranscriptHandler } = useVoiceAgent();
+  const { startSession, session: voiceSession, sendTextToVoice, setTranscriptHandler, drainPendingTranscripts } = useVoiceAgent();
 
   const bottomRef   = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -291,6 +291,7 @@ export default function AiChatPage() {
     const user = authService.getUser();
     if (!user?.id) return;
 
+    let serverMsgs: ChatMessage[] = [];
     try {
       const data = await apiGet("chat-sessions/messages/load", {
         institute_id: instituteId,
@@ -299,26 +300,35 @@ export default function AiChatPage() {
         role:         "student",
         chat_id:      session.chat_id,
       });
-      const msgs = (data?.messages ?? []) as ChatMessage[];
-      if (msgs.length > 0) {
-        setMessages(msgs);
-        // Retroactively rename chats that still have the default title
-        if (session.title === "New Chat") {
-          const firstUserMsg = msgs.find((m) => m.role === "user");
-          if (firstUserMsg) {
-            const title = firstUserMsg.content.slice(0, 40).trim();
-            if (title) {
-              setChatSessions((prev) => prev.map((s) => s.chat_id === session.chat_id ? { ...s, title } : s));
-              apiPost("chat-sessions/rename", {
-                institute_id: instituteId, user_id: user.id, course_id: session.course_id,
-                role: "student", chat_id: session.chat_id, title,
-              }).catch(() => {});
-            }
+      serverMsgs = (data?.messages ?? []) as ChatMessage[];
+    } catch { /* fall through */ }
+
+    // Flush any voice transcripts that arrived while in PiP on another page
+    const pending = voiceSession?.chatId === session.chat_id ? drainPendingTranscripts() : [];
+    const pendingMsgs: ChatMessage[] = pending.map((p) => ({
+      role: p.role,
+      content: p.text,
+      timestamp: Date.now() / 1000,
+    }));
+
+    if (serverMsgs.length > 0 || pendingMsgs.length > 0) {
+      setMessages([...serverMsgs, ...pendingMsgs]);
+      // Retroactively rename chats that still have the default title
+      if (session.title === "New Chat") {
+        const firstUserMsg = serverMsgs.find((m) => m.role === "user");
+        if (firstUserMsg) {
+          const title = firstUserMsg.content.slice(0, 40).trim();
+          if (title) {
+            setChatSessions((prev) => prev.map((s) => s.chat_id === session.chat_id ? { ...s, title } : s));
+            apiPost("chat-sessions/rename", {
+              institute_id: instituteId, user_id: user.id, course_id: session.course_id,
+              role: "student", chat_id: session.chat_id, title,
+            }).catch(() => {});
           }
         }
-        return;
       }
-    } catch { /* fall through */ }
+      return;
+    }
 
     // Empty chat — show welcome message
     showWelcome(ctx, session.chat_id);
@@ -329,6 +339,9 @@ export default function AiChatPage() {
     if (!course) return;
     const user = authService.getUser();
     if (!user?.id) return;
+
+    // Always use the course param for these fields so the welcome message is never "undefined"
+    const welcomeCtx: StudentContext = { ...ctx, selected_course: course.name, course_id: course.id };
 
     try {
       const meta: ChatSession = await apiPost("chat-sessions/create", {
@@ -341,13 +354,13 @@ export default function AiChatPage() {
       setChatSessions((prev) => [meta, ...prev]);
       setActiveChatId(meta.chat_id);
       setMessages([]);
-      showWelcome(ctx, meta.chat_id);
+      showWelcome(welcomeCtx, meta.chat_id);
     } catch {
       // fallback: just clear messages with local id
       const localId = Math.random().toString(36).slice(2, 10);
       setActiveChatId(localId);
       setMessages([]);
-      showWelcome(ctx, localId);
+      showWelcome(welcomeCtx, localId);
     }
   }
 

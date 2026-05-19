@@ -19,6 +19,11 @@ export interface VoiceSessionParams {
   label?: string;
 }
 
+export interface PendingTranscript {
+  role: "user" | "assistant";
+  text: string;
+}
+
 interface VoiceAgentContextValue {
   session: VoiceSessionParams | null;
   startSession: (params: VoiceSessionParams) => void;
@@ -31,6 +36,8 @@ interface VoiceAgentContextValue {
   setTranscriptHandler: (fn: ((role: "user" | "assistant", text: string) => void) | null) => void;
   /** Fired by VoiceModal when a text transcript arrives */
   dispatchTranscript: (role: "user" | "assistant", text: string) => void;
+  /** Returns and clears transcripts buffered while no page handler was registered */
+  drainPendingTranscripts: () => PendingTranscript[];
 }
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -49,12 +56,15 @@ export function VoiceAgentProvider({ children }: { children: React.ReactNode }) 
   const [session, setSession] = useState<VoiceSessionParams | null>(null);
   const sendFnRef             = useRef<((text: string) => void) | null>(null);
   const transcriptHandlerRef  = useRef<((role: "user" | "assistant", text: string) => void) | null>(null);
+  const pendingTranscriptsRef = useRef<PendingTranscript[]>([]);
 
   const startSession = useCallback((params: VoiceSessionParams) => {
+    pendingTranscriptsRef.current = [];
     setSession(params);
   }, []);
 
   const endSession = useCallback(() => {
+    pendingTranscriptsRef.current = [];
     setSession(null);
     sendFnRef.current = null;
   }, []);
@@ -72,7 +82,18 @@ export function VoiceAgentProvider({ children }: { children: React.ReactNode }) 
   }, []);
 
   const dispatchTranscript = useCallback((role: "user" | "assistant", text: string) => {
-    transcriptHandlerRef.current?.(role, text);
+    if (transcriptHandlerRef.current) {
+      transcriptHandlerRef.current(role, text);
+    } else {
+      // No page handler registered (user navigated away) — buffer the transcript
+      pendingTranscriptsRef.current.push({ role, text });
+    }
+  }, []);
+
+  const drainPendingTranscripts = useCallback((): PendingTranscript[] => {
+    const pending = pendingTranscriptsRef.current;
+    pendingTranscriptsRef.current = [];
+    return pending;
   }, []);
 
   return (
@@ -80,6 +101,7 @@ export function VoiceAgentProvider({ children }: { children: React.ReactNode }) 
       session, startSession, endSession,
       sendTextToVoice, setVoiceSendFn,
       setTranscriptHandler, dispatchTranscript,
+      drainPendingTranscripts,
     }}>
       {children}
     </VoiceAgentContext.Provider>
