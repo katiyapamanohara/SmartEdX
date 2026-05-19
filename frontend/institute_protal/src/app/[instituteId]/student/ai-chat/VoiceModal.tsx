@@ -47,6 +47,10 @@ export interface VoiceModalProps {
   onCompleted?: (result: EvalResult) => void;
   /** When true, force-switch to PiP (e.g. user navigated away from the chat page) */
   forcePip?: boolean;
+  /** Called with text transcripts extracted from voice WS messages */
+  onTranscript?: (role: "user" | "assistant", text: string) => void;
+  /** Called once the WS is open and ready to accept text messages */
+  onSendTextReady?: (fn: (text: string) => void) => void;
 }
 
 // ─── PCM / WAV helpers ────────────────────────────────────────────────────────
@@ -78,6 +82,7 @@ type AvatarState = "idle" | "speaking" | "listening";
 export default function VoiceModal({
   isDark, instituteLogo, context, selectedCourse, instituteId, onClose,
   wsUrl: wsUrlProp, label, initMessage, assessmentId, onCompleted, forcePip,
+  onTranscript, onSendTextReady,
 }: VoiceModalProps) {
   const [step, setStep]               = useState<Step>("connecting");
   const [avatarState, setAvatarState] = useState<AvatarState>("idle");
@@ -121,6 +126,12 @@ export default function VoiceModal({
   const screenVideoRef   = useRef<HTMLVideoElement>(null);
   const screenCanvasRef  = useRef<HTMLCanvasElement>(null);
   const screenIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Transcript accumulation buffers (flushed on turnComplete)
+  const outputTranscriptBufRef = useRef<string>("");
+  const inputTranscriptBufRef  = useRef<string>("");
+  // Stable ref to onTranscript so the WS closure never goes stale
+  const onTranscriptRef = useRef(onTranscript);
+  useEffect(() => { onTranscriptRef.current = onTranscript; }, [onTranscript]);
   // Background-tab keepalive refs
   const silentOscRef     = useRef<OscillatorNode | null>(null);
   const wsKeepaliveRef   = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -132,9 +143,23 @@ export default function VoiceModal({
     }
   }, []);
 
+  // ── Activate PiP: in-browser widget + system PiP if browser supports it ──
+  const activatePip = useCallback(async () => {
+    setPipMode(true);
+    if ((window as any).documentPictureInPicture && !sysPipWindowRef.current) {
+      await openSystemPip();
+    }
+  }, []);
+
   // ── Auto-switch to PiP when user navigates away from chat page ───────────
   useEffect(() => {
-    if (forcePip) setPipMode(true);
+    if (!forcePip) return;
+    setPipMode(true);
+    // Attempt system PiP — browser may block if no user gesture, that's fine
+    if ((window as any).documentPictureInPicture && !sysPipWindowRef.current) {
+      openSystemPip().catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forcePip]);
 
   // ── Resume audio contexts when user returns to this tab ───────────────────
@@ -321,12 +346,41 @@ export default function VoiceModal({
 
   // ── Parse WebSocket events ────────────────────────────────────────────────
   const handleEvent = useCallback((event: Record<string, unknown>) => {
-    if (event.interrupted === true) { stopAllAudio(); return; }
     if (event.type === "reminder") return;
 
+    // ── Interrupted: flush any buffered transcript then stop audio ──────────
+    if (event.interrupted === true) {
+      if (outputTranscriptBufRef.current) {
+        onTranscriptRef.current?.("assistant", outputTranscriptBufRef.current);
+        outputTranscriptBufRef.current = "";
+      }
+      stopAllAudio();
+      return;
+    }
+
+    // ── Native-audio: accumulate inputTranscription (user voice → text) ─────
+    const inputText = (event.inputTranscription as any)?.text;
+    if (typeof inputText === "string" && inputText.trim()) {
+      inputTranscriptBufRef.current = inputText.trim(); // overwrite — ADK sends cumulative text
+    }
+
+    // ── Native-audio: accumulate outputTranscription (AI voice → text) ──────
+    const outputText = (event.outputTranscription as any)?.text;
+    if (typeof outputText === "string" && outputText.trim()) {
+      outputTranscriptBufRef.current = outputText.trim(); // overwrite — ADK sends cumulative text
+    }
+
+    // ── Process content parts (audio chunks + text for half-cascade models) ──
     const parts = ((event.content as any)?.parts as any[]) ?? [];
+    const halfCascadeText: string[] = [];
+
     for (const p of parts) {
       if (p?.inlineData?.data) enqueueAudio(p.inlineData.data);
+
+      // Text parts in content = half-cascade (text modality) response; skip thought parts
+      if (typeof p?.text === "string" && p.text.trim() && !p.thought) {
+        halfCascadeText.push(p.text.trim());
+      }
 
       const fnResp = p?.functionResponse as Record<string, unknown> | undefined;
       if (fnResp?.name === "evaluate_voice_assessment") {
@@ -358,6 +412,26 @@ export default function VoiceModal({
           }
           onCompleted?.(result);
         }
+      }
+    }
+
+    // Accumulate half-cascade text into output buffer
+    if (halfCascadeText.length > 0) {
+      const chunk = halfCascadeText.join(" ");
+      outputTranscriptBufRef.current = outputTranscriptBufRef.current
+        ? `${outputTranscriptBufRef.current} ${chunk}`
+        : chunk;
+    }
+
+    // ── turnComplete: flush both buffers as chat messages ───────────────────
+    if (event.turnComplete === true) {
+      if (inputTranscriptBufRef.current) {
+        onTranscriptRef.current?.("user", inputTranscriptBufRef.current);
+        inputTranscriptBufRef.current = "";
+      }
+      if (outputTranscriptBufRef.current) {
+        onTranscriptRef.current?.("assistant", outputTranscriptBufRef.current);
+        outputTranscriptBufRef.current = "";
       }
     }
   }, [enqueueAudio, stopAllAudio, assessmentId, instituteId, onCompleted]);
@@ -507,6 +581,14 @@ export default function VoiceModal({
         silence.connect(micCtx.destination);
 
         if (initMessage && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(initMessage));
+
+        // Expose text-to-voice send function to the parent
+        // Backend upstream_task expects: {"type": "text", "text": "..."}
+        onSendTextReady?.((text: string) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "text", text }));
+          }
+        });
 
         startOrbAnimation();
         setStep("session");
@@ -1099,7 +1181,7 @@ export default function VoiceModal({
         {/* Minimize to PiP — only while connected */}
         {step === "session" && (
           <button
-            onClick={() => setPipMode(true)}
+            onClick={activatePip}
             className={`w-16 h-16 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95 ${isDark ? "text-white" : "text-gray-900"}`}
             style={{ background: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)", backdropFilter: "blur(12px)" }}
             title="Minimize to picture-in-picture"

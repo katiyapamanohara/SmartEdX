@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useState, useCallback } from "react";
+import { createContext, useContext, useState, useCallback, useRef } from "react";
 import { Course } from "@/services/instituteService";
 import { StudentContext } from "@/app/[instituteId]/student/ai-chat/VoiceModal";
 
@@ -19,6 +19,14 @@ interface VoiceAgentContextValue {
   session: VoiceSessionParams | null;
   startSession: (params: VoiceSessionParams) => void;
   endSession: () => void;
+  /** Send a text message into the active voice WebSocket session */
+  sendTextToVoice: (text: string) => void;
+  /** Called by VoiceModal once the WS is ready to accept text */
+  setVoiceSendFn: (fn: ((text: string) => void) | null) => void;
+  /** Register a handler that receives transcripts from the voice session */
+  setTranscriptHandler: (fn: ((role: "user" | "assistant", text: string) => void) | null) => void;
+  /** Fired by VoiceModal when a text transcript arrives */
+  dispatchTranscript: (role: "user" | "assistant", text: string) => void;
 }
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -35,6 +43,8 @@ export function useVoiceAgent(): VoiceAgentContextValue {
 
 export function VoiceAgentProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<VoiceSessionParams | null>(null);
+  const sendFnRef             = useRef<((text: string) => void) | null>(null);
+  const transcriptHandlerRef  = useRef<((role: "user" | "assistant", text: string) => void) | null>(null);
 
   const startSession = useCallback((params: VoiceSessionParams) => {
     setSession(params);
@@ -42,10 +52,31 @@ export function VoiceAgentProvider({ children }: { children: React.ReactNode }) 
 
   const endSession = useCallback(() => {
     setSession(null);
+    sendFnRef.current = null;
+  }, []);
+
+  const sendTextToVoice = useCallback((text: string) => {
+    sendFnRef.current?.(text);
+  }, []);
+
+  const setVoiceSendFn = useCallback((fn: ((text: string) => void) | null) => {
+    sendFnRef.current = fn;
+  }, []);
+
+  const setTranscriptHandler = useCallback((fn: ((role: "user" | "assistant", text: string) => void) | null) => {
+    transcriptHandlerRef.current = fn;
+  }, []);
+
+  const dispatchTranscript = useCallback((role: "user" | "assistant", text: string) => {
+    transcriptHandlerRef.current?.(role, text);
   }, []);
 
   return (
-    <VoiceAgentContext.Provider value={{ session, startSession, endSession }}>
+    <VoiceAgentContext.Provider value={{
+      session, startSession, endSession,
+      sendTextToVoice, setVoiceSendFn,
+      setTranscriptHandler, dispatchTranscript,
+    }}>
       {children}
     </VoiceAgentContext.Provider>
   );

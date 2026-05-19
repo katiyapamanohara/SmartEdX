@@ -405,10 +405,9 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
   // ── Join session ──────────────────────────────────────────────────────────
 
   const joinSession = useCallback(async (meta: SessionMeta) => {
-    // Already active on same session — just expand
+    // Already active on same session — update metadata but don't touch minimized state
     if (sessionRef.current?.sessionId === meta.sessionId && socketRef.current?.connected) {
       setSession((s) => ({ ...s!, title: meta.title, teacherName: meta.teacherName }));
-      setIsMinimized(false);
       setSessionEnded(false);
       return;
     }

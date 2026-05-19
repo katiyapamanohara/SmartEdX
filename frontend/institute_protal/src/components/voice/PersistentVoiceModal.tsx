@@ -1,19 +1,32 @@
 "use client";
-import { usePathname } from "next/navigation";
+import { useCallback, useEffect } from "react";
 import { useVoiceAgent } from "@/context/VoiceAgentContext";
 import VoiceModal from "@/app/[instituteId]/student/ai-chat/VoiceModal";
 
 /**
  * Rendered once at the student layout level so the voice session survives
- * navigation. Auto-switches to PiP when the user leaves the ai-chat page.
+ * navigation. Always renders in PiP mode so the underlying page stays visible.
+ * Text transcripts and the send-text bridge are wired through VoiceAgentContext.
  */
 export default function PersistentVoiceModal() {
-  const { session, endSession } = useVoiceAgent();
-  const pathname = usePathname() ?? "";
+  const { session, endSession, setVoiceSendFn, dispatchTranscript } = useVoiceAgent();
+
+  const handleTranscript = useCallback(
+    (role: "user" | "assistant", text: string) => dispatchTranscript(role, text),
+    [dispatchTranscript],
+  );
+
+  const handleSendTextReady = useCallback(
+    (fn: (text: string) => void) => setVoiceSendFn(fn),
+    [setVoiceSendFn],
+  );
+
+  // Clear the send function when session ends
+  useEffect(() => {
+    if (!session) setVoiceSendFn(null);
+  }, [session, setVoiceSendFn]);
 
   if (!session) return null;
-
-  const isOnChatPage = pathname.includes("/ai-chat");
 
   return (
     <VoiceModal
@@ -23,7 +36,9 @@ export default function PersistentVoiceModal() {
       selectedCourse={session.course}
       instituteId={session.instituteId}
       onClose={endSession}
-      forcePip={!isOnChatPage}
+      forcePip={true}
+      onTranscript={handleTranscript}
+      onSendTextReady={handleSendTextReady}
     />
   );
 }

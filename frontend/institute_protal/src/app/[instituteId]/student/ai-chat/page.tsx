@@ -55,7 +55,7 @@ export default function AiChatPage() {
 
   const { hasFeature } = useFeatures();
   const voiceEnabled = hasFeature("voice_agent");
-  const { startSession } = useVoiceAgent();
+  const { startSession, session: voiceSession, sendTextToVoice, setTranscriptHandler } = useVoiceAgent();
 
   const [isDark, setIsDark] = useState(false);
 
@@ -131,6 +131,14 @@ export default function AiChatPage() {
 
   }
 
+  // ── Voice transcript → chat messages ─────────────────────────────────────
+  useEffect(() => {
+    setTranscriptHandler((role, text) => {
+      setMessages((prev) => [...prev, { role, content: text }]);
+    });
+    return () => setTranscriptHandler(null);
+  }, [setTranscriptHandler]);
+
   // ── Auto-scroll ───────────────────────────────────────────────────────────
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -151,10 +159,19 @@ export default function AiChatPage() {
 
     const messageText = trimmed || (file ? `Please analyze this file: ${file.name}` : "");
     const userMsg: ChatMessage = { role: "user", content: messageText, fileName: file?.name };
-    const updated = [...messages, userMsg];
-    setMessages(updated);
     setInput("");
     setPendingFile(null);
+
+    // When a voice session is active (and no file), route text through the voice WS.
+    // The voice agent's audio+text response will arrive via the transcript handler.
+    if (voiceSession && !file) {
+      setMessages((prev) => [...prev, userMsg]);
+      sendTextToVoice(messageText);
+      return;
+    }
+
+    const updated = [...messages, userMsg];
+    setMessages(updated);
     setLoading(true);
 
     try {
@@ -186,7 +203,7 @@ export default function AiChatPage() {
     } finally {
       setLoading(false);
     }
-  }, [messages, loading, apiUrl, instituteId, context]);
+  }, [messages, loading, apiUrl, instituteId, context, voiceSession, sendTextToVoice]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -345,10 +362,17 @@ export default function AiChatPage() {
             AI Learning Companion · {context.institute_name || "SmartEdX"}
           </p>
         </div>
-        <span className="flex items-center gap-1.5 text-[11px] font-medium text-success-600 dark:text-success-500 shrink-0">
-          <span className="w-1.5 h-1.5 rounded-full bg-success-500 animate-pulse" />
-          Ready to help
-        </span>
+        {voiceSession ? (
+          <span className="flex items-center gap-1.5 text-[11px] font-medium text-violet-600 dark:text-violet-400 shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />
+            Voice active
+          </span>
+        ) : (
+          <span className="flex items-center gap-1.5 text-[11px] font-medium text-success-600 dark:text-success-500 shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-success-500 animate-pulse" />
+            Ready to help
+          </span>
+        )}
       </div>
 
       {/* Messages */}
@@ -378,7 +402,7 @@ export default function AiChatPage() {
 
       {/* Input area */}
       <div className="px-6 pb-6 pt-1 shrink-0">
-        <div className="flex items-center gap-2 rounded-full bg-white dark:bg-gray-800 shadow-md px-4 py-3">
+        <div className={`flex items-center gap-2 rounded-full bg-white dark:bg-gray-800 shadow-md px-4 py-3 transition-shadow ${voiceSession ? "ring-2 ring-violet-400/50 dark:ring-violet-500/40" : ""}`}>
           {/* Hidden file input */}
           <input
             ref={fileInputRef}
@@ -406,7 +430,7 @@ export default function AiChatPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={pendingFile ? `Ask about ${pendingFile.name}…` : "Ask anything..."}
+            placeholder={pendingFile ? `Ask about ${pendingFile.name}…` : voiceSession ? "Message voice agent…" : "Ask anything..."}
             disabled={loading}
             className="flex-1 resize-none bg-transparent text-sm text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 outline-none leading-relaxed disabled:opacity-50 max-h-[120px]"
           />
