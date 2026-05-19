@@ -13,12 +13,12 @@ from google.adk.tools import FunctionTool, ToolContext
 from google.genai import types
 
 from app.agent.api import fetch_institute_config, fetch_course_agent_config
+from app.agent.instructions import all_instructions
 from app.agent.api_tools import make_institute_admin_api_tools, make_student_api_tools, make_teacher_api_tools
 from app.qdrant.course_kb import _get_query_vector
 from app.agent.assessment_tools import evaluate_voice_assessment
 from app.agent.audio_clips import create_audio_clip_tool
 from app.agent.custom_tools import CustomToolHelper
-from app.agent.instructions import all_instructions
 from app.config import (
     MANIFEST_URL,
     TOOLS_SECRET,
@@ -302,7 +302,7 @@ def _substitute_placeholders(text: str, **values: str) -> str:
 
 def _build_system_instructions(base_instructions: str, custom_tools_enabled: bool) -> str:
     """Append feature-specific instruction blocks to base instructions."""
-    instructions = all_instructions + base_instructions
+    instructions = base_instructions
 
     if QDRANT_KB_ENABLED:
         instructions += (
@@ -367,29 +367,13 @@ def get_runner_for_institute(institute_id: str, session_service: InMemorySession
 
     # Fetch institute-specific config from the SmartEdX institute service
     institute_name = "SmartEdX"
-    base_instructions = (
-        "You are the SmartEdX educational voice assistant.\n"
-        "Your ONLY purpose is to help students and teachers with learning, course content, "
-        "academic subjects, study preparation, and educational questions.\n"
-        "- Answer only education-related questions.\n"
-        "- Redirect any off-topic request in one sentence back to learning.\n"
-        "- Be encouraging, concise, and clear.\n"
-    )
+    base_instructions = None
 
     try:
         config = fetch_institute_config(institute_id)
         institute_name = config.get("name") or institute_name
         if config.get("voiceInstructions"):
             base_instructions = config["voiceInstructions"]
-        else:
-            base_instructions = (
-                f"You are the AI educational voice assistant for {institute_name}.\n"
-                "Your ONLY purpose is to support student learning: course content, academic subjects, "
-                "study skills, assessments, and education-related questions.\n"
-                "- Do NOT answer questions unrelated to education , if ask unrelated this institute's courses. say it is unrealated and but give answer \n"
-                "- If a student asks something off-topic, reply in one sentence and redirect to their coursework.\n"
-                "- Be warm, encouraging, and concise.\n"
-            )
         logger.info(f"Loaded voice config for institute '{institute_name}' ({institute_id})")
     except Exception as e:
         logger.error(f"Failed to fetch institute config for {institute_id}: {e}", exc_info=True)
@@ -398,7 +382,20 @@ def get_runner_for_institute(institute_id: str, session_service: InMemorySession
         logger.info(f"Using SYSTEM_INSTRUCTION_OVERRIDE for institute {institute_id}")
         base_instructions = SYSTEM_INSTRUCTION_OVERRIDE
 
-    system_instructions = _build_system_instructions(base_instructions, CUSTOM_TOOLS_ENABLED)
+    if base_instructions:
+        system_instructions = _build_system_instructions(base_instructions, CUSTOM_TOOLS_ENABLED)
+    else:
+        _default_institute_instructions = (
+            f"You are the AI educational voice assistant for {institute_name}.\n"
+            "Your ONLY purpose is to support student learning: course content, academic subjects, "
+            "study skills, assessments, and education-related questions.\n"
+            "- Do NOT answer questions unrelated to education , if ask unrelated this institute's courses. say it is unrealated and but give answer \n"
+            "- If a student asks something off-topic, reply in one sentence and redirect to their coursework.\n"
+            "- Be warm, encouraging, and concise.\n"
+        )
+        system_instructions = _build_system_instructions(
+            all_instructions + _default_institute_instructions, CUSTOM_TOOLS_ENABLED
+        )
 
     safe_id = institute_id.replace("-", "_")
     institute_agent = Agent(
@@ -523,20 +520,26 @@ def get_runner_for_course(
         f"  NEVER pass 'course content', 'course material', or any generic phrase as the query.\n"
         f"- After search: answer in 1-2 sentences, cite the page if available (e.g. 'Page 3 says ...').\n"
         f"- If nothing is found: say so in one sentence and suggest the student ask their teacher.\n"
-        f"- OFF-TOPIC: if the student asks about anything unrelated to this course or education, "
-        f"reply in one sentence: 'I'm here to help with {course_name} — what would you like to learn?' "
-        f"and stop. Do NOT answer the off-topic question.\n"
+        f"- GENERAL QUESTIONS (resumes, career advice, writing, study habits, basic tech): answer helpfully in 1-2 sentences.\n"
+        f"- OFF-TOPIC (entertainment, weather, sports, personal errands): reply in one sentence redirecting back to the course.\n"
         f"- Always be brief — 1 to 2 sentences per turn."
     )
 
-    _raw_instructions = course_agent_instructions if course_agent_instructions else _default_course_instructions
     _placeholder_key = "teacher_name" if role == "teacher" else "student_name"
-    _raw_instructions = _substitute_placeholders(
-        _raw_instructions,
-        course_name=course_name,
-        **{_placeholder_key: user_name},
-    )
-    system_instructions = all_instructions + _raw_instructions
+    if course_agent_instructions:
+        _raw_instructions = _substitute_placeholders(
+            course_agent_instructions,
+            course_name=course_name,
+            **{_placeholder_key: user_name},
+        )
+        system_instructions = _raw_instructions
+    else:
+        _raw_instructions = _substitute_placeholders(
+            _default_course_instructions,
+            course_name=course_name,
+            **{_placeholder_key: user_name},
+        )
+        system_instructions = all_instructions + _raw_instructions
 
     safe_id = course_id.replace("-", "_")
     course_agent = Agent(
@@ -669,12 +672,18 @@ def get_runner_for_teacher(
         "'I can only assist with educational content — what would you like to explore?' and stop."
     )
 
-    _raw_teacher_instructions = teacher_agent_instructions if teacher_agent_instructions else _default_teacher_instructions
-    _raw_teacher_instructions = _substitute_placeholders(
-        _raw_teacher_instructions,
-        teacher_name=user_name,
-    )
-    system_instructions = all_instructions + _raw_teacher_instructions
+    if teacher_agent_instructions:
+        _raw_teacher_instructions = _substitute_placeholders(
+            teacher_agent_instructions,
+            teacher_name=user_name,
+        )
+        system_instructions = _raw_teacher_instructions
+    else:
+        _raw_teacher_instructions = _substitute_placeholders(
+            _default_teacher_instructions,
+            teacher_name=user_name,
+        )
+        system_instructions = all_instructions + _raw_teacher_instructions
 
     safe_id = teacher_id.replace("-", "_")
     teacher_agent = Agent(
@@ -750,9 +759,9 @@ def get_runner_for_institute_admin(
     )
 
     if SYSTEM_INSTRUCTION_OVERRIDE:
-        base_instructions = SYSTEM_INSTRUCTION_OVERRIDE
-
-    system_instructions = all_instructions + base_instructions
+        system_instructions = SYSTEM_INSTRUCTION_OVERRIDE
+    else:
+        system_instructions = all_instructions + base_instructions
 
     safe_id = institute_id.replace("-", "_")
     admin_agent = Agent(
