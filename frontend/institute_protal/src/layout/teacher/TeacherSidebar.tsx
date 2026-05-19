@@ -74,7 +74,6 @@ const TeacherSidebar: React.FC = () => {
   const courseSubItems = [
     { name: "Courses", path: "/teacher/courses" },
     ...(aiToolsEnabled ? [{ name: "AI Tools", path: "/teacher/ai-tools" }] : []),
-    ...(aiTutorEnabled ? [{ name: "AI Chat", path: "/teacher/ai-chat" }] : []),
   ];
 
   const navItems: NavItem[] = [
