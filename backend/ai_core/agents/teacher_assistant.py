@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 from agno.agent import Agent
 
+from agents.retry import run_with_retry
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -414,10 +415,6 @@ async def chat_with_teacher_assistant(
     if course_id:
         custom_instructions = _fetch_teacher_agent_instructions(institute_id, course_id)
 
-    agent = _build_teacher_assistant(
-        teacher_context, institute_id, teacher_id, auth_token, tracker, file_content, custom_instructions, course_id
-    )
-
     last_user_message = messages[-1]["content"] if messages else ""
 
     prior_turns: list[str] = []
@@ -425,15 +422,16 @@ async def chat_with_teacher_assistant(
         label = "Teacher" if msg["role"] == "user" else "Assistant"
         prior_turns.append(f"{label}: {msg['content']}")
 
-    if prior_turns:
-        prompt = (
-            "Conversation history:\n"
-            + "\n".join(prior_turns)
-            + "\n\nTeacher (current message): "
-            + last_user_message
-        )
-    else:
-        prompt = last_user_message
+    prompt = (
+        "Conversation history:\n" + "\n".join(prior_turns) + "\n\nTeacher (current message): " + last_user_message
+        if prior_turns else last_user_message
+    )
 
-    result = await agent.arun(prompt)
-    return result.content if isinstance(result.content, str) else str(result.content)
+    async def _run() -> str:
+        agent = _build_teacher_assistant(
+            teacher_context, institute_id, teacher_id, auth_token, tracker, file_content, custom_instructions, course_id
+        )
+        result = await agent.arun(prompt)
+        return result.content if isinstance(result.content, str) else str(result.content)
+
+    return await run_with_retry(_run, label="teacher_assistant")

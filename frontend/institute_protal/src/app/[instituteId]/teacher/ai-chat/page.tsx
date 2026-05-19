@@ -21,32 +21,30 @@ interface ChatMessage {
   fileName?: string;
 }
 
-interface StudentContext {
-  student_name?: string;
+interface TeacherContext {
+  teacher_name?: string;
   institute_name?: string;
   course_count?: number;
   selected_course?: string;
   course_id?: string;
 }
 
-
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function AiChatPage() {
+export default function TeacherAiChatPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const instituteId = params?.instituteId as string;
 
   const { isLoading: featuresLoading, hasFeature: hasInstFeature } = useInstituteFeatures({
     requiredFeature: "ai_tutor",
-    redirectTo: `/${instituteId}/student`,
+    redirectTo: `/${instituteId}/teacher`,
   });
 
   const [courses, setCourses]               = useState<Course[]>([]);
   const [coursesLoading, setCoursesLoading] = useState(true);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
-  const [context, setContext]               = useState<StudentContext>({});
+  const [context, setContext]               = useState<TeacherContext>({});
   const [instituteLogo, setInstituteLogo]   = useState<string | null>(null);
   const [userProfilePicture, setUserProfilePicture] = useState<string | null>(null);
   const [messages, setMessages]           = useState<ChatMessage[]>([]);
@@ -74,11 +72,11 @@ export default function AiChatPage() {
     return () => obs.disconnect();
   }, []);
 
-  // ── Restore: sessionStorage first (fast), Qdrant on new sessions ─────────
+  // ── Restore session from sessionStorage ───────────────────────────────────
   useEffect(() => {
     if (!instituteId) return;
     try {
-      const raw = sessionStorage.getItem(`ai-chat-student-${instituteId}`);
+      const raw = sessionStorage.getItem(`ai-chat-teacher-${instituteId}`);
       if (raw) {
         const saved = JSON.parse(raw);
         if (saved.selectedCourse) setSelectedCourse(saved.selectedCourse);
@@ -90,19 +88,17 @@ export default function AiChatPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Persist to sessionStorage + Qdrant whenever messages/course change ────
+  // ── Persist to sessionStorage + Qdrant whenever messages change ─────────
   useEffect(() => {
     if (!hydrated || !instituteId || !messages.length) return;
 
-    // sessionStorage — instant restore on same-session navigation
     try {
       sessionStorage.setItem(
-        `ai-chat-student-${instituteId}`,
+        `ai-chat-teacher-${instituteId}`,
         JSON.stringify({ messages, selectedCourse, context }),
       );
     } catch { /* ignore */ }
 
-    // Qdrant — cross-session persistence (fire-and-forget)
     const user = authService.getUser();
     const courseId = context.course_id;
     if (!user?.id || !courseId) return;
@@ -112,33 +108,33 @@ export default function AiChatPage() {
       body: JSON.stringify({
         institute_id: instituteId,
         user_id:      user.id,
-        user_type:    "student",
+        user_type:    "teacher",
         course_id:    courseId,
         messages:     messages.map((m) => ({ role: m.role, content: m.content })),
       }),
-    }).catch(() => { /* ignore */ });
+    }).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages]);
 
-  // ── Load enrolled courses ─────────────────────────────────────────────────
+  // ── Load teacher courses ──────────────────────────────────────────────────
   useEffect(() => {
     if (!instituteId) return;
     async function load() {
       setCoursesLoading(true);
       try {
-        const [user, institute, enrolled] = await Promise.all([
+        const [user, institute, myCourses] = await Promise.all([
           Promise.resolve(authService.getUser()),
           instituteService.getInstituteById(instituteId),
-          instituteService.getMyEnrolledCourses(instituteId),
+          instituteService.getMyTeacherCourses(instituteId),
         ]);
-        setCourses(enrolled);
+        setCourses(myCourses);
         setInstituteLogo(institute?.logo ?? null);
         setUserProfilePicture(user?.profilePicture ?? null);
         setContext((prev) => ({
           ...prev,
-          student_name:  user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() : undefined,
+          teacher_name:  user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() : undefined,
           institute_name: institute?.name,
-          course_count:  enrolled.length,
+          course_count:  myCourses.length,
         }));
       } catch {
         setCourses([]);
@@ -186,15 +182,15 @@ export default function AiChatPage() {
     setMessages([{
       role: "assistant",
       content:
-        `Hi${ctx.student_name ? ` ${ctx.student_name}` : ""}! 👋 I'm your AI tutor for **${course.name}**.\n\n` +
+        `Hi${ctx.teacher_name ? ` ${ctx.teacher_name}` : ""}! 👋 I'm your AI teaching assistant for **${course.name}**.\n\n` +
         `I can help you with:\n` +
-        `• 📚 Explore modules & topics in this course\n` +
-        `• 🧠 Explain any concept — simply & clearly\n` +
-        `• 📝 Create a personalized study plan\n` +
-        `• 📋 Generate practice questions & quizzes\n` +
-        `• 📄 Analyze your notes or uploaded documents\n` +
-        `• ❓ Resolve any doubts — anytime!\n\n` +
-        `What would you like to learn today?`,
+        `• 📝 Generate lesson plans & teaching materials\n` +
+        `• 📋 Create quizzes, assignments & exam questions\n` +
+        `• 📊 Analyse student performance & identify at-risk students\n` +
+        `• ✅ Grade essays with detailed rubric feedback\n` +
+        `• 📄 Review uploaded documents or student work\n` +
+        `• 💡 Get teaching strategy suggestions\n\n` +
+        `What would you like to work on today?`,
     }]);
   }
 
@@ -224,13 +220,11 @@ export default function AiChatPage() {
     const trimmed = text.trim();
     if ((!trimmed && !file) || loading) return;
 
-    const messageText = trimmed || (file ? `Please analyze this file: ${file.name}` : "");
+    const messageText = trimmed || (file ? `Please analyse this file: ${file.name}` : "");
     const userMsg: ChatMessage = { role: "user", content: messageText, fileName: file?.name };
     setInput("");
     setPendingFile(null);
 
-    // When a voice session is active (and no file), route text through the voice WS.
-    // The voice agent's audio+text response will arrive via the transcript handler.
     if (voiceSession && !file) {
       setMessages((prev) => [...prev, userMsg]);
       sendTextToVoice(messageText);
@@ -248,12 +242,13 @@ export default function AiChatPage() {
       const formData = new FormData();
       formData.append("messages",     JSON.stringify(updated.map((m) => ({ role: m.role, content: m.content }))));
       formData.append("institute_id", instituteId);
-      formData.append("student_id",   user?.id ?? "");
+      formData.append("teacher_id",   user?.id ?? "");
+      formData.append("course_id",    context.course_id ?? "");
       formData.append("context",      JSON.stringify(context));
       if (token) formData.append("auth_token", token);
       if (file)  formData.append("file", file);
 
-      const res = await fetch(`${apiUrl}/api/ai/student-chat/message`, {
+      const res = await fetch(`${apiUrl}/api/teacher-chat/message`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
@@ -282,7 +277,18 @@ export default function AiChatPage() {
   // ── Voice mode ────────────────────────────────────────────────────────────
   function openVoiceMode() {
     if (!selectedCourse) return;
-    startSession({ isDark, instituteLogo, studentContext: context, course: selectedCourse, instituteId });
+    startSession({
+      isDark,
+      instituteLogo,
+      studentContext: {
+        student_name:    context.teacher_name,
+        institute_name:  context.institute_name,
+        course_count:    context.course_count,
+        selected_course: context.selected_course,
+      },
+      course: selectedCourse,
+      instituteId,
+    });
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -294,7 +300,7 @@ export default function AiChatPage() {
   if (featuresLoading || !hasInstFeature("ai_tutor")) {
     return (
       <div className="flex items-center justify-center min-h-[500px]">
-        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -302,11 +308,7 @@ export default function AiChatPage() {
   // ── Course selection screen ───────────────────────────────────────────────
   if (!selectedCourse) {
     return (
-      <div className="flex flex-col items-center justify-start h-[calc(100vh-8rem)] max-h-[900px] rounded-2xl  dark:bg-gray-900 overflow-hidden">
-        {/* Header */}
-        
-
-        {/* Course picker body */}
+      <div className="flex flex-col items-center justify-start h-[calc(100vh-8rem)] max-h-[900px] rounded-2xl dark:bg-gray-900 overflow-hidden">
         <div className="w-full flex-1 flex items-start justify-center pt-16 px-6 pb-8">
           <div className="max-w-xl w-full">
             <div className="text-center mb-8">
@@ -315,8 +317,8 @@ export default function AiChatPage() {
                   const previews = courses.filter(c => c.coverImage).slice(0, 3);
                   if (coursesLoading || previews.length === 0) {
                     return (
-                      <div className="w-14 h-14 rounded-2xl bg-brand-50 dark:bg-brand-500/10 flex items-center justify-center">
-                        <FiBookOpen className="w-7 h-7 text-brand-500" />
+                      <div className="w-14 h-14 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
+                        <FiBookOpen className="w-7 h-7 text-emerald-500" />
                       </div>
                     );
                   }
@@ -339,7 +341,7 @@ export default function AiChatPage() {
                 Select a Course to Start
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                Choose which course you'd like help with today.
+                Choose which course you'd like AI assistance with today.
               </p>
             </div>
 
@@ -351,7 +353,7 @@ export default function AiChatPage() {
               </div>
             ) : courses.length === 0 ? (
               <div className="text-center py-12 text-sm text-gray-400 dark:text-gray-500">
-                You are not enrolled in any courses yet.
+                You are not assigned to any courses yet.
               </div>
             ) : (
               <div className="space-y-3">
@@ -359,7 +361,7 @@ export default function AiChatPage() {
                   <button
                     key={course.id}
                     onClick={() => handleSelectCourse(course)}
-                    className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl bg-white dark:bg-gray-800/50 hover:bg-brand-50/50 dark:hover:bg-brand-500/5 transition-all text-left group"
+                    className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl bg-white dark:bg-gray-800/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-500/5 transition-all text-left group"
                   >
                     {course.coverImage ? (
                       <img
@@ -368,12 +370,12 @@ export default function AiChatPage() {
                         className="w-10 h-10 rounded-lg object-cover shrink-0"
                       />
                     ) : (
-                      <div className="w-10 h-10 rounded-lg bg-linear-to-br from-violet-500 to-blue-400 shrink-0 flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-lg bg-linear-to-br from-emerald-500 to-teal-400 shrink-0 flex items-center justify-center">
                         <FiBookOpen className="w-4 h-4 text-white" />
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 dark:text-white truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
+                      <p className="text-sm font-medium text-gray-800 dark:text-white truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
                         {course.name}
                       </p>
                       <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
@@ -381,7 +383,7 @@ export default function AiChatPage() {
                         {course.batchNumber ? ` · Batch ${course.batchNumber}` : ""}
                       </p>
                     </div>
-                    <svg className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:text-brand-400 transition-colors shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:text-emerald-400 transition-colors shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                     </svg>
                   </button>
@@ -400,14 +402,14 @@ export default function AiChatPage() {
 
       {/* Header */}
       <div className="flex items-center gap-3 px-6 py-4 shrink-0 rounded-2xl
-        bg-linear-to-r from-brand-50 to-indigo-50 dark:from-brand-500/5 dark:to-indigo-500/5">
+        bg-linear-to-r from-emerald-50 to-teal-50 dark:from-emerald-500/5 dark:to-teal-500/5">
         <button
           onClick={() => {
             const user = authService.getUser();
             const courseId = context.course_id;
             setSelectedCourse(null);
             setMessages([]);
-            try { sessionStorage.removeItem(`ai-chat-student-${instituteId}`); } catch { /* ignore */ }
+            try { sessionStorage.removeItem(`ai-chat-teacher-${instituteId}`); } catch { /* ignore */ }
             if (user?.id && courseId) {
               fetch(`${apiUrl}/api/ai/chat-history/clear?institute_id=${encodeURIComponent(instituteId)}&user_id=${encodeURIComponent(user.id)}&course_id=${encodeURIComponent(courseId)}`, { method: "DELETE" }).catch(() => {});
             }
@@ -426,7 +428,7 @@ export default function AiChatPage() {
             className="w-10 h-10 rounded-xl object-cover shrink-0 shadow-md"
           />
         ) : (
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-linear-to-br from-brand-400 to-indigo-500 shadow-md shadow-brand-500/25 shrink-0">
+          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-linear-to-br from-emerald-400 to-teal-500 shadow-md shadow-emerald-500/25 shrink-0">
             <BotIcon className="w-5 h-5 text-white" />
           </div>
         )}
@@ -435,7 +437,7 @@ export default function AiChatPage() {
             {selectedCourse.name}
           </h3>
           <p className="text-[11px] text-gray-500 dark:text-gray-400">
-            AI Learning Companion · {context.institute_name || "SmartEdX"}
+            AI Teaching Assistant · {context.institute_name || "SmartEdX"}
           </p>
         </div>
         {voiceSession ? (
@@ -444,8 +446,8 @@ export default function AiChatPage() {
             Voice active
           </span>
         ) : (
-          <span className="flex items-center gap-1.5 text-[11px] font-medium text-success-600 dark:text-success-500 shrink-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-success-500 animate-pulse" />
+          <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-500 shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Ready to help
           </span>
         )}
@@ -460,15 +462,14 @@ export default function AiChatPage() {
         <div ref={bottomRef} />
       </div>
 
-
       {/* File pending badge */}
       {pendingFile && (
-        <div className="mx-6 mb-2 flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-brand-50 dark:bg-brand-500/10">
-          <svg className="w-4 h-4 text-brand-500 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <div className="mx-6 mb-2 flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10">
+          <svg className="w-4 h-4 text-emerald-500 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
           </svg>
-          <span className="text-[11px] text-brand-700 dark:text-brand-400 flex-1 truncate">{pendingFile.name}</span>
-          <button onClick={() => setPendingFile(null)} className="text-brand-400 hover:text-brand-600 transition-colors">
+          <span className="text-[11px] text-emerald-700 dark:text-emerald-400 flex-1 truncate">{pendingFile.name}</span>
+          <button onClick={() => setPendingFile(null)} className="text-emerald-400 hover:text-emerald-600 transition-colors">
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
             </svg>
@@ -479,7 +480,6 @@ export default function AiChatPage() {
       {/* Input area */}
       <div className="px-6 pb-6 pt-1 shrink-0">
         <div className={`flex items-center gap-2 rounded-full bg-white dark:bg-gray-800 shadow-md px-4 py-3 transition-shadow ${voiceSession ? "ring-2 ring-violet-400/50 dark:ring-violet-500/40" : ""}`}>
-          {/* Hidden file input */}
           <input
             ref={fileInputRef}
             type="file"
@@ -488,7 +488,6 @@ export default function AiChatPage() {
             className="hidden"
           />
 
-          {/* Attachment button */}
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={loading}
@@ -506,12 +505,11 @@ export default function AiChatPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={pendingFile ? `Ask about ${pendingFile.name}…` : voiceSession ? "Message voice agent…" : "Ask anything..."}
+            placeholder={pendingFile ? `Ask about ${pendingFile.name}…` : voiceSession ? "Message voice agent…" : "Ask anything about your course..."}
             disabled={loading}
             className="flex-1 resize-none bg-transparent text-sm text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 outline-none leading-relaxed disabled:opacity-50 max-h-[120px]"
           />
 
-          {/* Send / mic button */}
           <button
             onClick={() => input.trim() || pendingFile ? sendMessage(input, pendingFile) : (voiceEnabled ? openVoiceMode() : undefined)}
             disabled={loading || (!input.trim() && !pendingFile && !voiceEnabled)}
@@ -544,7 +542,7 @@ function MessageBubble({ msg, userProfilePicture }: { msg: ChatMessage; userProf
   const isUser = msg.role === "user";
   return (
     <div className={`flex gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
-      <div className="shrink-0 w-7 h-7 rounded-full overflow-hidden flex items-center justify-center text-[10px] font-bold bg-linear-to-br from-brand-400 to-indigo-500 text-white">
+      <div className="shrink-0 w-7 h-7 rounded-full overflow-hidden flex items-center justify-center text-[10px] font-bold bg-linear-to-br from-emerald-400 to-teal-500 text-white">
         {isUser ? (
           userProfilePicture ? (
             <img src={userProfilePicture} alt="You" className="w-full h-full object-cover" />
@@ -558,7 +556,7 @@ function MessageBubble({ msg, userProfilePicture }: { msg: ChatMessage; userProf
       <div
         className={`max-w-[82%] text-sm leading-relaxed px-3.5 py-2.5 rounded-2xl wrap-break-word ${
           isUser
-            ? "bg-linear-to-br from-brand-500 to-indigo-500 text-white rounded-tr-sm whitespace-pre-wrap"
+            ? "bg-linear-to-br from-emerald-500 to-teal-500 text-white rounded-tr-sm whitespace-pre-wrap"
             : "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-sm"
         }`}
       >
@@ -593,7 +591,7 @@ function MessageBubble({ msg, userProfilePicture }: { msg: ChatMessage; userProf
                 ),
               pre: ({ children }) => <pre className="my-1.5 overflow-x-auto">{children}</pre>,
               blockquote: ({ children }) => (
-                <blockquote className="border-l-4 border-green-400 bg-green-50 dark:bg-green-900/20 pl-3 pr-2 py-1.5 rounded-r-lg my-2 text-green-800 dark:text-green-300 not-italic font-medium">
+                <blockquote className="border-l-4 border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 pl-3 pr-2 py-1.5 rounded-r-lg my-2 text-emerald-800 dark:text-emerald-300 not-italic font-medium">
                   {children}
                 </blockquote>
               ),
@@ -612,13 +610,13 @@ function MessageBubble({ msg, userProfilePicture }: { msg: ChatMessage; userProf
 function TypingIndicator() {
   return (
     <div className="flex gap-2.5">
-      <div className="w-7 h-7 rounded-full bg-linear-to-br from-brand-400 to-indigo-500 flex items-center justify-center shrink-0">
+      <div className="w-7 h-7 rounded-full bg-linear-to-br from-emerald-400 to-teal-500 flex items-center justify-center shrink-0">
         <BotIconSm />
       </div>
       <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-1.5">
-        <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-bounce [animation-delay:0ms]" />
-        <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-bounce [animation-delay:150ms]" />
-        <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-bounce [animation-delay:300ms]" />
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce [animation-delay:0ms]" />
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce [animation-delay:150ms]" />
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce [animation-delay:300ms]" />
       </div>
     </div>
   );

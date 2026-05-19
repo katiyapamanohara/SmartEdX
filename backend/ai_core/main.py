@@ -16,6 +16,7 @@ from routers.transcription import router as transcription_router
 from routers.teacher_tools import router as teacher_tools_router
 from routers.teacher_tools import router_ai_tools
 from routers.screen_monitor import router as screen_monitor_router
+from routers.chat_history import router as chat_history_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -50,6 +51,7 @@ app.include_router(transcription_router)
 app.include_router(teacher_tools_router)
 app.include_router(router_ai_tools)
 app.include_router(screen_monitor_router)
+app.include_router(chat_history_router)
 
 
 @app.get("/health")

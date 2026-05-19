@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 from agno.agent import Agent
 
+from agents.retry import run_with_retry
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -383,34 +384,31 @@ async def chat_with_student_assistant(
     file_content: str | None = None,
     course_id: str | None = None,
 ) -> str:
-    """
-    Run the student assistant with conversation history and live tool access.
-    Returns the assistant's reply string.
+    """Run the student assistant and return the reply string.
+
+    Retries up to 4× with exponential backoff on transient 503/429 errors.
     """
     custom_instructions: str | None = None
     if course_id:
         custom_instructions = _fetch_student_agent_instructions(institute_id, course_id)
 
-    agent = _build_student_assistant(
-        student_context, institute_id, student_id, auth_token, file_content, custom_instructions
-    )
-
     last_user_message = messages[-1]["content"] if messages else ""
 
     prior_turns: list[str] = []
     for msg in messages[:-1]:
-        label = "Student" if msg["role"] == "user" else "Assistant"
-        prior_turns.append(f"{label}: {msg['content']}")
+        role_label = "Student" if msg["role"] == "user" else "Assistant"
+        prior_turns.append(f"{role_label}: {msg['content']}")
 
-    if prior_turns:
-        prompt = (
-            "Conversation history:\n"
-            + "\n".join(prior_turns)
-            + "\n\nStudent (current message): "
-            + last_user_message
+    prompt = (
+        "Conversation history:\n" + "\n".join(prior_turns) + "\n\nStudent (current message): " + last_user_message
+        if prior_turns else last_user_message
+    )
+
+    async def _run() -> str:
+        agent = _build_student_assistant(
+            student_context, institute_id, student_id, auth_token, file_content, custom_instructions
         )
-    else:
-        prompt = last_user_message
+        result = await agent.arun(prompt)
+        return result.content if isinstance(result.content, str) else str(result.content)
 
-    result = await agent.arun(prompt)
-    return result.content if isinstance(result.content, str) else str(result.content)
+    return await run_with_retry(_run, label="student_assistant")

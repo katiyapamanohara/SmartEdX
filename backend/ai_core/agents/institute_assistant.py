@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 from agno.agent import Agent
 
+from agents.retry import run_with_retry
 from config import settings
 
 
@@ -420,8 +421,6 @@ async def chat_with_assistant(
     auth_token: str | None,
     tracker: ActionTracker,
 ) -> str:
-    agent = _build_assistant(institute_context, institute_id, auth_token, tracker)
-
     last_user_message = messages[-1]["content"] if messages else ""
 
     prior_turns: list[str] = []
@@ -439,5 +438,9 @@ async def chat_with_assistant(
     else:
         prompt = last_user_message
 
-    result = await agent.arun(prompt)
-    return result.content if isinstance(result.content, str) else str(result.content)
+    async def _run() -> str:
+        agent = _build_assistant(institute_context, institute_id, auth_token, tracker)
+        result = await agent.arun(prompt)
+        return result.content if isinstance(result.content, str) else str(result.content)
+
+    return await run_with_retry(_run, label="institute_assistant")

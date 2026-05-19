@@ -69,18 +69,18 @@ const TeacherSidebar: React.FC = () => {
 
   const { enabledFeatures } = useFeatures();
   const aiToolsEnabled = enabledFeatures.includes("ai_tools");
+  const aiTutorEnabled = enabledFeatures.includes("ai_tutor");
+
+  const courseSubItems = [
+    { name: "Courses", path: "/teacher/courses" },
+    ...(aiToolsEnabled ? [{ name: "AI Tools", path: "/teacher/ai-tools" }] : []),
+    ...(aiTutorEnabled ? [{ name: "AI Chat", path: "/teacher/ai-chat" }] : []),
+  ];
 
   const navItems: NavItem[] = [
     { icon: <GridIcon />, name: "Dashboard", path: "/teacher" },
-    aiToolsEnabled
-      ? {
-          icon: <BoxIconLine />,
-          name: "Courses",
-          subItems: [
-            { name: "Courses", path: "/teacher/courses" },
-            { name: "AI Tools", path: "/teacher/ai-tools" },
-          ],
-        }
+    courseSubItems.length > 1
+      ? { icon: <BoxIconLine />, name: "Courses", subItems: courseSubItems }
       : { icon: <BoxIconLine />, name: "Courses", path: "/teacher/courses" },
     { icon: <TaskIcon />, name: "Assessments", path: "/teacher/assessments" },
     { icon: <DocsIcon />, name: "Exams", path: "/teacher/exams" },
