@@ -100,6 +100,7 @@ export default function VoiceModal({
   // System (OS-level) Document PiP
   const [sysPipWindow, setSysPipWindow] = useState<Window | null>(null);
   const sysPipWindowRef                 = useRef<Window | null>(null);
+  const sysPipAutoOpenedRef             = useRef(false);
   const [supportsDocPip, setSupportsDocPip] = useState(false);
 
   // Generation counter
@@ -162,6 +163,15 @@ export default function VoiceModal({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forcePip]);
 
+  // ── Auto-open system PiP when session connects (catches cases where the
+  //    initial attempt fires without a valid user-activation context) ─────────
+  useEffect(() => {
+    if (!pipMode || !supportsDocPip || sysPipWindowRef.current || step !== "session" || sysPipAutoOpenedRef.current) return;
+    sysPipAutoOpenedRef.current = true;
+    openSystemPip().catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, pipMode, supportsDocPip]);
+
   // ── Resume audio contexts when user returns to this tab ───────────────────
   useEffect(() => {
     function onVisibilityChange() {
@@ -217,6 +227,7 @@ export default function VoiceModal({
       pip.addEventListener("pagehide", () => {
         sysPipWindowRef.current = null;
         setSysPipWindow(null);
+        sysPipAutoOpenedRef.current = false;
       });
 
       sysPipWindowRef.current = pip;
@@ -950,8 +961,8 @@ export default function VoiceModal({
             {supportsDocPip && step === "session" && (
               <button
                 onClick={openSystemPip}
-                title="Pop out to system picture-in-picture"
-                style={{ marginLeft: 4, padding: 4, borderRadius: 6, border: "none", background: "none", cursor: "pointer", color: isDark ? "#6b7280" : "#9ca3af", display: "flex", alignItems: "center" }}
+                title="Float above other apps"
+                style={{ marginLeft: 4, padding: 4, borderRadius: 6, border: "none", background: "rgba(59,130,246,0.15)", cursor: "pointer", color: isDark ? "#93c5fd" : "#2563eb", display: "flex", alignItems: "center" }}
               >
                 {/* Picture-in-picture icon */}
                 <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
