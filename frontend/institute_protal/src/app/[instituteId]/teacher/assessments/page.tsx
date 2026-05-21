@@ -441,8 +441,16 @@ function StudentAttemptsModal({
 const OPTION_LETTERS_ROW = ["A", "B", "C", "D"];
 
 // ─── Quiz row ─────────────────────────────────────────────────────
-function QuizRow({ entry, onView, onViewAttempts, onEdit }: { entry: QuizEntry; onView: () => void; onViewAttempts: () => void; onEdit: () => void; instituteId: string }) {
+function QuizRow({ entry, onView, onViewAttempts, onEdit, onDelete }: { entry: QuizEntry; onView: () => void; onViewAttempts: () => void; onEdit: () => void; onDelete: () => void; instituteId: string }) {
   const [expanded, setExpanded] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm(`Delete "${entry.content.title}"? This cannot be undone.`)) return;
+    setDeleting(true);
+    Promise.resolve(onDelete()).finally(() => setDeleting(false));
+  };
   const quiz = entry.content.quizData;
   const questions: QuizQuestion[] = quiz?.questions ?? [];
   const qCount = questions.length;
@@ -509,6 +517,13 @@ function QuizRow({ entry, onView, onViewAttempts, onEdit }: { entry: QuizEntry; 
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors opacity-0 group-hover:opacity-100"
           >
             <FiEye className="w-3.5 h-3.5" /> View
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-40"
+          >
+            <FiX className="w-3.5 h-3.5" /> {deleting ? "Deleting…" : "Delete"}
           </button>
           <span className={`transition-transform duration-200 text-gray-400 ${expanded ? "rotate-180" : ""}`}>
             <FiChevronDown className="w-4 h-4" />
@@ -589,7 +604,7 @@ function QuizRow({ entry, onView, onViewAttempts, onEdit }: { entry: QuizEntry; 
 }
 
 // ─── Course group accordion ───────────────────────────────────────
-function CourseGroup({ course, quizzes, onViewQuiz, onViewAttempts, onEditQuiz, instituteId }: { course: Course; quizzes: QuizEntry[]; onViewQuiz: (e: QuizEntry) => void; onViewAttempts: (e: QuizEntry) => void; onEditQuiz: (e: QuizEntry) => void; instituteId: string }) {
+function CourseGroup({ course, quizzes, onViewQuiz, onViewAttempts, onEditQuiz, onDeleteQuiz, instituteId }: { course: Course; quizzes: QuizEntry[]; onViewQuiz: (e: QuizEntry) => void; onViewAttempts: (e: QuizEntry) => void; onEditQuiz: (e: QuizEntry) => void; onDeleteQuiz: (e: QuizEntry) => void; instituteId: string }) {
   const [open, setOpen] = useState(true);
   return (
     <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
@@ -630,6 +645,7 @@ function CourseGroup({ course, quizzes, onViewQuiz, onViewAttempts, onEditQuiz, 
               onView={() => onViewQuiz(entry)}
               onViewAttempts={() => onViewAttempts(entry)}
               onEdit={() => onEditQuiz(entry)}
+              onDelete={() => onDeleteQuiz(entry)}
             />
           ))}
         </div>
@@ -889,6 +905,21 @@ export default function TeacherAssessmentsPage() {
     );
   };
 
+  const handleDelete = async (entry: QuizEntry) => {
+    await instituteService.deleteTeacherContent(
+      instituteId,
+      entry.course.id,
+      entry.module.id,
+      entry.content.id
+    );
+    // Remove from local state — integrity monitor data derives from this, so it updates automatically
+    setQuizzesByCourse((prev) =>
+      prev
+        .map((g) => ({ ...g, quizzes: g.quizzes.filter((e) => e.content.id !== entry.content.id) }))
+        .filter((g) => g.quizzes.length > 0)
+    );
+  };
+
   const totalQuizzes = quizzesByCourse.reduce((s, g) => s + g.quizzes.length, 0);
   const totalQuestions = quizzesByCourse.reduce(
     (s, g) => s + g.quizzes.reduce((qs, e) => qs + (e.content.quizData?.questions?.length ?? 0), 0),
@@ -995,6 +1026,7 @@ export default function TeacherAssessmentsPage() {
                   onViewQuiz={setViewingQuiz}
                   onViewAttempts={setViewingAttempts}
                   onEditQuiz={(entry) => setEditingEntry(entry as EditEntry)}
+                  onDeleteQuiz={handleDelete}
                 />
               ))}
             </div>
