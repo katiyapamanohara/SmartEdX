@@ -491,8 +491,8 @@ export default function CreateAssessmentModal({
 }: CreateAssessmentModalProps) {
 
   const { hasFeature } = useFeatures();
-  const voiceEnabled = hasFeature("voice_agent");
-  const faceIdEnabled = hasFeature("exam_proctoring");
+  const voiceEnabled        = hasFeature("voice_agent");
+  const screenShareEnabled  = hasFeature("screen_share_proctoring");
 
   // ── Type selector ────────────────────────────────────────────────────────
   const [assessmentType, setAssessmentType] = useState<AssessmentType>("mcq");
@@ -509,8 +509,7 @@ export default function CreateAssessmentModal({
   const [submitting, setSubmitting]           = useState(false);
   const [error, setError]                     = useState<string | null>(null);
 
-  // ── Shared: face ID + max attempts ──────────────────────────────────────
-  const [requireFaceId, setRequireFaceId]     = useState(false);
+  // ── Shared: max attempts ─────────────────────────────────────────────────
   const [maxAttempts, setMaxAttempts]         = useState(1);
 
   // ── MCQ-specific ─────────────────────────────────────────────────────────
@@ -556,7 +555,7 @@ export default function CreateAssessmentModal({
       setAssessmentType("mcq");
       setCourseId(""); setModuleMode("existing"); setModuleId(""); setNewModuleName(""); setModules([]);
       setTitle(""); setDescription(""); setPassingScore(70); setTimeLimit(0);
-      setRequireFaceId(false); setMaxAttempts(1);
+      setMaxAttempts(1);
       setQuestions([newQuestion()]); setError(null);
       setVoiceInstructions(""); setVoiceDocSource("upload"); setVoiceFile(null); setVoiceSelectedDocId("");
       setVoiceNumQ(5); setVoiceMarksPerQ(10);
@@ -566,10 +565,10 @@ export default function CreateAssessmentModal({
   }, [isOpen]);
 
   // ── Auto-set screen share default when assessment type changes ───────────
-  // Voice defaults to ON (proctored interview), MCQ defaults to OFF (opt-in)
+  // Voice defaults to ON only when the feature is enabled; MCQ always defaults to OFF
   useEffect(() => {
-    setRequireScreenShare(assessmentType === "voice");
-  }, [assessmentType]);
+    setRequireScreenShare(assessmentType === "voice" && screenShareEnabled);
+  }, [assessmentType, screenShareEnabled]);
 
   // ── Load modules when course changes ─────────────────────────────────────
   useEffect(() => {
@@ -637,7 +636,7 @@ export default function CreateAssessmentModal({
           ...(moduleMode === "existing" ? { moduleId } : { moduleName: newModuleName.trim() }),
           title: title.trim(),
           description: description.trim() || undefined,
-          quizData: { questions: filled, passingScore, timeLimit, assessmentType: "mcq", requireFaceId, maxAttempts, requireScreenShare },
+          quizData: { questions: filled, passingScore, timeLimit, assessmentType: "mcq", maxAttempts, requireScreenShare },
         });
         const modTitle = moduleMode === "existing"
           ? (modules.find((m) => m.id === moduleId)?.title ?? "") : newModuleName.trim();
@@ -661,7 +660,6 @@ export default function CreateAssessmentModal({
             passingScore: 50,
             timeLimit: 0,
             totalMarks: voiceQuestions.reduce((s, q) => s + q.marks, 0),
-            requireFaceId,
             maxAttempts,
             requireScreenShare,
           },
@@ -986,65 +984,39 @@ export default function CreateAssessmentModal({
             </div>
           </div>
 
-          {/* ── Face ID toggle (shared for all types) ── */}
-          <button
-            type="button"
-            disabled={!faceIdEnabled}
-            onClick={() => faceIdEnabled && setRequireFaceId((p) => !p)}
-            title={!faceIdEnabled ? "Exam Proctoring feature is not enabled for this institute" : undefined}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left ${
-              !faceIdEnabled
-                ? "border-gray-100 dark:border-gray-800 opacity-40 cursor-not-allowed"
-                : requireFaceId
-                ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10"
-                : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
-            }`}
-          >
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${requireFaceId && faceIdEnabled ? "bg-blue-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-400"}`}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-              </svg>
-            </div>
-            <div className="flex-1">
-              <p className={`text-sm font-semibold ${requireFaceId && faceIdEnabled ? "text-blue-700 dark:text-blue-300" : "text-gray-700 dark:text-gray-300"}`}>
-                Require Face Identification
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                {faceIdEnabled ? "Students must verify their identity before starting this assessment" : "Not enabled — enable Exam Proctoring in Features & Plan"}
-              </p>
-            </div>
-            <div className={`w-10 h-6 rounded-full relative transition-colors shrink-0 ${requireFaceId && faceIdEnabled ? "bg-blue-500" : "bg-gray-200 dark:bg-gray-700"}`}>
-              <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${requireFaceId && faceIdEnabled ? "translate-x-5" : "translate-x-1"}`} />
-            </div>
-          </button>
-
           {/* ── Screen Share Proctoring toggle (all assessment types) ── */}
           <button
             type="button"
-            onClick={() => setRequireScreenShare((p) => !p)}
+            disabled={!screenShareEnabled}
+            onClick={() => screenShareEnabled && setRequireScreenShare((p) => !p)}
+            title={!screenShareEnabled ? "Screen Share Proctoring is not enabled for this institute" : undefined}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left ${
-              requireScreenShare
+              !screenShareEnabled
+                ? "border-gray-100 dark:border-gray-800 opacity-40 cursor-not-allowed"
+                : requireScreenShare
                 ? "border-purple-500 bg-purple-50 dark:bg-purple-500/10"
                 : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
             }`}
           >
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${requireScreenShare ? "bg-purple-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-400"}`}>
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${requireScreenShare && screenShareEnabled ? "bg-purple-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-400"}`}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0H3" />
               </svg>
             </div>
             <div className="flex-1">
-              <p className={`text-sm font-semibold ${requireScreenShare ? "text-purple-700 dark:text-purple-300" : "text-gray-700 dark:text-gray-300"}`}>
+              <p className={`text-sm font-semibold ${requireScreenShare && screenShareEnabled ? "text-purple-700 dark:text-purple-300" : "text-gray-700 dark:text-gray-300"}`}>
                 Require Screen Share Proctoring
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                {requireScreenShare
+                {!screenShareEnabled
+                  ? "Not enabled — enable Screen Share Proctoring in Features & Plan"
+                  : requireScreenShare
                   ? "Students must share their entire screen — stopping the share or switching windows scores 0"
                   : "No screen sharing required — students start the assessment directly"}
               </p>
             </div>
-            <div className={`w-10 h-6 rounded-full relative transition-colors shrink-0 ${requireScreenShare ? "bg-purple-500" : "bg-gray-200 dark:bg-gray-700"}`}>
-              <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${requireScreenShare ? "translate-x-5" : "translate-x-1"}`} />
+            <div className={`w-10 h-6 rounded-full relative transition-colors shrink-0 ${requireScreenShare && screenShareEnabled ? "bg-purple-500" : "bg-gray-200 dark:bg-gray-700"}`}>
+              <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${requireScreenShare && screenShareEnabled ? "translate-x-5" : "translate-x-1"}`} />
             </div>
           </button>
 

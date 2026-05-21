@@ -45,6 +45,9 @@ export class ModuleContent {
   @Column({ type: 'jsonb', default: '{}', nullable: true })
   studentAttempts: any; // Track student quiz attempts: { studentId: { score, attemptedAt } }
 
+  @Column({ type: 'jsonb', default: '{}', nullable: true })
+  integrityFlags: any; // { [userId]: [{ id, type, severity, timestamp, detail, reviewed }] }
+
   @Column({ default: 0 })
   order: number;
 

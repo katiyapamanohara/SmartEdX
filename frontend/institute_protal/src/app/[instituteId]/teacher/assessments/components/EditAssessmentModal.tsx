@@ -8,6 +8,7 @@ import {
   FiAlertCircle, FiMic, FiLoader, FiZap, FiUpload, FiBook, FiFile,
 } from "react-icons/fi";
 import { authService } from "@/services/authService";
+import { useFeatures } from "@/context/InstituteFeatureContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -388,13 +389,16 @@ export default function EditAssessmentModal({
 }: EditAssessmentModalProps) {
   const isVoice = (entry?.content.quizData as any)?.assessmentType === "voice";
 
+  // ── SaaS feature gates ─────────────────────────────────────────────────────
+  const { hasFeature } = useFeatures();
+  const screenShareEnabled = hasFeature("screen_share_proctoring");
+
   // ── Shared fields ──────────────────────────────────────────────────────────
   const [title, setTitle]                       = useState("");
   const [description, setDescription]           = useState("");
   const [passingScore, setPassingScore]         = useState(70);
   const [timeLimit, setTimeLimit]               = useState(0);
   const [maxAttempts, setMaxAttempts]           = useState(1);
-  const [requireFaceId, setRequireFaceId]       = useState(false);
   const [requireScreenShare, setRequireScreenShare] = useState(false);
   const [submitting, setSubmitting]             = useState(false);
   const [error, setError]                       = useState<string | null>(null);
@@ -444,7 +448,6 @@ export default function EditAssessmentModal({
     setPassingScore(qd?.passingScore ?? 70);
     setTimeLimit(qd?.timeLimit ?? 0);
     setMaxAttempts(qd?.maxAttempts ?? 1);
-    setRequireFaceId(!!(qd?.requireFaceId));
     setRequireScreenShare(!!(qd?.requireScreenShare));
     setError(null);
     if ((qd?.assessmentType ?? "mcq") === "voice") {
@@ -520,7 +523,6 @@ export default function EditAssessmentModal({
             voiceQuestions,
             totalMarks: voiceQuestions.reduce((s: number, q: VoiceQuestion) => s + q.marks, 0),
             maxAttempts,
-            requireFaceId,
             requireScreenShare,
           }
         : {
@@ -530,7 +532,6 @@ export default function EditAssessmentModal({
             timeLimit,
             assessmentType: "mcq",
             maxAttempts,
-            requireFaceId,
             requireScreenShare,
           };
 
@@ -705,47 +706,36 @@ export default function EditAssessmentModal({
             </div>
           </div>
 
-          {/* ── Face ID toggle ── */}
-          <button type="button" onClick={() => setRequireFaceId((p) => !p)}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left ${
-              requireFaceId ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10" : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"}`}>
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${requireFaceId ? "bg-blue-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-400"}`}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-              </svg>
-            </div>
-            <div className="flex-1">
-              <p className={`text-sm font-semibold ${requireFaceId ? "text-blue-700 dark:text-blue-300" : "text-gray-700 dark:text-gray-300"}`}>
-                Require Face Identification
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Students must verify identity before starting</p>
-            </div>
-            <div className={`w-10 h-6 rounded-full relative transition-colors shrink-0 ${requireFaceId ? "bg-blue-500" : "bg-gray-200 dark:bg-gray-700"}`}>
-              <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${requireFaceId ? "translate-x-5" : "translate-x-1"}`} />
-            </div>
-          </button>
-
           {/* ── Screen Share Proctoring toggle ── */}
-          <button type="button" onClick={() => setRequireScreenShare((p) => !p)}
+          <button type="button"
+            disabled={!screenShareEnabled}
+            onClick={() => screenShareEnabled && setRequireScreenShare((p) => !p)}
+            title={!screenShareEnabled ? "Screen Share Proctoring is not enabled for this institute" : undefined}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left ${
-              requireScreenShare ? "border-purple-500 bg-purple-50 dark:bg-purple-500/10" : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"}`}>
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${requireScreenShare ? "bg-purple-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-400"}`}>
+              !screenShareEnabled
+                ? "border-gray-100 dark:border-gray-800 opacity-40 cursor-not-allowed"
+                : requireScreenShare
+                ? "border-purple-500 bg-purple-50 dark:bg-purple-500/10"
+                : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"}`}>
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${requireScreenShare && screenShareEnabled ? "bg-purple-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-400"}`}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0H3" />
               </svg>
             </div>
             <div className="flex-1">
-              <p className={`text-sm font-semibold ${requireScreenShare ? "text-purple-700 dark:text-purple-300" : "text-gray-700 dark:text-gray-300"}`}>
+              <p className={`text-sm font-semibold ${requireScreenShare && screenShareEnabled ? "text-purple-700 dark:text-purple-300" : "text-gray-700 dark:text-gray-300"}`}>
                 Require Screen Share Proctoring
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                {requireScreenShare
+                {!screenShareEnabled
+                  ? "Not enabled — enable Screen Share Proctoring in Features & Plan"
+                  : requireScreenShare
                   ? "Students must share their entire screen — stopping it or switching windows scores 0"
                   : "No screen sharing required — students start the assessment directly"}
               </p>
             </div>
-            <div className={`w-10 h-6 rounded-full relative transition-colors shrink-0 ${requireScreenShare ? "bg-purple-500" : "bg-gray-200 dark:bg-gray-700"}`}>
-              <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${requireScreenShare ? "translate-x-5" : "translate-x-1"}`} />
+            <div className={`w-10 h-6 rounded-full relative transition-colors shrink-0 ${requireScreenShare && screenShareEnabled ? "bg-purple-500" : "bg-gray-200 dark:bg-gray-700"}`}>
+              <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${requireScreenShare && screenShareEnabled ? "translate-x-5" : "translate-x-1"}`} />
             </div>
           </button>
 

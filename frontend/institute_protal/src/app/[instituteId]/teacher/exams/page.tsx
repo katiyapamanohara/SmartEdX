@@ -433,9 +433,7 @@ function ExamModal({ courses, initial, onSave, onClose }: ExamModalProps) {
   const [durationMinutes, setDurationMinutes] = useState(initial?.durationMinutes ?? 60);
   const [passingScore, setPassingScore] = useState(initial?.passingScore ?? 50);
   const [questions, setQuestions] = useState<ExamQuestion[]>(initial?.questions ?? []);
-  const [requireFaceId, setRequireFaceId] = useState(initial?.requireFaceId ?? false);
   const [requireScreenShare, setRequireScreenShare] = useState(initial?.requireScreenShare ?? false);
-  const [enableLiveFaceCheck, setEnableLiveFaceCheck] = useState(initial?.enableLiveFaceCheck ?? false);
   const [autoFailOnCheat, setAutoFailOnCheat] = useState(initial?.autoFailOnCheat ?? false);
   const [maxAttempts, setMaxAttempts] = useState(initial?.maxAttempts ?? 1);
   const [saving, setSaving] = useState(false);
@@ -497,9 +495,7 @@ function ExamModal({ courses, initial, onSave, onClose }: ExamModalProps) {
       scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
       durationMinutes,
       passingScore,
-      requireFaceId,
       requireScreenShare,
-      enableLiveFaceCheck,
       autoFailOnCheat,
       maxAttempts,
       questions,
@@ -621,22 +617,10 @@ function ExamModal({ courses, initial, onSave, onClose }: ExamModalProps) {
             {(
               [
                 {
-                  value: requireFaceId, set: setRequireFaceId,
-                  label: "Require Face Identification",
-                  desc: "Students must verify their identity with face recognition before starting",
-                  icon: <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />,
-                },
-                {
                   value: requireScreenShare, set: setRequireScreenShare,
                   label: "Require Screen Share",
                   desc: "Students must share their screen during the entire exam — exits are flagged",
                   icon: <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H3.75A2.25 2.25 0 0 1 1.5 15V5.25A2.25 2.25 0 0 1 3.75 3h16.5A2.25 2.25 0 0 1 21 5.25Z" />,
-                },
-                {
-                  value: enableLiveFaceCheck, set: setEnableLiveFaceCheck,
-                  label: "Live Face Recognition",
-                  desc: "Continuously verify student identity via face recognition server every 60 s",
-                  icon: <><path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></>,
                 },
                 {
                   value: autoFailOnCheat, set: setAutoFailOnCheat,

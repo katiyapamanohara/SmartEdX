@@ -39,8 +39,8 @@ function InstituteCustomizeContent() {
 
   const PLAN_DEFAULTS: Record<string, string[]> = {
     starter: ["live_sessions", "recordings"],
-    pro: ["live_sessions", "recordings", "ai_tools", "ai_tutor", "exam_proctoring", "advanced_reports"],
-    enterprise: ["live_sessions", "recordings", "ai_tools", "ai_tutor", "exam_proctoring", "advanced_reports", "virtual_labs", "voice_agent"],
+    pro: ["live_sessions", "recordings", "ai_tools", "ai_tutor", "exam_proctoring", "screen_share_proctoring", "advanced_reports"],
+    enterprise: ["live_sessions", "recordings", "ai_tools", "ai_tutor", "exam_proctoring", "screen_share_proctoring", "advanced_reports", "virtual_labs", "voice_agent"],
   };
 
   const FEATURE_META: Record<string, { label: string; description: string; icon: string; plans: string[] }> = {
@@ -49,6 +49,7 @@ function InstituteCustomizeContent() {
     ai_tutor: { label: "AI Tutor (Student)", description: "Personal AI tutor for students — course-aware chat and Q&A assistant.", icon: "🎓", plans: ["pro", "enterprise"] },
     voice_agent: { label: "Voice Agent", description: "AI voice assistant for student Q&A and real-time tutoring.", icon: "🎙️", plans: ["enterprise"] },
     exam_proctoring: { label: "Exam Proctoring", description: "Face verification and integrity monitoring for online exams.", icon: "👁️", plans: ["pro", "enterprise"] },
+    screen_share_proctoring: { label: "Screen Share Proctoring", description: "Require students to share their entire screen during exams. Detects tab-switching, window sharing, and other violations — flagged in the Integrity Monitor.", icon: "🖥️", plans: ["pro", "enterprise"] },
     live_sessions: { label: "Live Classes", description: "Real-time video classes with screen sharing and chat.", icon: "📹", plans: ["starter", "pro", "enterprise"] },
     recordings: { label: "Recordings", description: "Record and replay live sessions for students.", icon: "🎬", plans: ["starter", "pro", "enterprise"] },
     advanced_reports: { label: "Advanced Reports", description: "Detailed performance analytics, CSV exports, and student insights.", icon: "📊", plans: ["pro", "enterprise"] },
@@ -92,8 +93,15 @@ function InstituteCustomizeContent() {
         setPhoneNumber(data.phoneNumber || "");
         setIsActive(data.isActive ?? true);
         setCurrency(data.currency || "USD");
-        setPlan(data.plan || "starter");
-        setEnabledFeatures(Array.isArray(data.enabledFeatures) ? data.enabledFeatures : []);
+        const loadedPlan = data.plan || "starter";
+        setPlan(loadedPlan);
+        const dbFeatures: string[] = Array.isArray(data.enabledFeatures) ? data.enabledFeatures : [];
+        // Auto-enable any plan-default features not yet in the DB (opt-out model).
+        // This ensures newly-added features (e.g. screen_share_proctoring) are ON
+        // for existing institutes without requiring a manual toggle + save.
+        const planDefaults = PLAN_DEFAULTS[loadedPlan] ?? [];
+        const merged = [...new Set([...dbFeatures, ...planDefaults])];
+        setEnabledFeatures(merged);
         try {
           const useCases = data.primaryUseCases ? JSON.parse(data.primaryUseCases) : [];
           setPrimaryUseCases(Array.isArray(useCases) ? useCases : []);
@@ -895,6 +903,13 @@ function getFeatureIcon(key: string) {
       return (
         <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        </svg>
+      );
+    case "screen_share_proctoring":
+      return (
+        <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 0l-2-2m2 2l2-2" />
         </svg>
       );
     case "live_sessions":

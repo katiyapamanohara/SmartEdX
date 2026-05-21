@@ -40,6 +40,7 @@ export default function StudentAssessmentAttemptPage() {
   const [submitted, setSubmitted]           = useState(false);
   const [submitting, setSubmitting]         = useState(false);
   const [alreadyAttempted, setAlreadyAttempted] = useState(false);
+  const [integrityViolatedPrev, setIntegrityViolatedPrev] = useState(false); // persisted from server
   const [attemptCount, setAttemptCount]     = useState(0);
   const [score, setScore]                   = useState(0);
   const [error, setError]                   = useState<string | null>(null);
@@ -52,12 +53,13 @@ export default function StudentAssessmentAttemptPage() {
   const [leaveCountdown, setLeaveCountdown] = useState<number | null>(null);
   const [violationMsg, setViolationMsg]     = useState("");
 
-  const screenStreamRef    = useRef<MediaStream | null>(null);
-  const autoFailedRef      = useRef(false);
-  const countdownTimerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
-  const leaveViolationsRef = useRef(0);
-  const triggerAutoFailRef = useRef<(reason?: string) => void>(() => {});
-  const violationsRef      = useRef<{type: string; timestamp: string; detail?: string}[]>([]);
+  const screenStreamRef      = useRef<MediaStream | null>(null);
+  const autoFailedRef        = useRef(false);
+  const integrityViolatedRef = useRef(false); // tracks current session violation
+  const countdownTimerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const leaveViolationsRef   = useRef(0);
+  const triggerAutoFailRef   = useRef<(reason?: string) => void>(() => {});
+  const violationsRef        = useRef<{type: string; timestamp: string; detail?: string}[]>([]);
 
   // ── Fetch data ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -80,11 +82,13 @@ export default function StudentAssessmentAttemptPage() {
                   setAttemptCount(count);
                   setScore(attData.score || 0);
                   setStoredAnswers(attData.answers || {});
-                  // Only block if used all attempts
-                  if (count >= maxAllowed) {
+                  // Persist integrity-violation flag from server — blocks re-attempts permanently
+                  if (attData.integrityViolated) {
+                    setIntegrityViolatedPrev(true);
+                  }
+                  if (count >= maxAllowed || attData.integrityViolated) {
                     setAlreadyAttempted(true);
                   } else {
-                    // Has attempts left — still show review but canReattempt=true
                     setAlreadyAttempted(true);
                   }
                 }
@@ -132,7 +136,8 @@ export default function StudentAssessmentAttemptPage() {
 
   const questions        = item?.content.quizData?.questions ?? [];
   const maxAttemptsAllowed = (item?.content.quizData as any)?.maxAttempts ?? 1;
-  const canReattempt     = alreadyAttempted && attemptCount < maxAttemptsAllowed;
+  // No re-attempt allowed if integrity was violated (regardless of remaining attempts)
+  const canReattempt     = alreadyAttempted && attemptCount < maxAttemptsAllowed && !integrityViolatedPrev;
 
   // Live score from current answers (used for back-submit)
   const liveScore = useMemo(() => {
@@ -194,12 +199,18 @@ export default function StudentAssessmentAttemptPage() {
     try {
       const token   = authService.getToken();
       const apiUrl  = process.env.NEXT_PUBLIC_API_URL;
+      const isIntegrityViolation = integrityViolatedRef.current;
       const res = await fetch(
         `${apiUrl}/api/institutes/institutes/${instituteId}/courses/student-assessments/${assessmentId}/submit`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ score: finalScore, answers: finalAnswers, violations: violationsRef.current }),
+          body: JSON.stringify({
+            score: isIntegrityViolation ? 0 : finalScore,
+            answers: finalAnswers,
+            violations: violationsRef.current,
+            integrityViolated: isIntegrityViolation || undefined,
+          }),
         }
       );
       if (!res.ok) {
@@ -208,8 +219,10 @@ export default function StudentAssessmentAttemptPage() {
         setSubmitted(false);
         return;
       }
-      setScore(finalScore);
+      const finalSavedScore = isIntegrityViolation ? 0 : finalScore;
+      setScore(finalSavedScore);
       setStoredAnswers(finalAnswers);
+      if (isIntegrityViolation) setIntegrityViolatedPrev(true);
       setAlreadyAttempted(true);
       setAttemptCount((prev) => prev + 1);
     } catch (e) {
@@ -240,9 +253,11 @@ export default function StudentAssessmentAttemptPage() {
     setError(null);
     setViolationMsg("");
     setLeaveCountdown(null);
-    autoFailedRef.current      = false;
-    leaveViolationsRef.current = 0;
-    violationsRef.current      = [];
+    setIntegrityViolatedPrev(false);
+    autoFailedRef.current         = false;
+    integrityViolatedRef.current  = false;
+    leaveViolationsRef.current    = 0;
+    violationsRef.current         = [];
     screenStreamRef.current?.getTracks().forEach((t) => t.stop());
     screenStreamRef.current = null;
     if (requiresScreenShare) {
@@ -287,13 +302,14 @@ export default function StudentAssessmentAttemptPage() {
   const triggerAutoFail = useCallback((reason = "screen_share_stopped") => {
     if (autoFailedRef.current) return;
     violationsRef.current.push({ type: reason, timestamp: new Date().toISOString() });
-    autoFailedRef.current = true;
+    autoFailedRef.current        = true;
+    integrityViolatedRef.current = true; // mark as integrity violation — forces 0 + blocks re-attempts
     if (countdownTimerRef.current) { clearInterval(countdownTimerRef.current); countdownTimerRef.current = null; }
     screenStreamRef.current?.getTracks().forEach((t) => t.stop());
     screenStreamRef.current = null;
     setLeaveCountdown(null);
     setViolationMsg("");
-    submitScore(0, {}); // submit 0 marks with violations
+    submitScore(0, {}); // submit 0 marks with violations + integrityViolated flag
   }, [submitScore]);
 
   triggerAutoFailRef.current = triggerAutoFail;
@@ -327,6 +343,22 @@ export default function StudentAssessmentAttemptPage() {
       }, 1_000);
     };
 
+    // Fire a real-time violation report to backend (teacher notified immediately)
+    const reportViolationRealTime = (type: string, detail: string) => {
+      try {
+        const token  = authService.getToken();
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+        fetch(
+          `${apiUrl}/api/institutes/institutes/${instituteId}/courses/student-assessments/${assessmentId}/violation`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ type, timestamp: new Date().toISOString(), detail }),
+          }
+        ).catch(() => {}); // fire-and-forget; don't block the UI
+      } catch { /* ignore */ }
+    };
+
     const clearCountdown = () => {
       if (!countdownTimerRef.current) return;
       clearInterval(countdownTimerRef.current);
@@ -334,12 +366,12 @@ export default function StudentAssessmentAttemptPage() {
       setLeaveCountdown(null);
       leaveViolationsRef.current += 1;
       const n = leaveViolationsRef.current;
-      // Record the tab-switch warning as a violation even before auto-fail
-      violationsRef.current.push({
-        type: "tab_switch",
-        timestamp: new Date().toISOString(),
-        detail: `Warning #${n} — returned within countdown`,
-      });
+      const ts = new Date().toISOString();
+      const detail = `Warning #${n} — returned within countdown`;
+      // Record locally
+      violationsRef.current.push({ type: "tab_switch", timestamp: ts, detail });
+      // Report to teacher in real-time
+      reportViolationRealTime("tab_switch", detail);
       if (n >= 2) {
         triggerAutoFailRef.current("tab_switch_repeated");
       } else {
@@ -462,13 +494,26 @@ export default function StudentAssessmentAttemptPage() {
           </Link>
         </div>
 
-        {/* Auto-fail termination banner */}
-        {autoFailedRef.current && (
-          <div className="rounded-2xl border border-red-300 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
-            <p className="font-semibold text-red-700 dark:text-red-400">Assessment Terminated</p>
-            <p className="mt-1 text-sm text-red-600 dark:text-red-400">
-              A cheating violation was detected (screen share stopped or window switched). Your score has been automatically set to 0.
-            </p>
+        {/* Integrity-violation / auto-fail termination banner */}
+        {(autoFailedRef.current || integrityViolatedPrev) && (
+          <div className="rounded-2xl border border-red-300 bg-red-50 p-5 dark:border-red-800 dark:bg-red-900/20">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center shrink-0">
+                <svg width="18" height="18" fill="none" stroke="#ef4444" strokeWidth={2.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                </svg>
+              </div>
+              <div>
+                <p className="font-bold text-red-700 dark:text-red-400">Assessment Terminated — Integrity Violation</p>
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                  A cheating violation was detected during this assessment (tab/window switch or screen share stopped).
+                  Your score has been set to <strong>0</strong> and this has been reported to your teacher.
+                </p>
+                <p className="mt-2 text-xs font-semibold text-red-500 dark:text-red-400">
+                  🔒 No further attempts are permitted for this assessment.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
