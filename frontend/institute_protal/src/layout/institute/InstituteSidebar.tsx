@@ -13,6 +13,7 @@ import {
   HorizontaLDots,
   UserIcon,
   DollarLineIcon,
+  PieChartIcon,
 } from "../../icons/index";
 
 type NavItem = {
@@ -43,6 +44,11 @@ const navItems: NavItem[] = [
   },
  
 
+  {
+    icon: <PieChartIcon />,
+    name: "Performance",
+    path: "/institute/performance",
+  },
   {
     icon: <DollarLineIcon />,
     name: "Finance",

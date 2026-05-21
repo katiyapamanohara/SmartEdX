@@ -149,23 +149,25 @@ export default function VoiceModal({
     }
   }, []);
 
-  // ── Activate PiP on forcePip (also attempts OS-level float) ─────────────
+  // ── Activate PiP on forcePip ──────────────────────────────────────────────
+  // NOTE: documentPictureInPicture.requestWindow() requires a user gesture.
+  // We cannot call it from a useEffect (no gesture). Instead we show a hint
+  // banner so the user can click to float the widget above other apps.
   useEffect(() => {
     if (!forcePip) return;
     setPipMode(true);
+    // If system PiP is supported but not yet open, nudge the user to click
     if ((window as any).documentPictureInPicture && !sysPipWindowRef.current) {
-      openSystemPip().catch(() => {});
+      setShowPipHint(true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forcePip]);
 
-  // ── Auto-open system PiP when session connects (catches cases where the
-  //    initial attempt above fires without a valid user-activation context) ──
+  // ── When session connects in PiP mode, re-surface hint if needed ──────────
   useEffect(() => {
-    if (!pipMode || !supportsDocPip || sysPipWindowRef.current || step !== "session" || sysPipAutoOpenedRef.current) return;
-    sysPipAutoOpenedRef.current = true;
-    openSystemPip().catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!pipMode || !supportsDocPip || sysPipWindowRef.current || step !== "session") return;
+    // Show hint so user can click to open OS-level window (requires gesture)
+    setShowPipHint(true);
   }, [step, pipMode, supportsDocPip]);
 
   // ── Resume audio contexts when user returns to this tab ───────────────────
@@ -179,6 +181,20 @@ export default function VoiceModal({
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => document.removeEventListener("visibilitychange", onVisibilityChange);
   }, []);
+
+  // ── Show "float above apps" hint when in-browser PiP tab goes to background ─
+  const [showPipHint, setShowPipHint] = useState(false);
+  useEffect(() => {
+    if (!pipMode) return;
+    function onVisibilityChange() {
+      // Page went hidden (user switched app) while in in-browser PiP — no system PiP open
+      if (document.visibilityState === "hidden" && !sysPipWindowRef.current) {
+        setShowPipHint(true);
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [pipMode]);
 
   // ── Detect system PiP window closing (e.g. on SPA navigation) ────────────
   useEffect(() => {
@@ -919,6 +935,40 @@ export default function VoiceModal({
             userSelect: "none",
           }}
         >
+          {/* "Float above other apps" banner — shown when OS-level PiP is available but not yet open */}
+          {showPipHint && supportsDocPip && !sysPipWindow && step === "session" && (
+            <button
+              onClick={async () => { setShowPipHint(false); try { await openSystemPip(); } catch {} }}
+              style={{
+                width: "100%",
+                padding: "9px 12px",
+                background: isDark ? "rgba(59,130,246,0.2)" : "rgba(37,99,235,0.1)",
+                borderBottom: `1px solid ${isDark ? "rgba(59,130,246,0.3)" : "rgba(37,99,235,0.2)"}`,
+                display: "flex",
+                alignItems: "center",
+                gap: 7,
+                border: "none",
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              <svg width="14" height="14" fill="none" stroke={isDark ? "#93c5fd" : "#2563eb"} strokeWidth={2} viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+                <rect x="2" y="3" width="20" height="14" rx="2" />
+                <rect x="12.5" y="9.5" width="7.5" height="5" rx="1" fill={isDark ? "#93c5fd" : "#2563eb"} opacity="0.3" />
+                <rect x="12.5" y="9.5" width="7.5" height="5" rx="1" />
+              </svg>
+              <span style={{ flex: 1, fontSize: 10, fontWeight: 600, color: isDark ? "#93c5fd" : "#1d4ed8", lineHeight: 1.4 }}>
+                Click to stay visible above other apps
+              </span>
+              <span
+                role="button"
+                onClick={e => { e.stopPropagation(); setShowPipHint(false); }}
+                style={{ color: isDark ? "#6b7280" : "#9ca3af", display: "flex", alignItems: "center", padding: 2 }}
+              >
+                <svg width="9" height="9" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+              </span>
+            </button>
+          )}
           {/* Drag handle */}
           <div
             onMouseDown={handlePipDragStart}
@@ -945,7 +995,7 @@ export default function VoiceModal({
             </span>
             {supportsDocPip && step === "session" && (
               <button
-                onClick={openSystemPip}
+                onClick={() => { setShowPipHint(false); openSystemPip(); }}
                 title="Float above other apps"
                 style={{ marginLeft: 4, padding: 4, borderRadius: 6, border: "none", background: "rgba(59,130,246,0.15)", cursor: "pointer", color: isDark ? "#93c5fd" : "#2563eb", display: "flex", alignItems: "center" }}
               >
@@ -1165,10 +1215,17 @@ export default function VoiceModal({
         {/* Minimize to PiP */}
         {step === "session" && (
           <button
-            onClick={() => setPipMode(true)}
+            onClick={async () => {
+              setPipMode(true);
+              // Try to open OS-level floating window immediately while we still
+              // have the user-gesture — this window stays on top of ALL apps.
+              if (supportsDocPip && !sysPipWindowRef.current) {
+                try { await openSystemPip(); } catch {}
+              }
+            }}
             className={`w-16 h-16 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95 ${isDark ? "text-white" : "text-gray-900"}`}
             style={{ background: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)", backdropFilter: "blur(12px)" }}
-            title="Minimize to picture-in-picture"
+            title={supportsDocPip ? "Float above all apps (Document PiP)" : "Minimize to picture-in-picture"}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <rect x="2" y="3" width="20" height="14" rx="2" strokeLinecap="round" strokeLinejoin="round" />
