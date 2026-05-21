@@ -39,10 +39,10 @@ export default function TeacherLayout({
     <InstituteFeatureProvider>
       <LiveSessionProvider>
         <VoiceAgentProvider>
-          <div className="min-h-screen lg:flex">
+          <div className="min-h-screen lg:flex overflow-x-hidden">
             <TeacherSidebar />
             <TeacherBackdrop />
-            <div className={`flex-1 transition-all duration-300 ease-in-out ${mainContentMargin}`}>
+            <div className={`flex-1 min-w-0 transition-all duration-300 ease-in-out ${mainContentMargin}`}>
               <TeacherHeader />
               <div className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">{children}</div>
             </div>

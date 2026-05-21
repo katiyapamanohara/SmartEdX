@@ -1688,19 +1688,8 @@ export default function TeacherExamsPage() {
               </div>
 
               {/* ── Desktop table (sm+) ── */}
-              <div className="hidden sm:block  overflow-x-auto overflow-y-auto max-h-[60vh] w-full">
-                <table className=" text-sm table-fixed">
-                  <colgroup>
-                    <col className="w-[30%]" />
-                    <col className="hidden md:table-column w-[18%]" />
-                    <col className="hidden lg:table-column w-[16%]" />
-                    <col className="hidden md:table-column w-[9%]" />
-                    <col className="hidden md:table-column w-[9%]" />
-                    <col className="w-[8%]" />
-                    <col className="w-[7%]" />
-                    <col className="w-[10%]" />
-                    <col className="w-[18%]" />
-                  </colgroup>
+              <div className="hidden sm:block w-full overflow-y-auto max-h-[60vh]">
+                <table className="w-full text-sm table-auto">
                   <thead className="sticky top-0 z-10 bg-white dark:bg-gray-900">
                     <tr className="border-b border-gray-100 dark:border-gray-800 text-xs text-gray-500 dark:text-gray-400">
                       <th className="text-left px-4 sm:px-5 py-3">Title</th>
@@ -1725,7 +1714,7 @@ export default function TeacherExamsPage() {
                       );
                       return (
                         <tr key={exam.id} className="border-b border-gray-50 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-white/3">
-                          <td className="px-4 sm:px-5 py-3 font-medium text-gray-900 dark:text-white max-w-40 sm:max-w-[200px] truncate">{exam.title}</td>
+                          <td className="px-4 sm:px-5 py-3 font-medium text-gray-900 dark:text-white w-full truncate">{exam.title}</td>
                           <td className="px-5 py-3 text-gray-500 dark:text-gray-400 hidden md:table-cell max-w-[140px] truncate">{exam.courseName ?? exam.courseId.slice(0, 8)}</td>
                           <td className="px-5 py-3 text-gray-500 dark:text-gray-400 hidden lg:table-cell whitespace-nowrap">{fmtDate(exam.scheduledAt)}</td>
                           <td className="px-5 py-3 text-center text-gray-600 dark:text-gray-400 hidden md:table-cell">{exam.durationMinutes}m</td>
