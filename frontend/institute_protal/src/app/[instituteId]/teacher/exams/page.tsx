@@ -511,8 +511,8 @@ function ExamModal({ courses, initial, onSave, onClose }: ExamModalProps) {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 overflow-y-auto py-8 px-4">
-      <div className="w-full max-w-2xl bg-white dark:bg-gray-900 rounded-2xl shadow-xl">
+    <div className="fixed inset-0 z-999999 flex flex-col justify-end sm:justify-center sm:items-center bg-black/50 backdrop-blur-sm sm:p-4">
+      <div className="w-full sm:max-w-2xl bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[95vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800">
           <h2 className="text-lg font-bold text-gray-900 dark:text-white">
@@ -549,7 +549,7 @@ function ExamModal({ courses, initial, onSave, onClose }: ExamModalProps) {
           </div>
         )}
 
-        <div className="px-6 py-5 max-h-[65vh] overflow-y-auto">
+        <div className="px-4 sm:px-6 py-5 flex-1 overflow-y-auto">
 
           {/* ── Details Tab ──────────────────────────────────────────────── */}
           <div className={`flex flex-col gap-4 ${tab !== "details" ? "hidden" : ""}`}>
@@ -671,14 +671,14 @@ function ExamModal({ courses, initial, onSave, onClose }: ExamModalProps) {
 
         </div>
 
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-800">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">Cancel</button>
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-3 px-4 sm:px-6 py-4 border-t border-gray-100 dark:border-gray-800 shrink-0">
+          <button onClick={onClose} className="px-4 py-2.5 sm:py-2 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">Cancel</button>
           <button onClick={() => handleSubmit(false)} disabled={saving}
-            className="px-4 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 disabled:opacity-50">
+            className="px-4 py-2.5 sm:py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 disabled:opacity-50">
             Save as Draft
           </button>
           <button onClick={() => handleSubmit(true)} disabled={saving}
-            className="px-4 py-2 text-sm rounded-lg bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50">
+            className="px-4 py-2.5 sm:py-2 text-sm rounded-lg bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50 font-semibold">
             {saving ? "Saving…" : scheduledAt ? "Publish & Schedule" : "Publish Now"}
           </button>
         </div>
@@ -832,27 +832,32 @@ function IntegrityMonitorModal({ exam, flags, instituteId, onClose, onFlagReview
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm overflow-y-auto py-8 px-4">
-      <div className="w-full max-w-3xl bg-white dark:bg-gray-900 rounded-2xl shadow-2xl">
+    <div className="fixed inset-0 z-99999 flex flex-col justify-end sm:justify-center sm:items-center bg-black/60 backdrop-blur-sm sm:p-4">
+      <div className="w-full sm:max-w-3xl bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[95vh] flex flex-col overflow-hidden">
+
+        {/* ── Drag handle (mobile only) ── */}
+        <div className="sm:hidden flex justify-center pt-3 pb-1 shrink-0">
+          <div className="w-10 h-1 rounded-full bg-gray-200 dark:bg-gray-700" />
+        </div>
 
         {/* ── Header ── */}
-        <div className="flex items-start justify-between px-6 py-5 border-b border-gray-100 dark:border-gray-800">
+        <div className="flex items-start justify-between px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-100 dark:border-gray-800 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center shrink-0">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="text-red-600 dark:text-red-400">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center shrink-0">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="text-red-600 dark:text-red-400">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
               </svg>
             </div>
             <div>
-              <h2 className="text-base font-bold text-gray-900 dark:text-white">Integrity Monitor</h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-xs">{exam.title}</p>
+              <h2 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white">Integrity Monitor</h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[220px] sm:max-w-xs">{exam.title}</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none shrink-0 mt-0.5">&times;</button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none shrink-0 mt-0.5 p-1">&times;</button>
         </div>
 
         {/* ── Summary stats ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 px-6 py-4 border-b border-gray-100 dark:border-gray-800">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-gray-800 shrink-0">
           {[
             { label: "Total Flags", value: totalFlags, color: "text-gray-800 dark:text-white" },
             { label: "Flagged Students", value: uniqueStudents, color: "text-amber-600 dark:text-amber-400" },
@@ -860,41 +865,41 @@ function IntegrityMonitorModal({ exam, flags, instituteId, onClose, onFlagReview
             { label: "Auto-Failed", value: autoFailedCount, color: "text-red-700 dark:text-red-300 font-bold" },
             { label: "Pending Review", value: pendingReview, color: "text-brand-600 dark:text-brand-400" },
           ].map((s) => (
-            <div key={s.label} className="rounded-xl bg-gray-50 dark:bg-white/5 p-3 text-center">
-              <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wide">{s.label}</p>
-              <p className={`text-2xl font-bold mt-0.5 ${s.color}`}>{s.value}</p>
+            <div key={s.label} className="rounded-xl bg-gray-50 dark:bg-white/5 p-2 sm:p-3 text-center">
+              <p className="text-[9px] sm:text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wide leading-tight">{s.label}</p>
+              <p className={`text-xl sm:text-2xl font-bold mt-0.5 ${s.color}`}>{s.value}</p>
             </div>
           ))}
         </div>
 
         {/* ── Tabs ── */}
-        <div className="flex items-center justify-between px-6 pt-4 pb-0 border-b border-gray-100 dark:border-gray-800">
-          <div className="flex gap-1">
+        <div className="flex items-center justify-between px-4 sm:px-6 pt-3 sm:pt-4 pb-0 border-b border-gray-100 dark:border-gray-800 shrink-0">
+          <div className="flex gap-0.5 sm:gap-1 overflow-x-auto">
             {(["students", "violations"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
-                className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                className={`px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
                   tab === t
                     ? "border-red-500 text-red-600 dark:text-red-400"
                     : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
                 }`}
               >
-                {t === "students" ? `Students (${uniqueStudents})` : `All Violations (${totalFlags})`}
+                {t === "students" ? `Students (${uniqueStudents})` : `Violations (${totalFlags})`}
               </button>
             ))}
           </div>
           {pendingReview > 0 && (
             <button
               onClick={markAllReviewed}
-              className="text-xs text-brand-500 hover:text-brand-600 font-medium mb-1"
+              className="text-xs text-brand-500 hover:text-brand-600 font-medium mb-1 ml-2 shrink-0"
             >
-              Mark all reviewed
+              Mark all
             </button>
           )}
         </div>
 
-        <div className="px-6 py-5 max-h-[55vh] overflow-y-auto">
+        <div className="px-4 sm:px-6 py-4 sm:py-5 flex-1 overflow-y-auto">
 
           {/* ── Students Tab ── */}
           {tab === "students" && (
@@ -1110,9 +1115,9 @@ function IntegrityMonitorModal({ exam, flags, instituteId, onClose, onFlagReview
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
+        <div className="px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0">
           <p className="text-xs text-gray-400">{pendingReview} unreviewed flag{pendingReview !== 1 ? "s" : ""}</p>
-          <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">Close</button>
+          <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors active:bg-gray-100">Close</button>
         </div>
       </div>
     </div>
@@ -1125,13 +1130,20 @@ function AttemptsModal({ exam, onClose }: { exam: Exam; onClose: () => void }) {
   type AttemptEntry = ExamAttempt & { attemptCount?: number; autoFailed?: boolean };
   const attempts = Object.entries(exam.studentAttempts ?? {}) as [string, AttemptEntry][];
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-      <div className="w-full max-w-lg bg-white dark:bg-gray-900 rounded-2xl shadow-xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800">
-          <h2 className="text-base font-bold text-gray-900 dark:text-white">Student Attempts — {exam.title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+    <div className="fixed inset-0 z-9999 flex flex-col justify-end sm:justify-center sm:items-center bg-black/50 sm:p-4">
+      <div className="w-full sm:max-w-lg bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col overflow-hidden">
+        {/* Drag handle */}
+        <div className="sm:hidden flex justify-center pt-3 pb-1 shrink-0">
+          <div className="w-10 h-1 rounded-full bg-gray-200 dark:bg-gray-700" />
         </div>
-        <div className="px-6 py-4 max-h-[70vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-100 dark:border-gray-800 shrink-0">
+          <div className="min-w-0 pr-3">
+            <h2 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white">Student Attempts</h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{exam.title}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl shrink-0 p-1">&times;</button>
+        </div>
+        <div className="px-4 sm:px-6 py-4 flex-1 overflow-y-auto">
           {attempts.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-8">No attempts yet.</p>
           ) : (
@@ -1178,7 +1190,270 @@ function AttemptsModal({ exam, onClose }: { exam: Exam; onClose: () => void }) {
             </div>
           )}
         </div>
+        <div className="px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-gray-800 flex justify-end shrink-0">
+          <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors active:bg-gray-100">Close</button>
+        </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Exams Integrity Inline Panel ─────────────────────────────────────────────
+
+function ExamsIntegrityPanel({
+  allFlags,
+  exams,
+  instituteId,
+  onFlagReviewed,
+  onViewExam,
+}: {
+  allFlags: FlagRow[];
+  exams: Exam[];
+  instituteId: string;
+  onFlagReviewed: (flagId: string) => void;
+  onViewExam: (exam: Exam) => void;
+}) {
+  const [filter, setFilter] = useState<"all" | "pending" | "reviewed">("all");
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [localFlags, setLocalFlags] = useState<FlagRow[]>(allFlags);
+  const [expandedExam, setExpandedExam] = useState<string | null>(null);
+
+  useEffect(() => { setLocalFlags(allFlags); }, [allFlags]);
+
+  const handleReview = async (flag: FlagRow) => {
+    if (flag.reviewed || reviewingId) return;
+    setReviewingId(flag.flagId);
+    const ok = await examService.markFlagReviewed(instituteId, flag.examId, flag.flagId, flag.userId);
+    if (ok) {
+      setLocalFlags((prev) => prev.map((f) => f.flagId === flag.flagId ? { ...f, reviewed: true } : f));
+      onFlagReviewed(flag.flagId);
+    }
+    setReviewingId(null);
+  };
+
+  // Derived stats
+  const totalFlags = localFlags.length;
+  const highFlags = localFlags.filter((f) => f.severity === "high").length;
+  const uniqueStudents = new Set(localFlags.map((f) => f.userId)).size;
+  const pendingCount = localFlags.filter((f) => !f.reviewed).length;
+  const autoFailedCount = exams.reduce((acc, e) => {
+    return acc + Object.values(e.studentAttempts ?? {}).filter((a) => (a as { autoFailed?: boolean }).autoFailed).length;
+  }, 0);
+
+  // Flags filtered by tab
+  const visible = localFlags.filter((f) => {
+    if (filter === "pending") return !f.reviewed;
+    if (filter === "reviewed") return f.reviewed;
+    return true;
+  });
+
+  // Group by exam for the grouped view
+  const byExam = visible.reduce<Record<string, FlagRow[]>>((acc, f) => {
+    (acc[f.examId] = acc[f.examId] ?? []).push(f);
+    return acc;
+  }, {});
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Summary stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        {[
+          { label: "Total Flags", value: totalFlags, color: "text-gray-800 dark:text-white" },
+          { label: "Flagged Students", value: uniqueStudents, color: "text-amber-600 dark:text-amber-400" },
+          { label: "High Severity", value: highFlags, color: "text-red-600 dark:text-red-400" },
+          { label: "Auto-Failed", value: autoFailedCount, color: "text-red-700 dark:text-red-300" },
+        ].map((s) => (
+          <div key={s.label} className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/3 p-4 sm:p-5">
+            <p className="text-xs text-gray-500 dark:text-gray-400">{s.label}</p>
+            <p className={`text-2xl font-bold mt-1 ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Filter bar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {(["all", "pending", "reviewed"] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              filter === f
+                ? "bg-brand-500 text-white"
+                : "bg-gray-100 dark:bg-white/6 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10"
+            }`}
+          >
+            {f.charAt(0).toUpperCase() + f.slice(1)}
+            {f === "pending" && pendingCount > 0 && (
+              <span className="ml-1.5 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{pendingCount}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Empty state */}
+      {totalFlags === 0 && (
+        <div className="flex flex-col items-center justify-center py-24 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 text-center gap-4">
+          <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+            <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
+            </svg>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700 dark:text-gray-300">No integrity violations</p>
+            <p className="text-sm text-gray-400 mt-1">All exams are clean.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Grouped by exam */}
+      {Object.keys(byExam).length > 0 && (
+        <div className="flex flex-col gap-3">
+          {Object.entries(byExam).map(([examId, examFlags]) => {
+            const exam = exams.find((e) => e.id === examId);
+            const examTitle = examFlags[0]?.examTitle ?? examId;
+            const examHighCount = examFlags.filter((f) => f.severity === "high").length;
+            const examUniqueStudents = new Set(examFlags.map((f) => f.userId)).size;
+            const isOpen = expandedExam === examId;
+
+            return (
+              <div key={examId} className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
+                {/* Exam header */}
+                <div
+                  className="flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
+                  onClick={() => setExpandedExam(isOpen ? null : examId)}
+                >
+                  <div className="w-9 h-9 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center shrink-0">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="text-red-600 dark:text-red-400">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-900 dark:text-white text-sm">{examTitle}</p>
+                    <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{examUniqueStudents} student{examUniqueStudents !== 1 ? "s" : ""} flagged</span>
+                      {examHighCount > 0 && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400">
+                          {examHighCount} high severity
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">
+                      {examFlags.length} flag{examFlags.length !== 1 ? "s" : ""}
+                    </span>
+                    {exam && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onViewExam(exam); }}
+                        className="text-[10px] font-medium text-brand-500 hover:text-brand-600 px-2 py-1 rounded border border-brand-200 dark:border-brand-800 hover:border-brand-400 transition-colors"
+                      >
+                        View Detail
+                      </button>
+                    )}
+                    <svg
+                      width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}
+                      className={`text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                    </svg>
+                  </div>
+                </div>
+
+                {/* Expanded: per-flag violation rows */}
+                {isOpen && (
+                  <div className="border-t border-gray-100 dark:border-gray-700">
+                    {/* Mobile: stacked cards */}
+                    <div className="sm:hidden divide-y divide-gray-100 dark:divide-gray-700">
+                      {examFlags
+                        .slice()
+                        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                        .map((f) => {
+                          const sev = SEVERITY_CFG[f.severity] ?? SEVERITY_CFG.medium;
+                          return (
+                            <div key={f.flagId} className={`px-4 py-3 flex items-start gap-2.5 ${f.reviewed ? "opacity-50" : ""}`}>
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 mt-0.5 ${sev.cls}`}>{sev.label}</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-semibold text-gray-800 dark:text-white">{f.studentName}</p>
+                                <p className="text-xs text-gray-600 dark:text-gray-300">{vlabel(f.type)}</p>
+                                <p className="text-[10px] text-gray-400">{fmtTs(f.timestamp)}</p>
+                              </div>
+                              {f.reviewed ? (
+                                <span className="text-[10px] text-green-500 font-semibold shrink-0 mt-0.5">✓</span>
+                              ) : (
+                                <button
+                                  onClick={() => handleReview(f)}
+                                  disabled={reviewingId === f.flagId}
+                                  className="text-[10px] font-semibold text-brand-500 shrink-0 disabled:opacity-40 mt-0.5"
+                                >
+                                  {reviewingId === f.flagId ? "…" : "Review"}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                    </div>
+                    {/* Desktop: table */}
+                    <div className="hidden sm:block overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 dark:bg-gray-800/80">
+                          <tr className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                            <th className="text-left px-5 py-2.5">Student</th>
+                            <th className="text-left px-5 py-2.5">Violation</th>
+                            <th className="text-left px-5 py-2.5 hidden lg:table-cell">Detail</th>
+                            <th className="text-left px-5 py-2.5">Severity</th>
+                            <th className="text-left px-5 py-2.5">Time</th>
+                            <th className="text-right px-5 py-2.5">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                          {examFlags
+                            .slice()
+                            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                            .map((f) => {
+                              const sev = SEVERITY_CFG[f.severity] ?? SEVERITY_CFG.medium;
+                              return (
+                                <tr key={f.flagId} className={`hover:bg-gray-50 dark:hover:bg-gray-700/20 transition-colors ${f.reviewed ? "opacity-50" : ""}`}>
+                                  <td className="px-5 py-3">
+                                    <p className="font-medium text-gray-800 dark:text-white text-xs">{f.studentName}</p>
+                                    <p className="text-[10px] text-gray-400 font-mono mt-0.5">{f.userId.slice(0, 8)}…</p>
+                                  </td>
+                                  <td className="px-5 py-3 text-xs font-medium text-gray-700 dark:text-gray-300">{vlabel(f.type)}</td>
+                                  <td className="px-5 py-3 text-[10px] text-gray-500 max-w-[140px] truncate hidden lg:table-cell">
+                                    {f.detail || <span className="text-gray-300 dark:text-gray-600">—</span>}
+                                  </td>
+                                  <td className="px-5 py-3">
+                                    <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${sev.cls}`}>
+                                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${sev.dot}`} />
+                                      {sev.label}
+                                    </span>
+                                  </td>
+                                  <td className="px-5 py-3 text-[10px] text-gray-400 whitespace-nowrap">{fmtTs(f.timestamp)}</td>
+                                  <td className="px-5 py-3 text-right">
+                                    {f.reviewed ? (
+                                      <span className="text-[10px] text-green-500 font-semibold">Reviewed</span>
+                                    ) : (
+                                      <button
+                                        onClick={() => handleReview(f)}
+                                        disabled={reviewingId === f.flagId}
+                                        className="text-[10px] font-semibold text-brand-500 hover:underline disabled:opacity-40"
+                                      >
+                                        {reviewingId === f.flagId ? "…" : "Mark Reviewed"}
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -1191,6 +1466,7 @@ export default function TeacherExamsPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [allFlags, setAllFlags] = useState<FlagRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"exams" | "integrity">("exams");
   const [showCreate, setShowCreate] = useState(false);
   const [editExam, setEditExam] = useState<Exam | null>(null);
   const [attemptsExam, setAttemptsExam] = useState<Exam | null>(null);
@@ -1242,141 +1518,281 @@ export default function TeacherExamsPage() {
   const completed = exams.filter((e) => e.status === "completed").length;
   const flaggedExams = new Set(allFlags.map((f) => f.examId)).size;
 
+  const hasAnyFlags = allFlags.length > 0;
+
   return (
-    <div className="flex flex-col gap-6">
-      {/* Header */}
+    <div className="flex flex-col gap-6 min-w-0 w-full overflow-x-hidden">
+      {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Exams</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Create, schedule and manage exams for your courses</p>
         </div>
+        {activeTab === "exams" && (
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 transition-colors shrink-0"
+          >
+            <span className="text-lg leading-none">+</span> Create Exam
+          </button>
+        )}
+      </div>
+
+      {/* ── Tab switcher — exact same style as Assessments page ── */}
+      <div className="flex rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden w-full sm:w-fit text-sm font-medium">
         <button
-          onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 transition-colors shrink-0"
+          onClick={() => setActiveTab("exams")}
+          className={`flex items-center gap-2 px-5 py-2.5 transition-colors ${
+            activeTab === "exams"
+              ? "bg-blue-600 text-white"
+              : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+          }`}
         >
-          <span className="text-lg leading-none">+</span> Create Exam
+          {/* Document icon */}
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+          </svg>
+          Exams
+        </button>
+        <button
+          onClick={() => setActiveTab("integrity")}
+          className={`flex items-center gap-2 px-5 py-2.5 border-l border-gray-200 dark:border-gray-700 transition-colors ${
+            activeTab === "integrity"
+              ? "bg-red-600 text-white"
+              : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+          }`}
+        >
+          {/* Shield icon */}
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
+          </svg>
+          Integrity Monitor
+          {/* Red dot when there are any flags — same as assessments page */}
+          {hasAnyFlags && (
+            <span className={`w-2 h-2 rounded-full ${activeTab === "integrity" ? "bg-red-200" : "bg-red-500"} animate-pulse shrink-0`} />
+          )}
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-        {[
-          { label: "Total", value: total, color: "text-gray-800 dark:text-white" },
-          { label: "Scheduled", value: scheduled, color: "text-blue-600 dark:text-blue-400" },
-          { label: "Active", value: active, color: "text-green-600 dark:text-green-400" },
-          { label: "Completed", value: completed, color: "text-purple-600 dark:text-purple-400" },
-          { label: "Flagged Exams", value: flaggedExams, color: flaggedExams > 0 ? "text-red-600 dark:text-red-400" : "text-gray-800 dark:text-white" },
-        ].map((s) => (
-          <div key={s.label} className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/3 p-5">
-            <p className="text-xs text-gray-500 dark:text-gray-400">{s.label}</p>
-            <p className={`text-2xl font-bold mt-1 ${s.color}`}>{s.value}</p>
+      {/* ── Exams tab content ── */}
+      {activeTab === "exams" && (
+        <>
+          {/* Stats */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
+            {[
+              { label: "Total", value: total, color: "text-gray-800 dark:text-white" },
+              { label: "Scheduled", value: scheduled, color: "text-blue-600 dark:text-blue-400" },
+              { label: "Active", value: active, color: "text-green-600 dark:text-green-400" },
+              { label: "Completed", value: completed, color: "text-purple-600 dark:text-purple-400" },
+              { label: "Flagged", value: flaggedExams, color: flaggedExams > 0 ? "text-red-600 dark:text-red-400" : "text-gray-800 dark:text-white" },
+            ].map((s) => (
+              <div key={s.label} className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/3 p-4 sm:p-5">
+                <p className="text-xs text-gray-500 dark:text-gray-400">{s.label}</p>
+                <p className={`text-2xl font-bold mt-1 ${s.color}`}>{s.value}</p>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      {/* Table */}
-      {loading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
-          ))}
-        </div>
-      ) : exams.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 text-center gap-3">
-          <div className="w-14 h-14 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-            <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" className="text-gray-400">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-            </svg>
-          </div>
-          <p className="font-semibold text-gray-700 dark:text-gray-300">No exams yet</p>
-          <p className="text-sm text-gray-400">Click "Create Exam" to get started.</p>
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/3 overflow-hidden">
-          <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 dark:border-gray-800 text-xs text-gray-500 dark:text-gray-400">
-                <th className="text-left px-5 py-3">Title</th>
-                <th className="text-left px-5 py-3 hidden md:table-cell">Course</th>
-                <th className="text-left px-5 py-3 hidden lg:table-cell">Scheduled</th>
-                <th className="text-center px-5 py-3 hidden sm:table-cell">Duration</th>
-                <th className="text-center px-5 py-3 hidden sm:table-cell">Questions</th>
-                <th className="text-center px-5 py-3">Attempts</th>
-                <th className="text-center px-5 py-3">Flags</th>
-                <th className="text-center px-5 py-3">Status</th>
-                <th className="text-right px-5 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {exams.map((exam) => {
-                const attempts = Object.keys(exam.studentAttempts ?? {}).length;
-                const examFlags = allFlags.filter((f) => f.examId === exam.id);
-                const flagCount = examFlags.length;
-                const highFlagCount = examFlags.filter((f) => f.severity === "high").length;
-                const hasAutoFailed = Object.values(exam.studentAttempts ?? {}).some(
-                  (a) => (a as { autoFailed?: boolean }).autoFailed
-                );
-                return (
-                  <tr key={exam.id} className="border-b border-gray-50 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-white/3">
-                    <td className="px-5 py-3 font-medium text-gray-900 dark:text-white max-w-[180px] truncate">{exam.title}</td>
-                    <td className="px-5 py-3 text-gray-500 dark:text-gray-400 hidden md:table-cell max-w-[140px] truncate">{exam.courseName ?? exam.courseId.slice(0, 8)}</td>
-                    <td className="px-5 py-3 text-gray-500 dark:text-gray-400 hidden lg:table-cell whitespace-nowrap">{fmtDate(exam.scheduledAt)}</td>
-                    <td className="px-5 py-3 text-center text-gray-600 dark:text-gray-400 hidden sm:table-cell">{exam.durationMinutes}m</td>
-                    <td className="px-5 py-3 text-center text-gray-600 dark:text-gray-400 hidden sm:table-cell">{exam.questionCount}</td>
-                    <td className="px-5 py-3 text-center">
-                      <button onClick={() => setAttemptsExam(exam)} className="text-brand-500 hover:underline font-medium">{attempts}</button>
-                    </td>
-                    <td className="px-5 py-3 text-center">
-                      {flagCount > 0 ? (
+          {/* Table */}
+          {loading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
+              ))}
+            </div>
+          ) : exams.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 text-center gap-3">
+              <div className="w-14 h-14 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" className="text-gray-400">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                </svg>
+              </div>
+              <p className="font-semibold text-gray-700 dark:text-gray-300">No exams yet</p>
+              <p className="text-sm text-gray-400">Click &quot;Create Exam&quot; to get started.</p>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/3 overflow-hidden min-w-0 w-full">
+
+              {/* ── Mobile card list (xs only) ── */}
+              <div className="sm:hidden divide-y divide-gray-100 dark:divide-gray-800">
+                {exams.map((exam) => {
+                  const attempts = Object.keys(exam.studentAttempts ?? {}).length;
+                  const examFlags = allFlags.filter((f) => f.examId === exam.id);
+                  const flagCount = examFlags.length;
+                  const highFlagCount = examFlags.filter((f) => f.severity === "high").length;
+                  const hasAutoFailed = Object.values(exam.studentAttempts ?? {}).some(
+                    (a) => (a as { autoFailed?: boolean }).autoFailed
+                  );
+                  return (
+                    <div key={exam.id} className="px-4 py-4 flex items-start gap-3">
+                      {/* Left: info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <p className="font-semibold text-sm text-gray-900 dark:text-white leading-snug">{exam.title}</p>
+                          {statusBadge(exam.status)}
+                        </div>
+                        {(exam.courseName || exam.courseId) && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate mb-2">
+                            {exam.courseName ?? exam.courseId.slice(0, 8)}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <span className="text-xs text-gray-400">{exam.durationMinutes}m</span>
+                          <span className="text-xs text-gray-400">{exam.questionCount} Qs</span>
+                          <button
+                            onClick={() => setAttemptsExam(exam)}
+                            className="text-xs text-brand-500 font-semibold"
+                          >
+                            {attempts} attempt{attempts !== 1 ? "s" : ""}
+                          </button>
+                          {flagCount > 0 && (
+                            <button
+                              onClick={() => setMonitorExam(exam)}
+                              className="inline-flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
+                            >
+                              {hasAutoFailed && <span className="w-1.5 h-1.5 rounded-full bg-red-600 shrink-0" />}
+                              {flagCount} flag{flagCount !== 1 ? "s" : ""}
+                              {highFlagCount > 0 && <span className="opacity-70">({highFlagCount}⚠)</span>}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {/* Right: actions */}
+                      <div className="flex flex-col gap-1.5 shrink-0">
                         <button
                           onClick={() => setMonitorExam(exam)}
-                          className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-500/25 transition-colors"
+                          className="text-xs text-orange-500 px-2.5 py-1.5 rounded-lg border border-orange-200 dark:border-orange-900/40 flex items-center gap-1 active:bg-orange-50 dark:active:bg-orange-900/20"
                         >
-                          {hasAutoFailed && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-red-600 shrink-0" />
-                          )}
-                          {flagCount}
-                          {highFlagCount > 0 && (
-                            <span className="text-[10px] opacity-70">({highFlagCount}⚠)</span>
-                          )}
-                        </button>
-                      ) : (
-                        <span className="text-xs text-gray-300 dark:text-gray-600">—</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-center">{statusBadge(exam.status)}</td>
-                    <td className="px-5 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => setMonitorExam(exam)}
-                          className="text-xs text-orange-500 hover:text-orange-600 px-2 py-1 rounded border border-orange-100 dark:border-orange-900/40 hover:border-orange-300 flex items-center gap-1"
-                          title="Integrity Monitor"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
                           </svg>
                           Integrity
                         </button>
-                        <button onClick={() => setEditExam(exam)} className="text-xs text-gray-500 hover:text-brand-500 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 hover:border-brand-300">Edit</button>
+                        <button
+                          onClick={() => setEditExam(exam)}
+                          className="text-xs text-gray-500 dark:text-gray-400 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 active:bg-gray-50 dark:active:bg-white/5"
+                        >
+                          Edit
+                        </button>
                         <button
                           onClick={() => handleDelete(exam.id)}
                           disabled={deleting === exam.id}
-                          className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded border border-red-100 dark:border-red-900/40 hover:border-red-300 disabled:opacity-40"
+                          className="text-xs text-red-500 px-2.5 py-1.5 rounded-lg border border-red-100 dark:border-red-900/40 disabled:opacity-40 active:bg-red-50 dark:active:bg-red-900/20"
                         >
                           {deleting === exam.id ? "…" : "Delete"}
                         </button>
                       </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          </div>
-        </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* ── Desktop table (sm+) ── */}
+              <div className="hidden sm:block  overflow-x-auto overflow-y-auto max-h-[60vh] w-full">
+                <table className=" text-sm table-fixed">
+                  <colgroup>
+                    <col className="w-[30%]" />
+                    <col className="hidden md:table-column w-[18%]" />
+                    <col className="hidden lg:table-column w-[16%]" />
+                    <col className="hidden md:table-column w-[9%]" />
+                    <col className="hidden md:table-column w-[9%]" />
+                    <col className="w-[8%]" />
+                    <col className="w-[7%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[18%]" />
+                  </colgroup>
+                  <thead className="sticky top-0 z-10 bg-white dark:bg-gray-900">
+                    <tr className="border-b border-gray-100 dark:border-gray-800 text-xs text-gray-500 dark:text-gray-400">
+                      <th className="text-left px-4 sm:px-5 py-3">Title</th>
+                      <th className="text-left px-5 py-3 hidden md:table-cell">Course</th>
+                      <th className="text-left px-5 py-3 hidden lg:table-cell">Scheduled</th>
+                      <th className="text-center px-5 py-3 hidden md:table-cell">Duration</th>
+                      <th className="text-center px-5 py-3 hidden md:table-cell">Questions</th>
+                      <th className="text-center px-3 sm:px-5 py-3">Attempts</th>
+                      <th className="text-center px-3 sm:px-5 py-3">Flags</th>
+                      <th className="text-center px-3 sm:px-5 py-3">Status</th>
+                      <th className="text-right px-4 sm:px-5 py-3">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {exams.map((exam) => {
+                      const attempts = Object.keys(exam.studentAttempts ?? {}).length;
+                      const examFlags = allFlags.filter((f) => f.examId === exam.id);
+                      const flagCount = examFlags.length;
+                      const highFlagCount = examFlags.filter((f) => f.severity === "high").length;
+                      const hasAutoFailed = Object.values(exam.studentAttempts ?? {}).some(
+                        (a) => (a as { autoFailed?: boolean }).autoFailed
+                      );
+                      return (
+                        <tr key={exam.id} className="border-b border-gray-50 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-white/3">
+                          <td className="px-4 sm:px-5 py-3 font-medium text-gray-900 dark:text-white max-w-40 sm:max-w-[200px] truncate">{exam.title}</td>
+                          <td className="px-5 py-3 text-gray-500 dark:text-gray-400 hidden md:table-cell max-w-[140px] truncate">{exam.courseName ?? exam.courseId.slice(0, 8)}</td>
+                          <td className="px-5 py-3 text-gray-500 dark:text-gray-400 hidden lg:table-cell whitespace-nowrap">{fmtDate(exam.scheduledAt)}</td>
+                          <td className="px-5 py-3 text-center text-gray-600 dark:text-gray-400 hidden md:table-cell">{exam.durationMinutes}m</td>
+                          <td className="px-5 py-3 text-center text-gray-600 dark:text-gray-400 hidden md:table-cell">{exam.questionCount}</td>
+                          <td className="px-3 sm:px-5 py-3 text-center">
+                            <button onClick={() => setAttemptsExam(exam)} className="text-brand-500 hover:underline font-medium">{attempts}</button>
+                          </td>
+                          <td className="px-3 sm:px-5 py-3 text-center">
+                            {flagCount > 0 ? (
+                              <button
+                                onClick={() => setMonitorExam(exam)}
+                                className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-500/25 transition-colors"
+                              >
+                                {hasAutoFailed && <span className="w-1.5 h-1.5 rounded-full bg-red-600 shrink-0" />}
+                                {flagCount}
+                                {highFlagCount > 0 && <span className="text-[10px] opacity-70">({highFlagCount}⚠)</span>}
+                              </button>
+                            ) : (
+                              <span className="text-xs text-gray-300 dark:text-gray-600">—</span>
+                            )}
+                          </td>
+                          <td className="px-3 sm:px-5 py-3 text-center">{statusBadge(exam.status)}</td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => setMonitorExam(exam)}
+                                title="Integrity Monitor"
+                                className="text-xs text-orange-500 hover:text-orange-600 px-2 py-1 rounded border border-orange-100 dark:border-orange-900/40 hover:border-orange-300 flex items-center gap-1"
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                                </svg>
+                                <span className="hidden md:inline">Integrity</span>
+                              </button>
+                              <button onClick={() => setEditExam(exam)} className="text-xs text-gray-500 hover:text-brand-500 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 hover:border-brand-300">Edit</button>
+                              <button
+                                onClick={() => handleDelete(exam.id)}
+                                disabled={deleting === exam.id}
+                                className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded border border-red-100 dark:border-red-900/40 hover:border-red-300 disabled:opacity-40"
+                              >
+                                {deleting === exam.id ? "…" : "Del"}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
+      {/* ── Integrity Monitor tab content ── */}
+      {activeTab === "integrity" && (
+        <ExamsIntegrityPanel
+          allFlags={allFlags}
+          exams={exams}
+          instituteId={instituteId}
+          onFlagReviewed={handleFlagReviewed}
+          onViewExam={(exam) => setMonitorExam(exam)}
+        />
+      )}
+
+      {/* ── Modals ── */}
       {showCreate && (
         <ExamModal courses={courses} onSave={handleCreate} onClose={() => setShowCreate(false)} />
       )}
@@ -1395,7 +1811,6 @@ export default function TeacherExamsPage() {
           onFlagReviewed={handleFlagReviewed}
         />
       )}
-
     </div>
   );
 }
