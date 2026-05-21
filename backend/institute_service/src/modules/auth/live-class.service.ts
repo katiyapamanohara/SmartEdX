@@ -25,7 +25,7 @@ export class LiveClassService {
     let courseName: string | undefined;
 
     if (dto.courseId) {
-      const course = await this.courseRepo.findOne(dto.courseId);
+      const course = await this.courseRepo.findById(dto.courseId);
       if (!course) throw new NotFoundException('Course not found');
       if (course.instituteId !== instituteId)
         throw new ForbiddenException('Course does not belong to this institute');
@@ -150,7 +150,7 @@ export class LiveClassService {
     teacherId: string,
     instituteId: string,
     dto: CreateLiveSessionDto,
-  ): Promise<LiveSession> {
+  ) {
     const session = await this.liveSessionRepo.findWithDetails(sessionId);
     if (!session) throw new NotFoundException('Session not found');
     if (session.teacherId !== teacherId)
@@ -161,7 +161,7 @@ export class LiveClassService {
     let courseName: string | undefined;
 
     if (dto.courseId) {
-      const course = await this.courseRepo.findOne(dto.courseId);
+      const course = await this.courseRepo.findById(dto.courseId);
       if (!course) throw new NotFoundException('Course not found');
       if (course.instituteId !== instituteId)
         throw new ForbiddenException('Course does not belong to this institute');
