@@ -56,7 +56,8 @@ export default function StudentAssessmentAttemptPage() {
   const autoFailedRef      = useRef(false);
   const countdownTimerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   const leaveViolationsRef = useRef(0);
-  const triggerAutoFailRef = useRef<() => void>(() => {});
+  const triggerAutoFailRef = useRef<(reason?: string) => void>(() => {});
+  const violationsRef      = useRef<{type: string; timestamp: string; detail?: string}[]>([]);
 
   // ── Fetch data ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -198,7 +199,7 @@ export default function StudentAssessmentAttemptPage() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ score: finalScore, answers: finalAnswers }),
+          body: JSON.stringify({ score: finalScore, answers: finalAnswers, violations: violationsRef.current }),
         }
       );
       if (!res.ok) {
@@ -241,6 +242,7 @@ export default function StudentAssessmentAttemptPage() {
     setLeaveCountdown(null);
     autoFailedRef.current      = false;
     leaveViolationsRef.current = 0;
+    violationsRef.current      = [];
     screenStreamRef.current?.getTracks().forEach((t) => t.stop());
     screenStreamRef.current = null;
     if (requiresScreenShare) {
@@ -282,15 +284,16 @@ export default function StudentAssessmentAttemptPage() {
   }, [examStarted, submitted, alreadyAttempted]);
 
   // ── Auto-fail ─────────────────────────────────────────────────────────────
-  const triggerAutoFail = useCallback(() => {
+  const triggerAutoFail = useCallback((reason = "screen_share_stopped") => {
     if (autoFailedRef.current) return;
+    violationsRef.current.push({ type: reason, timestamp: new Date().toISOString() });
     autoFailedRef.current = true;
     if (countdownTimerRef.current) { clearInterval(countdownTimerRef.current); countdownTimerRef.current = null; }
     screenStreamRef.current?.getTracks().forEach((t) => t.stop());
     screenStreamRef.current = null;
     setLeaveCountdown(null);
     setViolationMsg("");
-    submitScore(0, {}); // submit 0 marks immediately
+    submitScore(0, {}); // submit 0 marks with violations
   }, [submitScore]);
 
   triggerAutoFailRef.current = triggerAutoFail;
@@ -303,7 +306,7 @@ export default function StudentAssessmentAttemptPage() {
     const livenessTimer = setInterval(() => {
       const s = screenStreamRef.current;
       if (!s || s.getTracks().every((t) => t.readyState === "ended")) {
-        triggerAutoFailRef.current();
+        triggerAutoFailRef.current("screen_share_stopped");
       }
     }, 5_000);
 
@@ -316,7 +319,7 @@ export default function StudentAssessmentAttemptPage() {
           if (prev === null || prev <= 1) {
             clearInterval(countdownTimerRef.current!);
             countdownTimerRef.current = null;
-            triggerAutoFailRef.current();
+            triggerAutoFailRef.current("tab_switch_timeout");
             return null;
           }
           return prev - 1;
@@ -331,8 +334,14 @@ export default function StudentAssessmentAttemptPage() {
       setLeaveCountdown(null);
       leaveViolationsRef.current += 1;
       const n = leaveViolationsRef.current;
+      // Record the tab-switch warning as a violation even before auto-fail
+      violationsRef.current.push({
+        type: "tab_switch",
+        timestamp: new Date().toISOString(),
+        detail: `Warning #${n} — returned within countdown`,
+      });
       if (n >= 2) {
-        triggerAutoFailRef.current();
+        triggerAutoFailRef.current("tab_switch_repeated");
       } else {
         setViolationMsg(
           `⚠ Violation #${n}: You left the assessment window. ` +
@@ -374,18 +383,30 @@ export default function StudentAssessmentAttemptPage() {
       const stream: MediaStream = await (navigator.mediaDevices as any).getDisplayMedia({
         video: { cursor: "always", displaySurface: "monitor" },
         audio: false,
+        // Chrome 111+ — defaults picker to "Entire Screen" tab and hides current-tab shortcut
+        preferCurrentTab: false,
+        selfBrowserSurface: "exclude",
       });
       const track   = stream.getVideoTracks()[0];
       const surface = (track?.getSettings() as any)?.displaySurface as string | undefined;
-      if (surface === "browser" || surface === "window") {
+      // Strict: only entire screen ("monitor") is accepted — reject window, tab, application
+      if (surface && surface !== "monitor") {
         stream.getTracks().forEach((t: MediaStreamTrack) => t.stop());
-        const what = surface === "browser" ? "a browser tab" : "an application window";
-        setSsError(`You shared ${what} instead of your entire screen. Open the "Entire Screen" tab and select your monitor.`);
+        const surfaceNames: Record<string, string> = {
+          browser: "a browser tab",
+          window: "an application window",
+          application: "an application window",
+        };
+        const what = surfaceNames[surface] ?? `"${surface}"`;
+        setSsError(
+          `❌ You shared ${what} — only your entire screen is accepted. ` +
+          `Click again, choose the "Entire Screen" tab, select your monitor, then click Share.`
+        );
         setSsRequesting(false);
         return;
       }
       track?.addEventListener("ended", () => {
-        if (!autoFailedRef.current) triggerAutoFailRef.current();
+        if (!autoFailedRef.current) triggerAutoFailRef.current("screen_share_stopped");
       });
       screenStreamRef.current = stream;
       setSsRequesting(false);
@@ -589,15 +610,24 @@ export default function StudentAssessmentAttemptPage() {
               <p className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">How to share correctly</p>
               {[
                 'Click "Share Entire Screen & Start" below',
-                'In the browser picker, open the "Entire Screen" or "Screen" tab',
-                'Click your monitor thumbnail, then "Share" — do NOT select a Window or Tab',
+                'In the browser picker select the "Entire Screen" or "Screen" tab — NOT "Window" or "Tab"',
+                'Click your monitor thumbnail, then click "Share"',
               ].map((t, i) => (
                 <div key={i} className="flex items-start gap-2.5">
                   <span className="w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5 bg-blue-500">{i + 1}</span>
                   <p className="text-xs text-gray-600 dark:text-gray-300">{t}</p>
                 </div>
               ))}
-              <p className="text-xs font-semibold pt-1 text-amber-600 dark:text-amber-400">
+              {/* Hard block notice */}
+              <div className="flex items-start gap-2 rounded-lg px-2.5 py-1.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                <svg width="12" height="12" fill="none" stroke="#ef4444" strokeWidth={2.5} viewBox="0 0 24 24" className="shrink-0 mt-0.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                </svg>
+                <p className="text-[11px] font-semibold text-red-700 dark:text-red-400">
+                  Window, Tab, and Application sharing are <u>blocked</u> — only Entire Screen is accepted.
+                </p>
+              </div>
+              <p className="text-xs font-semibold text-amber-600 dark:text-amber-400">
                 ⚠ Stopping the share or switching apps during the assessment results in automatic 0 marks.
               </p>
             </div>

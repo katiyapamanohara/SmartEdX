@@ -520,26 +520,31 @@ export default function VoiceModal({
       const stream: MediaStream = await (navigator.mediaDevices as any).getDisplayMedia({
         video: { cursor: "always", displaySurface: "monitor" },
         audio: false,
+        // Chrome 111+ — hides the current-tab option and defaults picker to "Entire Screen"
+        preferCurrentTab: false,
+        selfBrowserSurface: "exclude",
       });
 
       const track   = stream.getVideoTracks()[0];
       const surface = (track?.getSettings() as any)?.displaySurface as string | undefined;
 
-      // Reject if the browser tells us it's not the whole monitor
-      if (surface === "browser" || surface === "window") {
+      // Strict check: only "monitor" (entire screen) is allowed.
+      // Reject window, browser tab, application, and any other surface.
+      if (surface && surface !== "monitor") {
         stream.getTracks().forEach((t: MediaStreamTrack) => t.stop());
-        const what = surface === "browser" ? "a browser tab" : "an application window";
+        const surfaceNames: Record<string, string> = {
+          browser: "a browser tab",
+          window: "an application window",
+          application: "an application window",
+        };
+        const what = surfaceNames[surface] ?? `"${surface}"`;
         setSsError(
-          `You shared ${what} instead of your entire screen. ` +
-          `Please click "Share Entire Screen & Start" again, open the "Entire Screen" tab in the picker, and select your monitor.`
+          `❌ You shared ${what} — only your entire screen is accepted.\n\n` +
+          `Click the button again, choose the "Entire Screen" tab in the browser picker, ` +
+          `then select your monitor and click Share.`
         );
         setSsRequesting(false);
         return;
-      }
-
-      // If displaySurface is undefined (Firefox/older browsers), warn but allow — we can't detect
-      if (!surface) {
-        console.warn("[VoiceModal] displaySurface not available — cannot verify entire screen was shared");
       }
 
       // Listen for the student stopping the share from the browser toolbar
@@ -782,16 +787,25 @@ export default function VoiceModal({
                 <p className="text-xs font-bold uppercase tracking-wide" style={{ color: c2 }}>How to share correctly</p>
                 {[
                   'Click "Share Entire Screen & Start" below',
-                  'In the browser picker, open the "Entire Screen" or "Screen" tab',
-                  'Click your monitor thumbnail, then click "Share" — do NOT select a Window or Tab',
+                  'In the browser picker select the "Entire Screen" or "Screen" tab — NOT "Window" or "Tab"',
+                  'Click your monitor thumbnail, then click "Share"',
                 ].map((t, i) => (
                   <div key={i} className="flex items-start gap-2.5">
                     <span className="w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5" style={{ background: "#3b82f6" }}>{i + 1}</span>
                     <p className="text-xs" style={{ color: isDark ? "#d1d5db" : "#374151" }}>{t}</p>
                   </div>
                 ))}
-                <p className="text-xs font-semibold pt-1" style={{ color: "#f59e0b" }}>
-                  ⚠ Stopping the share or switching apps during the assessment will result in an automatic 0 score.
+                {/* Hard rule: window/tab sharing blocked */}
+                <div className="flex items-start gap-2 pt-1 rounded-lg px-2 py-1.5" style={{ background: isDark ? "rgba(239,68,68,0.12)" : "#fef2f2", border: `1px solid ${isDark ? "rgba(239,68,68,0.3)" : "#fecaca"}` }}>
+                  <svg width="12" height="12" fill="none" stroke="#ef4444" strokeWidth={2.5} viewBox="0 0 24 24" className="shrink-0 mt-0.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                  </svg>
+                  <p className="text-[11px] font-semibold" style={{ color: isDark ? "#fca5a5" : "#b91c1c" }}>
+                    Window, Tab, and Application sharing are <u>blocked</u> — only Entire Screen is accepted.
+                  </p>
+                </div>
+                <p className="text-xs font-semibold" style={{ color: "#f59e0b" }}>
+                  ⚠ Stopping the share or switching apps during the assessment results in automatic 0 marks.
                 </p>
               </div>
               {/* ── Multi-monitor warning ── */}

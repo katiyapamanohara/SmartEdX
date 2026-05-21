@@ -27,6 +27,8 @@ import {
   FiUsers,
   FiChevronUp,
   FiMic,
+  FiShield,
+  FiAlertTriangle,
 } from "react-icons/fi";
 
 // ─── Types ────────────────────────────────────────────────────────
@@ -166,7 +168,8 @@ function StudentAttemptsModal({
   if (!isOpen || !content) return null;
 
   const attempts = content.studentAttempts || {};
-  type QuizAttempt = { score: number; answers: Record<string, number>; attemptedAt: string; type?: never };
+  type ProctoringViolation = { type: string; timestamp: string; detail?: string };
+  type QuizAttempt = { score: number; answers: Record<string, number>; attemptedAt: string; violations?: ProctoringViolation[]; attemptCount?: number; type?: never };
   type VoiceAttempt = {
     score: number; type: "voice"; totalScore: number; totalMarks: number; grade: string;
     passed: boolean; overallFeedback: string; attemptedAt: string;
@@ -175,7 +178,15 @@ function StudentAttemptsModal({
   const attemptEntries = Object.entries(attempts) as [string, QuizAttempt | VoiceAttempt][];
   const questions: QuizQuestion[] = content.quizData?.questions ?? [];
   const passingScore = content.quizData?.passingScore ?? 70;
-  const isVoice = (content.quizData as any)?.assessmentType === "voice";
+  const isVoiceAssessment = (content.quizData as any)?.assessmentType === "voice";
+
+  const VIOLATION_LABELS: Record<string, string> = {
+    tab_switch: "Tab / Window Switch",
+    tab_switch_timeout: "Left — Countdown Expired",
+    tab_switch_repeated: "Repeated Tab Switch (Auto-fail)",
+    screen_share_stopped: "Screen Share Stopped",
+    screen_share_ended: "Screen Share Ended",
+  };
 
   const modal = (
     <div className="fixed inset-0 z-999999 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -218,7 +229,8 @@ function StudentAttemptsModal({
               const name = students[userId] || userId;
               const passed = attempt.score >= passingScore;
               const isOpen = expanded === userId;
-              const isVoiceAttempt = attempt.type === "voice";
+              const isVoiceAttempt = isVoiceAssessment || attempt.type === "voice";
+              const flagged = !isVoiceAttempt && !!((attempt as QuizAttempt).violations?.length);
               const correctCount = isVoiceAttempt
                 ? null
                 : questions.filter((q) => (attempt as QuizAttempt).answers?.[q.id] === q.correctAnswer).length;
@@ -242,6 +254,11 @@ function StudentAttemptsModal({
                         {attempt.attemptedAt ? ` · ${new Date(attempt.attemptedAt).toLocaleDateString()}` : ""}
                       </p>
                     </div>
+                    {flagged && (
+                      <span className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400">
+                        <FiAlertTriangle className="w-3 h-3" /> Flagged
+                      </span>
+                    )}
                     <span className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold ${
                       passed
                         ? "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400"
@@ -255,6 +272,37 @@ function StudentAttemptsModal({
                   {/* Per-question breakdown */}
                   {isOpen && (
                     <div className="border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 px-4 py-4 space-y-3">
+
+                      {/* ── Proctoring violations ── */}
+                      {flagged && (
+                        <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 overflow-hidden">
+                          <div className="flex items-center gap-2 px-3 py-2 bg-red-100 dark:bg-red-900/40 border-b border-red-200 dark:border-red-800">
+                            <FiShield className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
+                            <p className="text-xs font-bold text-red-700 dark:text-red-400 uppercase tracking-wide">
+                              Proctoring Violations ({(attempt as QuizAttempt).violations!.length})
+                            </p>
+                          </div>
+                          <div className="divide-y divide-red-100 dark:divide-red-900/40">
+                            {(attempt as QuizAttempt).violations!.map((v, vi) => (
+                              <div key={vi} className="flex items-start gap-3 px-3 py-2">
+                                <span className="shrink-0 w-4 h-4 rounded-full bg-red-200 dark:bg-red-800 text-red-700 dark:text-red-300 text-[10px] font-bold flex items-center justify-center mt-0.5">
+                                  {vi + 1}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold text-red-700 dark:text-red-300">
+                                    {VIOLATION_LABELS[v.type] ?? v.type.replace(/_/g, " ")}
+                                  </p>
+                                  <p className="text-[10px] text-red-500 dark:text-red-400">
+                                    {new Date(v.timestamp).toLocaleString()}
+                                    {v.detail ? ` · ${v.detail}` : ""}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {isVoiceAttempt ? (
                         // ── Voice assessment breakdown ──
                         <>
@@ -590,6 +638,190 @@ function CourseGroup({ course, quizzes, onViewQuiz, onViewAttempts, onEditQuiz, 
   );
 }
 
+// ─── Integrity Monitor ────────────────────────────────────────────
+interface FlaggedRecord {
+  studentId: string;
+  studentName: string;
+  assessmentTitle: string;
+  courseName: string;
+  score: number;
+  violations: { type: string; timestamp: string; detail?: string }[];
+  attemptedAt: string;
+}
+
+const VIOLATION_LABELS_MAP: Record<string, string> = {
+  tab_switch: "Tab Switch",
+  tab_switch_timeout: "Left (Timeout)",
+  tab_switch_repeated: "Repeated Tab Switch",
+  screen_share_stopped: "Screen Share Stopped",
+  screen_share_ended: "Screen Share Ended",
+};
+
+function IntegrityMonitorPanel({
+  quizzesByCourse,
+  instituteId,
+}: {
+  quizzesByCourse: { course: Course; quizzes: QuizEntry[] }[];
+  instituteId: string;
+}) {
+  const [students, setStudents] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!instituteId) return;
+    setLoading(true);
+    instituteService.getInstituteUsers(instituteId, "student")
+      .then((users) => {
+        const map: Record<string, string> = {};
+        for (const u of users) map[u.id] = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || u.email || u.id;
+        setStudents(map);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [instituteId]);
+
+  // Build list of all flagged attempts across all quizzes
+  const flagged: FlaggedRecord[] = [];
+  for (const { course, quizzes } of quizzesByCourse) {
+    for (const entry of quizzes) {
+      const attempts = entry.content.studentAttempts || {};
+      for (const [userId, att] of Object.entries(attempts)) {
+        const a = att as any;
+        if (!a.violations?.length) continue;
+        flagged.push({
+          studentId: userId,
+          studentName: students[userId] || userId,
+          assessmentTitle: entry.content.title,
+          courseName: course.name,
+          score: a.score ?? 0,
+          violations: a.violations,
+          attemptedAt: a.attemptedAt ?? "",
+        });
+      }
+    }
+  }
+  // Newest first
+  flagged.sort((a, b) => new Date(b.attemptedAt).getTime() - new Date(a.attemptedAt).getTime());
+
+  return (
+    <div className="space-y-5">
+      {/* Summary stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="rounded-2xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-5">
+          <span className="text-sm text-red-600 dark:text-red-400">Flagged Students</span>
+          <p className="mt-1 text-2xl font-bold text-red-700 dark:text-red-300">{loading ? "—" : flagged.length}</p>
+        </div>
+        <div className="rounded-2xl border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20 p-5">
+          <span className="text-sm text-orange-600 dark:text-orange-400">Total Violations</span>
+          <p className="mt-1 text-2xl font-bold text-orange-700 dark:text-orange-300">
+            {loading ? "—" : flagged.reduce((s, r) => s + r.violations.length, 0)}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/3 p-5">
+          <span className="text-sm text-gray-500 dark:text-gray-400">Auto-failed (0%)</span>
+          <p className="mt-1 text-2xl font-bold text-gray-800 dark:text-white">
+            {loading ? "—" : flagged.filter((r) => r.score === 0).length}
+          </p>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex flex-col gap-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="animate-pulse rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 h-16" />
+          ))}
+        </div>
+      ) : flagged.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-24 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 text-center gap-4">
+          <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+            <FiShield className="w-8 h-8 text-green-500" />
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700 dark:text-gray-300">No violations detected</p>
+            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">All proctored assessments are clean.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
+          {/* Table header */}
+          <div className="grid grid-cols-[1fr_1fr_1fr_auto_auto] gap-4 px-5 py-3 bg-gray-50 dark:bg-gray-800/80 border-b border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+            <span>Student</span>
+            <span>Assessment</span>
+            <span>Course</span>
+            <span>Violations</span>
+            <span>Score</span>
+          </div>
+
+          <div className="divide-y divide-gray-100 dark:divide-gray-700">
+            {flagged.map((rec, ri) => (
+              <details key={ri} className="group">
+                <summary className="grid grid-cols-[1fr_1fr_1fr_auto_auto] gap-4 items-center px-5 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors list-none">
+                  {/* Student */}
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-7 h-7 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center text-xs font-bold text-red-700 dark:text-red-300 shrink-0 uppercase">
+                      {rec.studentName.charAt(0)}
+                    </div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{rec.studentName}</p>
+                  </div>
+                  {/* Assessment */}
+                  <p className="text-sm text-gray-700 dark:text-gray-300 truncate">{rec.assessmentTitle}</p>
+                  {/* Course */}
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{rec.courseName}</p>
+                  {/* Violations count */}
+                  <div className="flex items-center gap-1.5">
+                    {[...new Set(rec.violations.map((v) => v.type))].map((type) => (
+                      <span key={type} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300 whitespace-nowrap">
+                        {VIOLATION_LABELS_MAP[type] ?? type.replace(/_/g, " ")}
+                      </span>
+                    ))}
+                    <span className="text-xs text-gray-400">×{rec.violations.length}</span>
+                  </div>
+                  {/* Score */}
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                    rec.score === 0
+                      ? "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400"
+                      : "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400"
+                  }`}>
+                    {rec.score}%
+                  </span>
+                </summary>
+
+                {/* Violation timeline (expanded) */}
+                <div className="px-5 pb-4 pt-1 space-y-2 bg-red-50/60 dark:bg-red-900/10 border-t border-red-100 dark:border-red-900/40">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-red-500 dark:text-red-400 mb-2">
+                    Violation Timeline
+                  </p>
+                  {rec.violations.map((v, vi) => (
+                    <div key={vi} className="flex items-start gap-3">
+                      <div className="shrink-0 w-5 h-5 rounded-full bg-red-200 dark:bg-red-800 text-red-700 dark:text-red-300 text-[10px] font-bold flex items-center justify-center mt-0.5">
+                        {vi + 1}
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-red-700 dark:text-red-300">
+                          {VIOLATION_LABELS_MAP[v.type] ?? v.type.replace(/_/g, " ")}
+                        </p>
+                        <p className="text-[10px] text-red-400 dark:text-red-500">
+                          {new Date(v.timestamp).toLocaleString()}
+                          {v.detail ? ` · ${v.detail}` : ""}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                  {rec.attemptedAt && (
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500 pt-1">
+                      Submitted {new Date(rec.attemptedAt).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+              </details>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────
 export default function TeacherAssessmentsPage() {
   const params = useParams();
@@ -598,6 +830,7 @@ export default function TeacherAssessmentsPage() {
   const [quizzesByCourse, setQuizzesByCourse] = useState<{ course: Course; quizzes: QuizEntry[] }[]>([]);
   const [allCourses, setAllCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"assessments" | "integrity">("assessments");
   const [viewingQuiz, setViewingQuiz] = useState<QuizEntry | null>(null);
   const [viewingAttempts, setViewingAttempts] = useState<QuizEntry | null>(null);
   const [editingEntry, setEditingEntry] = useState<EditEntry | null>(null);
@@ -664,13 +897,13 @@ export default function TeacherAssessmentsPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Page header + tabs */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Assessments</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Quizzes across your assigned courses</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-         
           <button
             onClick={() => setCreateOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
@@ -680,56 +913,95 @@ export default function TeacherAssessmentsPage() {
         </div>
       </div>
 
-      {/* Stat bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/3 p-5">
-          <span className="text-sm text-gray-500 dark:text-gray-400">Total Quizzes</span>
-          <p className="mt-1 text-2xl font-bold text-gray-800 dark:text-white">{loading ? "—" : totalQuizzes}</p>
-        </div>
-        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/3 p-5">
-          <span className="text-sm text-gray-500 dark:text-gray-400">Total Questions</span>
-          <p className="mt-1 text-2xl font-bold text-gray-800 dark:text-white">{loading ? "—" : totalQuestions}</p>
-        </div>
-        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/3 p-5">
-          <span className="text-sm text-gray-500 dark:text-gray-400">Courses with Quizzes</span>
-          <p className="mt-1 text-2xl font-bold text-gray-800 dark:text-white">{loading ? "—" : quizzesByCourse.length}</p>
-        </div>
+      {/* Tab switcher */}
+      <div className="flex rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden w-fit text-sm font-medium">
+        <button
+          onClick={() => setActiveTab("assessments")}
+          className={`flex items-center gap-2 px-5 py-2.5 transition-colors ${
+            activeTab === "assessments"
+              ? "bg-blue-600 text-white"
+              : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+          }`}
+        >
+          <FiHelpCircle className="w-4 h-4" /> Assessments
+        </button>
+        <button
+          onClick={() => setActiveTab("integrity")}
+          className={`flex items-center gap-2 px-5 py-2.5 border-l border-gray-200 dark:border-gray-700 transition-colors ${
+            activeTab === "integrity"
+              ? "bg-red-600 text-white"
+              : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+          }`}
+        >
+          <FiShield className="w-4 h-4" />
+          Integrity Monitor
+          {/* Red dot if any violations exist */}
+          {quizzesByCourse.some(({ quizzes }) =>
+            quizzes.some((e) =>
+              Object.values(e.content.studentAttempts || {}).some((a) => (a as any).violations?.length)
+            )
+          ) && (
+            <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+          )}
+        </button>
       </div>
 
-      {/* Content */}
-      {loading ? (
-        <div className="flex flex-col gap-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="animate-pulse rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 space-y-3">
-              <div className="h-4 w-1/3 bg-gray-200 dark:bg-gray-700 rounded" />
-              <div className="h-3 w-1/2 bg-gray-100 dark:bg-gray-800 rounded" />
+      {activeTab === "assessments" ? (
+        <>
+          {/* Stat bar */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/3 p-5">
+              <span className="text-sm text-gray-500 dark:text-gray-400">Total Quizzes</span>
+              <p className="mt-1 text-2xl font-bold text-gray-800 dark:text-white">{loading ? "—" : totalQuizzes}</p>
             </div>
-          ))}
-        </div>
-      ) : quizzesByCourse.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 text-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-            <FiHelpCircle className="w-8 h-8 text-gray-400" />
+            <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/3 p-5">
+              <span className="text-sm text-gray-500 dark:text-gray-400">Total Questions</span>
+              <p className="mt-1 text-2xl font-bold text-gray-800 dark:text-white">{loading ? "—" : totalQuestions}</p>
+            </div>
+            <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/3 p-5">
+              <span className="text-sm text-gray-500 dark:text-gray-400">Courses with Quizzes</span>
+              <p className="mt-1 text-2xl font-bold text-gray-800 dark:text-white">{loading ? "—" : quizzesByCourse.length}</p>
+            </div>
           </div>
-          <div>
-            <p className="font-semibold text-gray-700 dark:text-gray-300">No quizzes yet</p>
-            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">No quiz content has been added to your courses.</p>
-          </div>
-        </div>
+
+          {/* Assessment list */}
+          {loading ? (
+            <div className="flex flex-col gap-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="animate-pulse rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 space-y-3">
+                  <div className="h-4 w-1/3 bg-gray-200 dark:bg-gray-700 rounded" />
+                  <div className="h-3 w-1/2 bg-gray-100 dark:bg-gray-800 rounded" />
+                </div>
+              ))}
+            </div>
+          ) : quizzesByCourse.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 text-center gap-4">
+              <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                <FiHelpCircle className="w-8 h-8 text-gray-400" />
+              </div>
+              <div>
+                <p className="font-semibold text-gray-700 dark:text-gray-300">No quizzes yet</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">No quiz content has been added to your courses.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {quizzesByCourse.map(({ course, quizzes }) => (
+                <CourseGroup
+                  key={course.id}
+                  course={course}
+                  quizzes={quizzes}
+                  instituteId={instituteId}
+                  onViewQuiz={setViewingQuiz}
+                  onViewAttempts={setViewingAttempts}
+                  onEditQuiz={(entry) => setEditingEntry(entry as EditEntry)}
+                />
+              ))}
+            </div>
+          )}
+        </>
       ) : (
-        <div className="flex flex-col gap-3">
-          {quizzesByCourse.map(({ course, quizzes }) => (
-            <CourseGroup
-              key={course.id}
-              course={course}
-              quizzes={quizzes}
-              instituteId={instituteId}
-              onViewQuiz={setViewingQuiz}
-              onViewAttempts={setViewingAttempts}
-              onEditQuiz={(entry) => setEditingEntry(entry as EditEntry)}
-            />
-          ))}
-        </div>
+        <IntegrityMonitorPanel quizzesByCourse={quizzesByCourse} instituteId={instituteId} />
       )}
 
       <QuizViewModal
