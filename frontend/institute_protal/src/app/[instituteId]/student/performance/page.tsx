@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { PieChartIcon, ArrowUpIcon, ArrowDownIcon } from "@/icons";
 import { instituteService, Course, StudentAssessmentGroup } from "@/services/instituteService";
 import { authService } from "@/services/authService";
+import { RelatedStudyMaterial } from "@/components/common/RelatedStudyMaterial";
 
 type CourseRow = {
   id: string;
@@ -25,13 +26,6 @@ type ExamRow = {
   status: string;
 };
 
-type KbResult = {
-  content: string;
-  page: number | null;
-  title: string;
-  score: number;
-};
-
 type WeakArea = {
   id: string;
   source: "exam" | "quiz-voice" | "quiz-mcq";
@@ -43,6 +37,9 @@ type WeakArea = {
   myAnswer?: string;
   correctAnswer?: string;
   feedback?: string;
+  // For unanswered / short-answer questions
+  questionType?: "mcq" | "short_answer" | "essay";
+  pendingReview?: boolean;
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -57,91 +54,6 @@ const EXAM_STATUS_COLORS: Record<string, string> = {
   scheduled: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
   draft: "bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400",
 };
-
-// ─── Inline sub-component: expandable related content ─────────────────────────
-function RelatedContent({
-  instituteId,
-  area,
-}: {
-  instituteId: string;
-  area: WeakArea;
-}) {
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<KbResult[] | null>(null);
-
-  const load = useCallback(async () => {
-    if (results !== null) return; // already fetched
-    setLoading(true);
-    try {
-      const data = await instituteService.searchCourseKB(
-        instituteId,
-        area.courseId,
-        area.questionText,
-      );
-      setResults(data);
-    } finally {
-      setLoading(false);
-    }
-  }, [instituteId, area.courseId, area.questionText, results]);
-
-  const toggle = () => {
-    if (!open && results === null) load();
-    setOpen((v) => !v);
-  };
-
-  return (
-    <div className="mt-2">
-      <button
-        onClick={toggle}
-        className="flex items-center gap-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
-      >
-        <span>{open ? "▾" : "▸"}</span>
-        {open ? "Hide" : "Show"} related study material
-      </button>
-
-      {open && (
-        <div className="mt-2 rounded-xl border border-blue-100 dark:border-blue-900/40 bg-blue-50/60 dark:bg-blue-500/[0.06] p-3 flex flex-col gap-2">
-          {loading && (
-            <div className="flex flex-col gap-2">
-              {[1, 2].map((i) => (
-                <div key={i} className="animate-pulse h-10 bg-blue-100 dark:bg-blue-900/20 rounded-lg" />
-              ))}
-            </div>
-          )}
-
-          {!loading && results !== null && results.length === 0 && (
-            <p className="text-xs text-gray-400 dark:text-gray-500 italic">
-              No course material found for this topic yet. Make sure PDFs / documents are uploaded for this course.
-            </p>
-          )}
-
-          {!loading &&
-            results !== null &&
-            results.map((r, i) => (
-              <div
-                key={i}
-                className="rounded-lg bg-white dark:bg-white/[0.04] border border-blue-100 dark:border-blue-900/30 p-3"
-              >
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 truncate">
-                    📄 {r.title || "Course Material"}
-                    {r.page ? ` · p.${r.page}` : ""}
-                  </span>
-                  <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
-                    {Math.round(r.score * 100)}% match
-                  </span>
-                </div>
-                <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed line-clamp-4">
-                  {r.content}
-                </p>
-              </div>
-            ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function StudentPerformancePage() {
@@ -285,30 +197,77 @@ export default function StudentPerformancePage() {
         // ── Weak Areas Analysis ──────────────────────────────────────────────
         const areas: WeakArea[] = [];
 
-        // 1. Exam MCQ — wrong answers
+        // 1. Exam questions (MCQ wrong/unanswered, short_answer low score, essay pending)
         for (const exam of exams) {
           const attempt = exam.myAttempt;
-          console.log(`[Performance] exam "${exam.title}" status=${exam.status} hasAttempt=${!!attempt} answersKeys=${attempt?.answers ? Object.keys(attempt.answers).length : 0} questionsCount=${(exam.questions ?? []).length} firstQType=${exam.questions?.[0]?.type} firstQHasCorrect=${exam.questions?.[0]?.correctAnswer !== undefined}`);
-          if (!attempt?.answers) continue;
           const questions: any[] = exam.questions ?? [];
+          console.log(`[Performance] exam "${exam.title}" status=${exam.status} hasAttempt=${!!attempt} answersKeys=${attempt?.answers ? Object.keys(attempt.answers).length : 0} questionsCount=${questions.length} types=${[...new Set(questions.map((q:any)=>q.type))].join(",")} firstQHasCorrect=${questions[0]?.correctAnswer !== undefined}`);
+          if (!attempt) continue; // no submission yet
+
+          const answers: Record<string, any> = attempt.answers ?? {};
+          const essayGrades: Record<string, any> = (attempt as any).essayGrades ?? {};
+
           for (const q of questions) {
-            if (q.type !== "mcq" || q.correctAnswer === undefined) continue;
-            const myAnswerRaw = attempt.answers[q.id];
-            if (myAnswerRaw === undefined) continue;
-            // Normalise to number — JSONB may deserialise the stored index as a string
-            const myAnswerIdx = Number(myAnswerRaw);
-            if (myAnswerIdx === Number(q.correctAnswer)) continue;
-            areas.push({
-              id: `exam-${exam.id}-${q.id}`,
-              source: "exam",
-              sourceTitle: exam.title,
-              courseName: exam.courseName ?? "—",
-              courseId: exam.courseId ?? "",
-              questionText: q.question,
-              scorePercent: 0,
-              myAnswer: q.options?.[myAnswerIdx] ?? `Option ${myAnswerIdx + 1}`,
-              correctAnswer: q.options?.[Number(q.correctAnswer)] ?? `Option ${Number(q.correctAnswer) + 1}`,
-            });
+            const qType: string = q.type ?? "mcq";
+
+            if (qType === "mcq") {
+              // Wrong answer OR no answer at all (both indicate a gap)
+              if (q.correctAnswer === undefined) continue;
+              const myAnswerRaw = answers[q.id];
+              const myAnswerIdx = myAnswerRaw !== undefined ? Number(myAnswerRaw) : null;
+              const isCorrect = myAnswerIdx !== null && myAnswerIdx === Number(q.correctAnswer);
+              if (isCorrect) continue;
+              areas.push({
+                id: `exam-${exam.id}-${q.id}`,
+                source: "exam",
+                sourceTitle: exam.title,
+                courseName: exam.courseName ?? "—",
+                courseId: exam.courseId ?? "",
+                questionText: q.question,
+                questionType: "mcq",
+                scorePercent: 0,
+                myAnswer: myAnswerIdx !== null
+                  ? (q.options?.[myAnswerIdx] ?? `Option ${myAnswerIdx + 1}`)
+                  : "Not answered",
+                correctAnswer: q.options?.[Number(q.correctAnswer)] ?? `Option ${Number(q.correctAnswer) + 1}`,
+              });
+
+            } else if (qType === "short_answer") {
+              // AI-graded: surface if score < 60% of available marks
+              const grade = essayGrades[q.id];
+              const pct = grade ? Math.round((grade.score / (q.marks || 1)) * 100) : 0;
+              if (pct >= 60) continue;
+              areas.push({
+                id: `exam-${exam.id}-${q.id}`,
+                source: "exam",
+                sourceTitle: exam.title,
+                courseName: exam.courseName ?? "—",
+                courseId: exam.courseId ?? "",
+                questionText: q.question,
+                questionType: "short_answer",
+                scorePercent: pct,
+                myAnswer: answers[q.id] ? String(answers[q.id]) : "Not answered",
+                feedback: grade?.feedback ?? undefined,
+              });
+
+            } else if (qType === "essay") {
+              // Pending teacher review — always surface so student knows it needs attention
+              const grade = essayGrades[q.id];
+              if (grade && Math.round((grade.score / (q.marks || 1)) * 100) >= 60) continue;
+              areas.push({
+                id: `exam-${exam.id}-${q.id}`,
+                source: "exam",
+                sourceTitle: exam.title,
+                courseName: exam.courseName ?? "—",
+                courseId: exam.courseId ?? "",
+                questionText: q.question,
+                questionType: "essay",
+                scorePercent: grade ? Math.round((grade.score / (q.marks || 1)) * 100) : 0,
+                myAnswer: answers[q.id] ? String(answers[q.id]) : "Not answered",
+                feedback: grade?.feedback,
+                pendingReview: !grade,
+              });
+            }
           }
         }
 
@@ -317,7 +276,6 @@ export default function StudentPerformancePage() {
           for (const { content } of group.quizzes) {
             const attempt = userId && content.studentAttempts?.[userId];
             if (!attempt?.questionResults) continue;
-            console.log(`[Performance] voice quiz "${content.title}" questionResults:`, attempt.questionResults);
             for (const qr of attempt.questionResults as any[]) {
               if ((qr.percentage ?? 100) >= 60) continue;
               areas.push({
@@ -334,18 +292,16 @@ export default function StudentPerformancePage() {
           }
         }
 
-        // 3. MCQ quiz — wrong answers
+        // 3. MCQ quiz — wrong / unanswered answers
         for (const group of assessmentGroups) {
           for (const { content } of group.quizzes) {
             const attempt = userId && content.studentAttempts?.[userId];
-            console.log(`[Performance] mcq quiz "${content.title}" hasAttempt=${!!attempt} answers=${JSON.stringify(attempt?.answers ?? null)} hasQResults=${!!attempt?.questionResults}`);
             if (!attempt?.answers || attempt?.questionResults) continue;
             const questions: any[] = content.quizData?.questions ?? [];
             for (const q of questions) {
               if (q.correctAnswer === undefined) continue;
               const myAnswerRaw = attempt.answers[q.id];
               if (myAnswerRaw === undefined) continue;
-              // Normalise to number — JSONB may deserialise the stored index as a string
               const myAnswerIdx = Number(myAnswerRaw);
               if (myAnswerIdx === Number(q.correctAnswer)) continue;
               areas.push({
@@ -355,6 +311,7 @@ export default function StudentPerformancePage() {
                 courseName: group.course.name,
                 courseId: group.course.id,
                 questionText: q.question,
+                questionType: "mcq",
                 scorePercent: 0,
                 myAnswer: q.options?.[myAnswerIdx] ?? `Option ${myAnswerIdx + 1}`,
                 correctAnswer: q.options?.[Number(q.correctAnswer)] ?? `Option ${Number(q.correctAnswer) + 1}`,
@@ -462,8 +419,8 @@ export default function StudentPerformancePage() {
           <div className="divide-y divide-orange-100 dark:divide-orange-900/30">
             {weakAreas.map((area) => (
               <div key={area.id} className="px-5 py-4">
-                {/* Source label */}
-                <div className="flex items-center gap-2 mb-1.5">
+                {/* Source label row */}
+                <div className="flex items-center flex-wrap gap-2 mb-1.5">
                   <span className="text-xs font-medium text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-500/15 px-2 py-0.5 rounded-full">
                     {area.source === "exam"
                       ? "Exam"
@@ -471,27 +428,38 @@ export default function StudentPerformancePage() {
                       ? "Voice Quiz"
                       : "Quiz"}
                   </span>
+                  {/* Question type pill */}
+                  {area.questionType && area.questionType !== "mcq" && (
+                    <span className="text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-500/15 px-2 py-0.5 rounded-full capitalize">
+                      {area.questionType.replace("_", " ")}
+                    </span>
+                  )}
+                  {area.pendingReview && (
+                    <span className="text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-500/15 px-2 py-0.5 rounded-full">
+                      Pending review
+                    </span>
+                  )}
                   <span className="text-xs text-gray-500 dark:text-gray-400">
                     {area.sourceTitle} · {area.courseName}
                   </span>
-                  {area.source === "quiz-voice" && (
+                  {(area.source === "quiz-voice" || area.questionType === "short_answer") && (
                     <span className="ml-auto text-xs font-semibold text-red-600 dark:text-red-400">
                       {area.scorePercent}%
                     </span>
                   )}
                 </div>
 
-                {/* Question */}
+                {/* Question text */}
                 <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">
                   {area.questionText}
                 </p>
 
-                {/* MCQ answer comparison */}
-                {(area.source === "exam" || area.source === "quiz-mcq") && (
+                {/* MCQ: your answer vs correct */}
+                {(area.questionType === "mcq" || (!area.questionType && area.source !== "quiz-voice")) && area.correctAnswer && (
                   <div className="flex flex-wrap gap-3 text-xs mb-2">
                     <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 px-2.5 py-1 rounded-lg">
                       <span className="font-semibold">Your answer:</span>
-                      {area.myAnswer}
+                      {area.myAnswer ?? "Not answered"}
                     </span>
                     <span className="flex items-center gap-1.5 text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-500/10 px-2.5 py-1 rounded-lg">
                       <span className="font-semibold">Correct:</span>
@@ -500,16 +468,35 @@ export default function StudentPerformancePage() {
                   </div>
                 )}
 
-                {/* Voice feedback */}
-                {area.source === "quiz-voice" && area.feedback && (
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 italic">
+                {/* Short answer: what the student wrote */}
+                {area.questionType === "short_answer" && area.myAnswer && area.myAnswer !== "Not answered" && (
+                  <div className="text-xs mb-2 p-2.5 rounded-lg bg-gray-50 dark:bg-white/4 border border-gray-200 dark:border-gray-700">
+                    <span className="font-semibold text-gray-600 dark:text-gray-400">Your answer: </span>
+                    <span className="text-gray-700 dark:text-gray-300">{area.myAnswer}</span>
+                  </div>
+                )}
+
+                {/* AI / teacher feedback */}
+                {area.feedback && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 italic border-l-2 border-orange-300 dark:border-orange-600 pl-2">
                     {area.feedback}
+                  </p>
+                )}
+
+                {/* Essay pending review notice */}
+                {area.questionType === "essay" && area.pendingReview && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mb-2">
+                    ⏳ Awaiting teacher grading — study the related material below to prepare.
                   </p>
                 )}
 
                 {/* Related content from Qdrant — lazy loaded on expand */}
                 {area.courseId && (
-                  <RelatedContent instituteId={instituteId} area={area} />
+                  <RelatedStudyMaterial
+                    instituteId={instituteId}
+                    courseId={area.courseId}
+                    questionText={area.questionText}
+                  />
                 )}
               </div>
             ))}

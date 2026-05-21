@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { PieChartIcon } from "@/icons";
 import { instituteService, Course } from "@/services/instituteService";
+import { RelatedStudyMaterial } from "@/components/common/RelatedStudyMaterial";
 
 type CourseStat = {
   id: string;
@@ -31,10 +32,14 @@ type ClassWeakArea = {
   source: "exam" | "quiz-voice" | "quiz-mcq";
   sourceTitle: string;
   courseName: string;
+  courseId: string;
   questionText: string;
+  questionType: "mcq" | "short_answer" | "voice";
   failCount: number;
   totalAttempts: number;
   failRate: number; // % of students who got it wrong / scored low
+  avgScore?: number; // for short_answer / voice: average AI score %
+  isPendingEssay?: boolean;
 };
 
 const EXAM_STATUS_COLORS: Record<string, string> = {
@@ -55,6 +60,7 @@ export default function TeacherPerformancePage() {
   const [totalStudents, setTotalStudents] = useState(0);
   const [overallAvg, setOverallAvg] = useState<number | null>(null);
   const [totalSubmissions, setTotalSubmissions] = useState(0);
+  const [pendingEssayReviews, setPendingEssayReviews] = useState(0);
 
   useEffect(() => {
     if (!instituteId) return;
@@ -70,7 +76,6 @@ export default function TeacherPerformancePage() {
         // ── Build per-course stats from quizzes ──────────────────────────────
         const courseMap = new Map<string, CourseStat>();
 
-        // Seed from courses list
         for (const c of courses as Course[]) {
           courseMap.set(c.id, {
             id: c.id,
@@ -83,7 +88,6 @@ export default function TeacherPerformancePage() {
           });
         }
 
-        // Accumulate quiz data
         for (const group of assessmentGroups as any[]) {
           const cid = group.course?.id;
           if (!cid) continue;
@@ -102,8 +106,10 @@ export default function TeacherPerformancePage() {
             stat.quizCount += 1;
             const attempts: Record<string, any> = content.studentAttempts ?? {};
             for (const attempt of Object.values(attempts)) {
-              if (attempt?.score !== undefined && attempt?.totalMarks > 0) {
-                scores.push(Math.round((attempt.score / attempt.totalMarks) * 100));
+              const tm = (attempt as any)?.totalMarks ?? (attempt as any)?.totalScore;
+              const sc = (attempt as any)?.score ?? (attempt as any)?.totalScore;
+              if (sc !== undefined && tm > 0) {
+                scores.push(Math.round((sc / tm) * 100));
                 stat.submissionCount += 1;
               }
             }
@@ -124,9 +130,9 @@ export default function TeacherPerformancePage() {
           const attempts: Record<string, any> = exam.studentAttempts ?? {};
           const attemptValues = Object.values(attempts);
           const scores = attemptValues
-            .filter((a) => a?.totalMarks > 0)
-            .map((a) => Math.round((a.score / a.totalMarks) * 100));
-          const passCount = attemptValues.filter((a) => a?.passed).length;
+            .filter((a: any) => a?.totalMarks > 0)
+            .map((a: any) => Math.round((a.score / a.totalMarks) * 100));
+          const passCount = attemptValues.filter((a: any) => a?.passed).length;
           const submissionCount = attemptValues.length;
 
           const avgScore = scores.length
@@ -134,7 +140,6 @@ export default function TeacherPerformancePage() {
             : null;
           const passRate = submissionCount > 0 ? Math.round((passCount / submissionCount) * 100) : null;
 
-          // Update course map with exam count
           const cid = exam.courseId;
           if (cid && courseMap.has(cid)) {
             const stat = courseMap.get(cid)!;
@@ -175,51 +180,135 @@ export default function TeacherPerformancePage() {
           setOverallAvg(Math.round(allScores.reduce((a, b) => a + b, 0) / allScores.length));
         }
 
-        const totalSubs = eStats.reduce((s, e) => s + e.submissionCount, 0) +
+        const totalSubs =
+          eStats.reduce((s, e) => s + e.submissionCount, 0) +
           Array.from(courseMap.values()).reduce((s, c) => s + c.submissionCount, 0);
         setTotalSubmissions(totalSubs);
 
-        // Rough unique student count from attempts across exams
         const studentIds = new Set<string>();
         for (const exam of exams as any[]) {
           for (const sid of Object.keys(exam.studentAttempts ?? {})) studentIds.add(sid);
+        }
+        for (const group of assessmentGroups as any[]) {
+          for (const { content } of group.quizzes ?? []) {
+            for (const sid of Object.keys(content.studentAttempts ?? {})) studentIds.add(sid);
+          }
         }
         setTotalStudents(studentIds.size);
 
         // ── Class Weak Areas Analysis ────────────────────────────────────────
         const weakAreas: ClassWeakArea[] = [];
 
-        // 1. Exam MCQ questions — find questions where most students got wrong
+        // 1. Exam questions — MCQ (wrong OR unanswered), short_answer (low AI score or 0), essay (pending)
         for (const exam of exams as any[]) {
           const attempts: Record<string, any> = exam.studentAttempts ?? {};
-          const attemptList = Object.values(attempts);
+          const attemptList = Object.values(attempts) as any[];
           if (attemptList.length === 0) continue;
 
           for (const q of exam.questions ?? []) {
-            if (q.type !== "mcq" || q.correctAnswer === undefined) continue;
-            const failCount = attemptList.filter(
-              (a) => a.answers?.[q.id] !== undefined && a.answers[q.id] !== q.correctAnswer
-            ).length;
-            const answeredCount = attemptList.filter(
-              (a) => a.answers?.[q.id] !== undefined
-            ).length;
-            if (answeredCount === 0) continue;
-            const failRate = Math.round((failCount / answeredCount) * 100);
-            if (failRate < 30) continue; // only flag if 30%+ students got it wrong
-            weakAreas.push({
-              id: `exam-${exam.id}-${q.id}`,
-              source: "exam",
-              sourceTitle: exam.title,
-              courseName: exam.courseName ?? "—",
-              questionText: q.question,
-              failCount,
-              totalAttempts: answeredCount,
-              failRate,
-            });
+            const qType: string = q.type ?? "mcq";
+
+            if (qType === "mcq") {
+              if (q.correctAnswer === undefined) continue;
+              const correct = Number(q.correctAnswer);
+              // Count students who answered wrong OR didn't answer at all — both are gaps
+              const failed = attemptList.filter((a) => {
+                const ans = a.answers?.[q.id];
+                if (ans === undefined || ans === null || ans === "") return true; // unanswered
+                return Number(ans) !== correct; // wrong answer
+              });
+              if (failed.length === 0) continue;
+              const failRate = Math.round((failed.length / attemptList.length) * 100);
+              if (failRate < 30) continue;
+              weakAreas.push({
+                id: `exam-${exam.id}-${q.id}`,
+                source: "exam",
+                sourceTitle: exam.title,
+                courseName: exam.courseName ?? "—",
+                courseId: exam.courseId ?? "",
+                questionText: q.question,
+                questionType: "mcq",
+                failCount: failed.length,
+                totalAttempts: attemptList.length,
+                failRate,
+              });
+
+            } else if (qType === "short_answer") {
+              // Primary: use AI grades stored in essayGrades
+              const graded = attemptList.filter((a) => a.essayGrades?.[q.id] !== undefined);
+              // Fallback: student answered but AI grading failed → treat score as 0
+              const answeredNoGrade = attemptList.filter(
+                (a) => !a.essayGrades?.[q.id] && a.answers?.[q.id] !== undefined && a.answers[q.id] !== ""
+              );
+
+              const totalRelevant = graded.length + answeredNoGrade.length;
+              if (totalRelevant === 0) continue;
+
+              const gradedAvgPct = graded.length > 0
+                ? Math.round(
+                    graded.reduce((sum: number, a: any) => {
+                      const g = a.essayGrades[q.id];
+                      return sum + Math.round((g.score / (q.marks || 1)) * 100);
+                    }, 0) / graded.length
+                  )
+                : 0;
+
+              // Combined avg: graded questions + zero-score ungraded ones
+              const combinedAvgPct = graded.length > 0
+                ? Math.round(
+                    (gradedAvgPct * graded.length + 0 * answeredNoGrade.length) / totalRelevant
+                  )
+                : 0;
+
+              if (graded.length > 0 && combinedAvgPct >= 60) continue;
+
+              const failCount =
+                graded.filter((a: any) =>
+                  Math.round((a.essayGrades[q.id].score / (q.marks || 1)) * 100) < 60
+                ).length + answeredNoGrade.length;
+
+              const failRate = Math.round((failCount / totalRelevant) * 100);
+              if (failRate < 30) continue;
+
+              weakAreas.push({
+                id: `exam-${exam.id}-${q.id}`,
+                source: "exam",
+                sourceTitle: exam.title,
+                courseName: exam.courseName ?? "—",
+                courseId: exam.courseId ?? "",
+                questionText: q.question,
+                questionType: "short_answer",
+                failCount,
+                totalAttempts: totalRelevant,
+                failRate,
+                avgScore: graded.length > 0 ? combinedAvgPct : undefined,
+              });
+
+            } else if (qType === "essay") {
+              // Surface essays that are pending review so teacher knows to act
+              const pendingCount = attemptList.filter(
+                (a) => a.answers?.[q.id] !== undefined && a.answers[q.id] !== "" && !a.essayGrades?.[q.id]
+              ).length;
+              if (pendingCount === 0) continue;
+              const failRate = Math.round((pendingCount / attemptList.length) * 100);
+              weakAreas.push({
+                id: `exam-${exam.id}-${q.id}`,
+                source: "exam",
+                sourceTitle: exam.title,
+                courseName: exam.courseName ?? "—",
+                courseId: exam.courseId ?? "",
+                questionText: q.question,
+                questionType: "short_answer", // reuse pill style
+                failCount: pendingCount,
+                totalAttempts: attemptList.length,
+                failRate,
+                isPendingEssay: true,
+              });
+            }
           }
         }
 
-        // 2. Voice quiz questionResults — aggregate per question across all students
+        // 2. Voice quiz — aggregate per-question across all students
         for (const group of assessmentGroups as any[]) {
           for (const { content } of group.quizzes ?? []) {
             const allAttempts = Object.values(content.studentAttempts ?? {}) as any[];
@@ -245,52 +334,57 @@ export default function TeacherPerformancePage() {
                 source: "quiz-voice",
                 sourceTitle: content.title,
                 courseName: group.course?.name ?? "—",
+                courseId: group.course?.id ?? "",
                 questionText: agg.text,
+                questionType: "voice",
                 failCount: agg.count,
                 totalAttempts: agg.count,
                 failRate: 100 - avgPct,
+                avgScore: avgPct,
               });
             }
           }
         }
 
-        // 3. MCQ quiz questions — compare student answers vs correctAnswer
+        // 3. MCQ quiz — wrong / unanswered across students
         for (const group of assessmentGroups as any[]) {
           for (const { content } of group.quizzes ?? []) {
             const questions: any[] = content.quizData?.questions ?? [];
             if (questions.length === 0) continue;
             const allAttempts = Object.values(content.studentAttempts ?? {}) as any[];
-            const mcqAttempts = allAttempts.filter((a) => a.answers && a.type !== "voice");
+            const mcqAttempts = allAttempts.filter((a: any) => a.answers && a.type !== "voice");
             if (mcqAttempts.length === 0) continue;
 
             for (const q of questions) {
               if (q.correctAnswer === undefined) continue;
-              const answeredAttempts = mcqAttempts.filter(
-                (a) => a.answers?.[q.id] !== undefined
-              );
-              if (answeredAttempts.length === 0) continue;
-              const failCount = answeredAttempts.filter(
-                (a) => a.answers[q.id] !== q.correctAnswer
-              ).length;
-              const failRate = Math.round((failCount / answeredAttempts.length) * 100);
+              const correct = Number(q.correctAnswer);
+              const failed = mcqAttempts.filter((a: any) => {
+                const ans = a.answers?.[q.id];
+                if (ans === undefined || ans === null || ans === "") return true;
+                return Number(ans) !== correct;
+              });
+              if (failed.length === 0) continue;
+              const failRate = Math.round((failed.length / mcqAttempts.length) * 100);
               if (failRate < 30) continue;
               weakAreas.push({
                 id: `quiz-${content.id}-${q.id}`,
                 source: "quiz-mcq",
                 sourceTitle: content.title,
                 courseName: group.course?.name ?? "—",
+                courseId: group.course?.id ?? "",
                 questionText: q.question,
-                failCount,
-                totalAttempts: answeredAttempts.length,
+                questionType: "mcq",
+                failCount: failed.length,
+                totalAttempts: mcqAttempts.length,
                 failRate,
               });
             }
           }
         }
 
-        // Sort: highest fail rate first
         weakAreas.sort((a, b) => b.failRate - a.failRate);
         setClassWeakAreas(weakAreas);
+        setPendingEssayReviews(weakAreas.filter((a) => a.isPendingEssay).reduce((s, a) => s + a.failCount, 0));
       } finally {
         setLoading(false);
       }
@@ -302,6 +396,11 @@ export default function TeacherPerformancePage() {
     { label: "Total Submissions", value: loading ? "—" : totalSubmissions.toString() },
     { label: "Exams Created", value: loading ? "—" : examStats.length.toString() },
     { label: "Students with Attempts", value: loading ? "—" : totalStudents.toString() },
+    {
+      label: "Pending Essay Reviews",
+      value: loading ? "—" : pendingEssayReviews.toString(),
+      highlight: !loading && pendingEssayReviews > 0,
+    },
   ];
 
   return (
@@ -314,103 +413,146 @@ export default function TeacherPerformancePage() {
       </div>
 
       {/* Summary stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {summaryStats.map((s) => (
           <div
             key={s.label}
-            className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/[0.03] p-5"
+            className={`rounded-2xl border p-5 ${
+              (s as any).highlight
+                ? "border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-500/10"
+                : "border-gray-200 dark:border-gray-800 bg-white dark:bg-white/3"
+            }`}
           >
-            <span className="text-sm text-gray-500 dark:text-gray-400">{s.label}</span>
-            <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1">{s.value}</p>
+            <span className={`text-sm ${(s as any).highlight ? "text-amber-700 dark:text-amber-400" : "text-gray-500 dark:text-gray-400"}`}>
+              {s.label}
+            </span>
+            <p className={`text-2xl font-bold mt-1 ${(s as any).highlight ? "text-amber-700 dark:text-amber-300" : "text-gray-800 dark:text-white"}`}>
+              {s.value}
+            </p>
           </div>
         ))}
       </div>
 
-      {/* Class Weak Areas */}
-      {(loading || classWeakAreas.length > 0) && (
-        <div className="rounded-2xl border border-red-200 dark:border-red-800/50 bg-red-50/50 dark:bg-red-500/[0.05] overflow-hidden">
-          <div className="px-5 py-4 border-b border-red-200 dark:border-red-800/50 flex items-center gap-2">
-            <span className="text-lg">📉</span>
-            <div>
-              <h3 className="font-semibold text-gray-800 dark:text-white">Class Weak Areas</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                Questions where 30%+ of students struggled — sorted by highest failure rate
-              </p>
-            </div>
+      {/* Class Weak Areas — always shown once loaded */}
+      <div className="rounded-2xl border border-red-200 dark:border-red-800/50 bg-red-50/50 dark:bg-red-500/5 overflow-hidden">
+        <div className="px-5 py-4 border-b border-red-200 dark:border-red-800/50 flex items-center gap-2">
+          <span className="text-lg">📉</span>
+          <div>
+            <h3 className="font-semibold text-gray-800 dark:text-white">Class Weak Areas</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              Questions where 30%+ of students struggled — sorted by highest failure rate
+            </p>
           </div>
+        </div>
 
-          {loading ? (
-            <div className="p-5 flex flex-col gap-3">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="animate-pulse h-16 bg-red-100 dark:bg-red-900/20 rounded-xl" />
-              ))}
-            </div>
-          ) : (
-            <div className="divide-y divide-red-100 dark:divide-red-900/30">
-              {classWeakAreas.map((area) => (
-                <div key={area.id} className="px-5 py-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      {/* Source label */}
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-xs font-medium text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-500/15 px-2 py-0.5 rounded-full">
-                          {area.source === "exam"
-                            ? "Exam"
-                            : area.source === "quiz-voice"
-                            ? "Voice Quiz"
-                            : "Quiz"}
+        {loading ? (
+          <div className="p-5 flex flex-col gap-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="animate-pulse h-16 bg-red-100 dark:bg-red-900/20 rounded-xl" />
+            ))}
+          </div>
+        ) : classWeakAreas.length === 0 ? (
+          <div className="px-5 py-8 flex flex-col items-center gap-2 text-center">
+            <span className="text-2xl">✅</span>
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              No class-wide weak areas detected
+            </p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              Questions will appear here once 30%+ of students struggle with them.
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-red-100 dark:divide-red-900/30">
+            {classWeakAreas.map((area) => (
+              <div key={area.id} className="px-5 py-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    {/* Labels row */}
+                    <div className="flex items-center flex-wrap gap-2 mb-1.5">
+                      <span className="text-xs font-medium text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-500/15 px-2 py-0.5 rounded-full">
+                        {area.source === "exam"
+                          ? "Exam"
+                          : area.source === "quiz-voice"
+                          ? "Voice Quiz"
+                          : "Quiz"}
+                      </span>
+                      {area.questionType !== "mcq" && area.questionType !== "voice" && (
+                        <span className="text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-500/15 px-2 py-0.5 rounded-full capitalize">
+                          {area.questionType.replace("_", " ")}
                         </span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                          {area.sourceTitle} · {area.courseName}
+                      )}
+                      {area.isPendingEssay && (
+                        <span className="text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-500/15 px-2 py-0.5 rounded-full">
+                          ⏳ Pending your review
                         </span>
-                      </div>
-                      {/* Question */}
-                      <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
-                        {area.questionText}
+                      )}
+                      <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {area.sourceTitle} · {area.courseName}
+                      </span>
+                    </div>
+
+                    {/* Question text */}
+                    <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                      {area.questionText}
+                    </p>
+
+                    {/* Avg score for short_answer / voice */}
+                    {area.avgScore !== undefined && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Class avg score: <span className="font-semibold text-gray-700 dark:text-gray-300">{area.avgScore}%</span>
                       </p>
-                    </div>
-
-                    {/* Fail rate badge */}
-                    <div className="shrink-0 text-right">
-                      <div
-                        className={`text-lg font-bold ${
-                          area.failRate >= 70
-                            ? "text-red-600 dark:text-red-400"
-                            : area.failRate >= 50
-                            ? "text-orange-600 dark:text-orange-400"
-                            : "text-amber-600 dark:text-amber-400"
-                        }`}
-                      >
-                        {area.failRate}%
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {area.failCount}/{area.totalAttempts} failed
-                      </div>
-                    </div>
+                    )}
                   </div>
 
-                  {/* Progress bar */}
-                  <div className="mt-2.5 h-1.5 w-full bg-red-100 dark:bg-red-900/30 rounded-full overflow-hidden">
+                  {/* Fail rate badge */}
+                  <div className="shrink-0 text-right">
                     <div
-                      className={`h-full rounded-full ${
+                      className={`text-lg font-bold ${
                         area.failRate >= 70
-                          ? "bg-red-500"
+                          ? "text-red-600 dark:text-red-400"
                           : area.failRate >= 50
-                          ? "bg-orange-500"
-                          : "bg-amber-500"
+                          ? "text-orange-600 dark:text-orange-400"
+                          : "text-amber-600 dark:text-amber-400"
                       }`}
-                      style={{ width: `${area.failRate}%` }}
-                    />
+                    >
+                      {area.failRate}%
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {area.failCount}/{area.totalAttempts} failed
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+
+                {/* Fail rate bar */}
+                <div className="mt-2.5 h-1.5 w-full bg-red-100 dark:bg-red-900/30 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      area.failRate >= 70
+                        ? "bg-red-500"
+                        : area.failRate >= 50
+                        ? "bg-orange-500"
+                        : "bg-amber-500"
+                    }`}
+                    style={{ width: `${area.failRate}%` }}
+                  />
+                </div>
+
+                {/* Related study material — lazy KB search */}
+                {area.courseId && (
+                  <RelatedStudyMaterial
+                    instituteId={instituteId}
+                    courseId={area.courseId}
+                    questionText={area.questionText}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Exam Performance Table */}
-      <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.03] overflow-hidden">
+      <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="font-semibold text-gray-800 dark:text-white">Exam Performance</h3>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
@@ -495,7 +637,7 @@ export default function TeacherPerformancePage() {
       </div>
 
       {/* Course Overview Table */}
-      <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.03] overflow-hidden">
+      <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="font-semibold text-gray-800 dark:text-white">Course Overview</h3>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
@@ -555,7 +697,7 @@ export default function TeacherPerformancePage() {
 
       {/* Empty state */}
       {!loading && courseStats.length === 0 && examStats.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.03] px-6 py-8 text-center flex flex-col items-center gap-3">
+        <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 px-6 py-8 text-center flex flex-col items-center gap-3">
           <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
             <PieChartIcon className="w-6 h-6 text-gray-400" />
           </div>
