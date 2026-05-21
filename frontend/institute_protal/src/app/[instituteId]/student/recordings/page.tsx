@@ -84,11 +84,13 @@ export default function StudentRecordingsPage() {
   const activeQuestionRef = useRef<VideoQuestion | null>(null);
   const feedbackRef = useRef<QuestionFeedback | null>(null);
   const submittingAnswerRef = useRef(false);
+  const isWindowFocusedRef = useRef(true);
   videoQuestionsRef.current = videoQuestions;
   answeredIdsRef.current = answeredIds;
   activeQuestionRef.current = activeQuestion;
   feedbackRef.current = feedback;
   submittingAnswerRef.current = submittingAnswer;
+  isWindowFocusedRef.current = isWindowFocused;
 
   // Stable handler ref — always calls the latest logic without re-attaching the listener
   const triggerCheckRef = useRef<() => void>(() => {});
@@ -248,7 +250,8 @@ export default function StudentRecordingsPage() {
 
     function onWindowBlur() {
       setIsWindowFocused(false);
-      protectedVideoRef.current?.pause();
+      const v = protectedVideoRef.current;
+      if (v && !v.paused) v.pause();
     }
 
     function onWindowFocus() {
@@ -260,7 +263,8 @@ export default function StudentRecordingsPage() {
       const hidden = document.hidden;
       setIsWindowFocused(!hidden);
       if (hidden) {
-        protectedVideoRef.current?.pause();
+        const v = protectedVideoRef.current;
+        if (v && !v.paused) v.pause();
       } else if (canResume()) {
         protectedVideoRef.current?.play();
       }
@@ -366,11 +370,11 @@ export default function StudentRecordingsPage() {
     }
   };
 
-  // Play guard — if a question/feedback/submit is active, immediately re-pause
-  // any attempt to play the video (e.g. student clicking the play button on controls).
+  // Play guard — if a question/feedback/submit is active, or window is inactive,
+  // immediately re-pause any attempt to play the video.
   const playGuardRef = useRef<() => void>(() => {});
   playGuardRef.current = () => {
-    if (activeQuestionRef.current || feedbackRef.current || submittingAnswerRef.current) {
+    if (activeQuestionRef.current || feedbackRef.current || submittingAnswerRef.current || !isWindowFocusedRef.current) {
       protectedVideoRef.current?.pause();
     }
   };
