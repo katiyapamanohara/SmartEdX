@@ -56,6 +56,21 @@ import { LiveParticipant } from '../../modules/auth/entities/live-participant.en
         ssl: configService.get<string>('DB_SSL') === 'true'
           ? { rejectUnauthorized: false }
           : false,
+        // ── Neon cold-start resilience ────────────────────────────────────────
+        // Neon free tier suspends after ~5 min; the first reconnect can take
+        // up to 10 s.  We raise timeouts and let TypeORM retry automatically.
+        retryAttempts: 5,
+        retryDelay: 3000,        // ms between retries
+        connectTimeoutMS: 15000, // 15 s — gives Neon enough time to wake up
+        extra: {
+          // pg-driver level options
+          connectionTimeoutMillis: 15000,
+          idleTimeoutMillis: 30000,  // release idle connections after 30 s
+          max: 10,                   // connection pool cap
+          // Keepalive so idle connections don't hit the cloud firewall timeout
+          keepAlive: true,
+          keepAliveInitialDelayMillis: 10000,
+        },
       }),
       inject: [ConfigService],
     }),

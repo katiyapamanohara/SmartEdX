@@ -53,9 +53,7 @@ export class CreateExamDto {
   @Min(1)
   @Max(10)
   maxAttempts?: number;
-  @ApiPropertyOptional() @IsOptional() @IsBoolean() requireFaceId?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() requireScreenShare?: boolean;
-  @ApiPropertyOptional() @IsOptional() @IsBoolean() enableLiveFaceCheck?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() autoFailOnCheat?: boolean;
   @ApiPropertyOptional({ enum: ['draft', 'scheduled', 'active', 'completed'] })
   @IsOptional()

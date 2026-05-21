@@ -197,8 +197,8 @@ export default function NotificationDropdown({ instituteId }: Props) {
               No notifications yet
             </li>
           )}
-          {!loading && notifications.map((notif) => (
-            <li key={notif.id}>
+          {!loading && notifications.map((notif, idx) => (
+            <li key={notif.id ?? `notif-${idx}`}>
               <DropdownItem
                 onItemClick={() => handleNotifClick(notif)}
                 className={`flex gap-3 rounded-lg border-b border-gray-100 px-3 py-3 hover:bg-gray-100 dark:border-gray-800 dark:hover:bg-white/5 transition-colors cursor-pointer ${

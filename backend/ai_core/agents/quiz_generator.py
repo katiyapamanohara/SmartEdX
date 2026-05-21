@@ -18,7 +18,11 @@ logger = logging.getLogger(__name__)
 
 # ─── Retry helper ────────────────────────────────────────────────────────────
 
-_RATE_LIMIT_SIGNALS = ("429", "resource_exhausted", "rate limit", "quota", "too many requests")
+_RATE_LIMIT_SIGNALS = (
+    "429", "resource_exhausted", "rate limit", "quota", "too many requests",
+    # 503 / capacity signals — Gemini returns these during demand spikes
+    "503", "unavailable", "high demand", "service unavailable",
+)
 
 
 def _is_rate_limit_error(exc: Exception) -> bool:
@@ -27,8 +31,14 @@ def _is_rate_limit_error(exc: Exception) -> bool:
 
 
 async def _run_with_backoff(agent: Agent, prompt: str, max_attempts: int = 3):
-    """Run agent.arun(prompt) with exponential backoff on rate-limit errors."""
-    delays = [5, 20, 60]  # seconds between retries
+    """Run agent.arun(prompt) with exponential backoff on transient errors.
+
+    The agno Agent already retries internally (via its ``retries`` parameter),
+    so this outer loop acts as a second safety net if the inner retries are all
+    exhausted — giving us a total of up to ``max_attempts`` outer rounds, each
+    with its own inner retry budget.
+    """
+    delays = [10, 30, 60]  # seconds between outer retry rounds
     last_exc: Exception | None = None
 
     for attempt in range(1, max_attempts + 1):
@@ -40,18 +50,18 @@ async def _run_with_backoff(agent: Agent, prompt: str, max_attempts: int = 3):
                 if attempt < max_attempts:
                     wait = delays[attempt - 1]
                     logger.warning(
-                        "Attempt %d/%d hit rate limit — retrying in %ds. Error: %s",
+                        "Outer attempt %d/%d hit transient error — retrying in %ds. Error: %s",
                         attempt, max_attempts, wait, exc,
                     )
                     await asyncio.sleep(wait)
                 else:
                     logger.error(
-                        "All %d attempts exhausted due to rate limiting. Last error: %s",
+                        "All %d outer attempts exhausted. Last error: %s",
                         max_attempts, exc,
                     )
                     raise
             else:
-                # Non-rate-limit error — fail immediately
+                # Non-transient error — fail immediately
                 raise
 
     raise last_exc  # unreachable but satisfies type checkers
@@ -166,6 +176,10 @@ def _build_mcq_agent() -> Agent:
         ],
         response_model=UnifiedQuizOut,
         structured_outputs=True,
+        # Retry on transient Gemini errors (503 demand spikes, 429 rate limits)
+        retries=3,
+        delay_between_retries=5,
+        exponential_backoff=True,
     )
 
 
@@ -186,6 +200,9 @@ def _build_essay_agent() -> Agent:
         ],
         response_model=UnifiedQuizOut,
         structured_outputs=True,
+        retries=3,
+        delay_between_retries=5,
+        exponential_backoff=True,
     )
 
 
@@ -204,6 +221,9 @@ def _build_mixed_agent() -> Agent:
         ],
         response_model=UnifiedQuizOut,
         structured_outputs=True,
+        retries=3,
+        delay_between_retries=5,
+        exponential_backoff=True,
     )
 
 

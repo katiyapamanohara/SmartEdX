@@ -973,6 +973,22 @@ class InstituteService {
     }
   }
 
+  /** Institute admin: get ALL exams across every teacher in the institute */
+  async getAllInstituteExams(instituteId: string): Promise<any[]> {
+    const token = authService.getToken();
+    if (!token) return [];
+    try {
+      const response = await fetch(
+        `${this.apiUrl}/api/institutes/institutes/${instituteId}/exams/institute`,
+        { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } },
+      );
+      if (!response.ok) return [];
+      return await response.json();
+    } catch {
+      return [];
+    }
+  }
+
   async getTeacherCount(instituteId: string): Promise<number> {
     const token = authService.getToken();
     if (!token) return 0;

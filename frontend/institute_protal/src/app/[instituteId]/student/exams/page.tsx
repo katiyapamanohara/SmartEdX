@@ -41,168 +41,6 @@ function Countdown({ endsAt }: { endsAt: Date }) {
   );
 }
 
-// ─── Face Verify Modal ────────────────────────────────────────────────────────
-
-function FaceVerifyModal({
-  exam,
-  instituteId,
-  onVerified,
-  onClose,
-}: {
-  exam: Exam;
-  instituteId: string;
-  onVerified: () => void;
-  onClose: () => void;
-}) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const [status, setStatus] = useState<"loading" | "ready" | "verifying" | "success" | "failed">("loading");
-  const [errorMsg, setErrorMsg] = useState("");
-
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
-        if (!active) { stream.getTracks().forEach((t) => t.stop()); return; }
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-        }
-        setStatus("ready");
-      } catch {
-        setStatus("failed");
-        setErrorMsg("Cannot access camera. Please enable camera permissions and try again.");
-      }
-    })();
-    return () => {
-      active = false;
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-    };
-  }, []);
-
-  const stopCamera = () => streamRef.current?.getTracks().forEach((t) => t.stop());
-
-  const handleVerify = async () => {
-    if (!videoRef.current) return;
-    setStatus("verifying");
-    try {
-      const canvas = document.createElement("canvas");
-      canvas.width = videoRef.current.videoWidth || 640;
-      canvas.height = videoRef.current.videoHeight || 480;
-      canvas.getContext("2d")!.drawImage(videoRef.current, 0, 0);
-      const imageB64 = canvas.toDataURL("image/jpeg", 0.92);
-
-      const result = await examService.verifyFace(imageB64);
-      if (result?.verified) {
-        setStatus("success");
-        stopCamera();
-        setTimeout(onVerified, 900);
-      } else {
-        setStatus("failed");
-        setErrorMsg(
-          result
-            ? `Face not recognized (distance ${result.distance.toFixed(3)} > threshold ${result.threshold}). Ensure you are enrolled and well-lit.`
-            : "Verification failed. Make sure your face is enrolled in Account Settings."
-        );
-      }
-    } catch {
-      setStatus("failed");
-      setErrorMsg("An error occurred during verification. Please try again.");
-    }
-  };
-
-  const handleClose = () => { stopCamera(); onClose(); };
-  const retry = () => { setStatus("ready"); setErrorMsg(""); };
-
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="face-verify-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
-    >
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-          <div>
-            <h2 id="face-verify-title" className="font-bold text-gray-900 dark:text-white">Face Verification Required</h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{exam.title}</p>
-          </div>
-          <button
-            onClick={handleClose}
-            aria-label="Close face verification dialog"
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
-          >
-            <span aria-hidden="true">✕</span>
-          </button>
-        </div>
-
-        <div className="p-6 flex flex-col items-center gap-5">
-          {/* Camera feed */}
-          <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black" role="img" aria-label="Camera feed for face verification">
-            <video ref={videoRef} className="w-full h-full object-cover" muted playsInline aria-hidden="true" />
-            {/* Oval guide overlay */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
-              <div className="w-36 h-44 rounded-full border-4 border-white/60" style={{ boxShadow: "0 0 0 9999px rgba(0,0,0,0.45)" }} />
-            </div>
-            {status === "success" && (
-              <div className="absolute inset-0 flex items-center justify-center bg-green-500/80" aria-hidden="true">
-                <span className="text-white text-5xl">✓</span>
-              </div>
-            )}
-          </div>
-
-          {/* Status / error — live region so screen readers announce changes */}
-          <div aria-live="polite" aria-atomic="true" className="w-full text-center">
-            {status === "loading" && (
-              <p className="text-sm text-gray-500 dark:text-gray-400">Starting camera…</p>
-            )}
-            {status === "ready" && (
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Position your face within the oval and click <strong>Verify</strong>.
-              </p>
-            )}
-            {status === "verifying" && (
-              <p className="text-sm text-blue-600 dark:text-blue-400 animate-pulse">Verifying identity…</p>
-            )}
-            {status === "success" && (
-              <p className="text-sm font-semibold text-green-600 dark:text-green-400">Identity verified! Starting exam…</p>
-            )}
-            {status === "failed" && (
-              <div role="alert" className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300">
-                {errorMsg || "Verification failed."}
-              </div>
-            )}
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-3 w-full">
-            <button onClick={handleClose} className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5">
-              Cancel
-            </button>
-            {status === "failed" ? (
-              <button onClick={retry} className="flex-1 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600">
-                Try Again
-              </button>
-            ) : (
-              <button
-                onClick={handleVerify}
-                disabled={status !== "ready"}
-                aria-disabled={status !== "ready"}
-                className="flex-1 py-2.5 rounded-xl bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 disabled:opacity-40"
-              >
-                {status === "verifying" ? "Verifying…" : "Verify Identity"}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Screen Share Gate ────────────────────────────────────────────────────────
 
 function ScreenShareGate({
@@ -390,9 +228,7 @@ function TakeExamModal({
   const flagCooldown = useRef<Record<string, number>>({});
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const leaveViolationsRef = useRef(0);
-  const cameraStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
-  const faceCheckVideoRef = useRef<HTMLVideoElement | null>(null);
 
   // ── Shared flag reporter with auto-fail detection ─────────────────────────
   const reportFlag = useCallback(
@@ -551,108 +387,6 @@ function TakeExamModal({
     };
   }, [reportFlag]);
 
-  // ── Proctoring: camera — face detection + optional live recognition ───────
-  useEffect(() => {
-    let faceapi: typeof import("@vladmandic/face-api") | null = null;
-    let intervalId: ReturnType<typeof setInterval> | null = null;
-    let mounted = true;
-
-    (async () => {
-      // ── Step 1: acquire camera (only this failure = camera_disabled flag) ──
-      let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      } catch {
-        // Camera genuinely blocked — flag it
-        const res = await examService.reportIntegrityFlag(instituteId, exam.id, "camera_disabled");
-        if (res?.autoFailed && !submitRef.current) { submitRef.current = true; setAutoFailed(true); }
-        return;
-      }
-
-      if (!mounted) { stream.getTracks().forEach((t) => t.stop()); return; }
-      cameraStreamRef.current = stream;
-
-      const video = document.createElement("video");
-      video.srcObject = stream;
-      video.muted = true;
-      video.playsInline = true;
-      try { await video.play(); } catch { /* silent — autoplay may be blocked */ }
-      faceCheckVideoRef.current = video;
-
-      // ── Step 2: load face-api models (failure here is silent — don't flag camera) ──
-      try {
-        faceapi = await import("@vladmandic/face-api");
-        await faceapi.nets.tinyFaceDetector.loadFromUri("/models");
-      } catch {
-        // Models unavailable — skip face detection entirely, camera still works
-        return;
-      }
-
-      // ── Step 3: periodic checks ───────────────────────────────────────────
-      // Every 30 s: face presence.  Every 60 s: live recognition (if enabled).
-      let checkCount = 0;
-      intervalId = setInterval(async () => {
-        if (!mounted || !faceCheckVideoRef.current || !faceapi) return;
-        checkCount++;
-
-        // ── Face presence (TinyFaceDetector) ───
-        try {
-          const detections = await faceapi.detectAllFaces(
-            faceCheckVideoRef.current,
-            new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.4 }),
-          );
-          const count = detections.length;
-          const now = Date.now();
-
-          if (count === 0) {
-            const last = flagCooldown.current["face_absent"] ?? 0;
-            if (now - last >= 30_000) {
-              flagCooldown.current["face_absent"] = now;
-              const res = await examService.reportIntegrityFlag(instituteId, exam.id, "face_absent");
-              setFlagWarning("⚠️ Face not detected. Stay in front of the camera.");
-              setTimeout(() => setFlagWarning(""), 6000);
-              if (res?.autoFailed && !submitRef.current) { submitRef.current = true; setAutoFailed(true); }
-            }
-          } else if (count > 1) {
-            const last = flagCooldown.current["multiple_faces"] ?? 0;
-            if (now - last >= 30_000) {
-              flagCooldown.current["multiple_faces"] = now;
-              const res = await examService.reportIntegrityFlag(instituteId, exam.id, "multiple_faces");
-              setFlagWarning("⚠️ Multiple faces detected. Only one person allowed.");
-              setTimeout(() => setFlagWarning(""), 6000);
-              if (res?.autoFailed && !submitRef.current) { submitRef.current = true; setAutoFailed(true); }
-            }
-          }
-        } catch { /* silent */ }
-
-        // ── Live face recognition (face_recognition_server) every 2nd tick = 60 s ──
-        if (exam.enableLiveFaceCheck && checkCount % 2 === 0) {
-          try {
-            const canvas = document.createElement("canvas");
-            canvas.width = faceCheckVideoRef.current.videoWidth || 320;
-            canvas.height = faceCheckVideoRef.current.videoHeight || 240;
-            canvas.getContext("2d")!.drawImage(faceCheckVideoRef.current, 0, 0);
-            const imageB64 = canvas.toDataURL("image/jpeg", 0.85);
-
-            const result = await examService.liveFaceCheck(instituteId, exam.id, imageB64);
-            if (result && !result.verified) {
-              setFlagWarning("⚠️ Face recognition failed. Ensure you are the enrolled student.");
-              setTimeout(() => setFlagWarning(""), 6000);
-              if (result.autoFailed && !submitRef.current) { submitRef.current = true; setAutoFailed(true); }
-            }
-          } catch { /* silent */ }
-        }
-      }, 30_000);
-    })();
-
-    return () => {
-      mounted = false;
-      if (intervalId) clearInterval(intervalId);
-      cameraStreamRef.current?.getTracks().forEach((t) => t.stop());
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [exam.id, exam.enableLiveFaceCheck, instituteId]);
-
   // Sync externally-provided screen stream into ref
   useEffect(() => {
     if (screenStream !== undefined) screenStreamRef.current = screenStream ?? null;
@@ -787,12 +521,6 @@ function TakeExamModal({
             <span className="hidden sm:flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse inline-block" />
               Screen Shared
-            </span>
-          )}
-          {exam.enableLiveFaceCheck && (
-            <span className="hidden sm:flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 px-2 py-0.5 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse inline-block" />
-              Face Watch
             </span>
           )}
         </div>
@@ -1048,7 +776,6 @@ function ExamCard({ exam, onStart }: { exam: Exam; onStart: (exam: Exam) => void
 
   // Build start button label from required proctoring steps
   const startLabel = [
-    exam.requireFaceId && "Face ID",
     exam.requireScreenShare && "Screen Share",
   ].filter(Boolean);
 
@@ -1062,14 +789,8 @@ function ExamCard({ exam, onStart }: { exam: Exam; onStart: (exam: Exam) => void
         <div className="flex flex-col items-end gap-1">
           {statusBadge(exam.status)}
           <div className="flex flex-wrap gap-1 justify-end">
-            {exam.requireFaceId && (
-              <span className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded-full">🔒 Face ID</span>
-            )}
             {exam.requireScreenShare && (
               <span className="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded-full">🖥 Screen</span>
-            )}
-            {exam.enableLiveFaceCheck && (
-              <span className="text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 px-1.5 py-0.5 rounded-full">👁 Live Check</span>
             )}
           </div>
         </div>
@@ -1148,9 +869,8 @@ export default function StudentExamsPage() {
   const [loading, setLoading] = useState(true);
 
   // Gate state — each step clears before the next opens
-  const [verifyingExam, setVerifyingExam] = useState<Exam | null>(null);     // step 1: face verify
-  const [screenShareExam, setScreenShareExam] = useState<Exam | null>(null); // step 2: screen share
-  const [takingExam, setTakingExam] = useState<Exam | null>(null);           // step 3: exam itself
+  const [screenShareExam, setScreenShareExam] = useState<Exam | null>(null); // step 1: screen share
+  const [takingExam, setTakingExam] = useState<Exam | null>(null);           // step 2: exam itself
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
 
   const [result, setResult] = useState<{
@@ -1181,18 +901,6 @@ export default function StudentExamsPage() {
 
   // Entry point: student clicks "Start Exam"
   const handleStart = useCallback((exam: Exam) => {
-    if (exam.requireFaceId && proctoringEnabled) {
-      setVerifyingExam(exam);
-    } else if (exam.requireScreenShare && proctoringEnabled) {
-      openScreenShare(exam);
-    } else {
-      openExam(exam);
-    }
-  }, [proctoringEnabled, openScreenShare, openExam]);
-
-  // After face verify passes
-  const handleFaceVerified = useCallback((exam: Exam) => {
-    setVerifyingExam(null);
     if (exam.requireScreenShare && proctoringEnabled) {
       openScreenShare(exam);
     } else {
@@ -1308,17 +1016,7 @@ export default function StudentExamsPage() {
         </div>
       )}
 
-      {/* Step 1: Face verify */}
-      {verifyingExam && (
-        <FaceVerifyModal
-          exam={verifyingExam}
-          instituteId={instituteId}
-          onVerified={() => handleFaceVerified(verifyingExam)}
-          onClose={() => setVerifyingExam(null)}
-        />
-      )}
-
-      {/* Step 2: Screen share gate */}
+      {/* Step 1: Screen share gate */}
       {screenShareExam && (
         <ScreenShareGate
           exam={screenShareExam}
@@ -1327,7 +1025,7 @@ export default function StudentExamsPage() {
         />
       )}
 
-      {/* Step 3: Take exam */}
+      {/* Step 2: Take exam */}
       {takingExam && (
         <TakeExamModal
           exam={takingExam}

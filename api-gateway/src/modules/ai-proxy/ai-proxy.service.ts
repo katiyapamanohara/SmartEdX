@@ -69,7 +69,7 @@ export class AiProxyService {
 
   async forwardFileUpload(
     path: string,
-    file: Express.Multer.File,
+    file: Express.Multer.File | undefined,
     body: any,
     headers?: any,
   ): Promise<any> {
@@ -77,11 +77,44 @@ export class AiProxyService {
     this.logger.log(`Forwarding file upload to ${url}`);
 
     const formData = new FormData();
-    formData.append('file', file.buffer, {
-      filename: file.originalname,
-      contentType: file.mimetype,
-      knownLength: file.size,
-    });
+
+    if (file) {
+      // Direct browser file upload
+      formData.append('file', file.buffer, {
+        filename: file.originalname,
+        contentType: file.mimetype,
+        knownLength: file.size,
+      });
+    } else if (body.document_url) {
+      // Fetch the course document server-side to avoid CORS from the browser
+      this.logger.log(`Fetching course document server-side: ${body.document_url}`);
+      const docRes = await firstValueFrom(
+        this.httpService.get(body.document_url, {
+          responseType: 'arraybuffer',
+          validateStatus: () => true,
+        }),
+      );
+      if (docRes.status >= 400) {
+        throw new HttpException(
+          { detail: 'Failed to fetch the selected course document' },
+          422,
+        );
+      }
+      const buffer = Buffer.from(docRes.data as ArrayBuffer);
+      const rawUrl = (body.document_url as string).split('?')[0];
+      const rawExt = rawUrl.split('.').pop()?.toLowerCase() ?? 'pdf';
+      const safeExt = ['pdf', 'docx', 'doc', 'pptx', 'ppt'].includes(rawExt)
+        ? rawExt
+        : 'pdf';
+      const contentType =
+        (docRes.headers['content-type'] as string)?.split(';')[0] ||
+        'application/pdf';
+      formData.append('file', buffer, {
+        filename: `course-document.${safeExt}`,
+        contentType,
+        knownLength: buffer.length,
+      });
+    }
 
     if (body.num_questions)
       formData.append('num_questions', String(body.num_questions));
@@ -102,13 +135,15 @@ export class AiProxyService {
           },
           maxContentLength: Infinity,
           maxBodyLength: Infinity,
-          // Accept all responses including 4xx so we can forward them properly
           validateStatus: (status) => status < 600,
           timeout: 180_000, // allow for up to 3 retries with backoff in ai_core
         }),
       );
 
       if (response.status >= 400) {
+        this.logger.warn(
+          `AI Core returned ${response.status} for ${path}: ${JSON.stringify(response.data)}`,
+        );
         throw new HttpException(response.data, response.status);
       }
 
@@ -143,11 +178,42 @@ export class AiProxyService {
       if (body[field] !== undefined)
         formData.append(field, String(body[field]));
     }
+
     if (file) {
+      // Direct browser file upload
       formData.append('file', file.buffer, {
         filename: file.originalname,
         contentType: file.mimetype,
         knownLength: file.size,
+      });
+    } else if (body.document_url) {
+      // Fetch the course document server-side to avoid CORS from the browser
+      this.logger.log(`Fetching course document server-side: ${body.document_url}`);
+      const docRes = await firstValueFrom(
+        this.httpService.get(body.document_url, {
+          responseType: 'arraybuffer',
+          validateStatus: () => true,
+        }),
+      );
+      if (docRes.status >= 400) {
+        throw new HttpException(
+          { detail: 'Failed to fetch the selected course document' },
+          422,
+        );
+      }
+      const buffer = Buffer.from(docRes.data as ArrayBuffer);
+      const rawUrl = (body.document_url as string).split('?')[0];
+      const rawExt = rawUrl.split('.').pop()?.toLowerCase() ?? 'pdf';
+      const safeExt = ['pdf', 'docx', 'doc', 'pptx', 'ppt'].includes(rawExt)
+        ? rawExt
+        : 'pdf';
+      const contentType =
+        (docRes.headers['content-type'] as string)?.split(';')[0] ||
+        'application/pdf';
+      formData.append('file', buffer, {
+        filename: `course-document.${safeExt}`,
+        contentType,
+        knownLength: buffer.length,
       });
     }
 
@@ -165,17 +231,23 @@ export class AiProxyService {
           },
           maxContentLength: Infinity,
           maxBodyLength: Infinity,
-          validateStatus: (status) => status < 500,
+          validateStatus: (status) => status < 600,
           timeout: 120_000,
         }),
       );
-      if (response.status >= 400)
+      if (response.status >= 400) {
+        this.logger.warn(
+          `AI Core returned ${response.status} for voice-assessment/generate: ${JSON.stringify(response.data)}`,
+        );
         throw new HttpException(response.data, response.status);
+      }
       return response.data;
     } catch (error) {
       if (error instanceof HttpException) throw error;
       if (error.response) {
-        this.logger.error(`Voice assessment error: ${error.response.status}`);
+        this.logger.error(
+          `Voice assessment error: ${error.response.status} - ${JSON.stringify(error.response.data)}`,
+        );
         throw new HttpException(error.response.data, error.response.status);
       }
       throw error;

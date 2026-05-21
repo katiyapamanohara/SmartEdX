@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useState, useCallback, useRef } from "react";
+import { createContext, useContext, useState, useCallback, useRef, useEffect } from "react";
 import { Course } from "@/services/instituteService";
 import { StudentContext } from "@/app/[instituteId]/student/ai-chat/VoiceModal";
 
@@ -76,10 +76,19 @@ function readStoredPending(): PendingTranscript[] {
 }
 
 export function VoiceAgentProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<VoiceSessionParams | null>(readStoredSession);
+  // Always start null on the server (and during client hydration) so the
+  // SSR and client trees match. We restore from sessionStorage AFTER mount.
+  const [session, setSession] = useState<VoiceSessionParams | null>(null);
   const sendFnRef             = useRef<((text: string) => void) | null>(null);
   const transcriptHandlerRef  = useRef<((role: "user" | "assistant", text: string) => void) | null>(null);
-  const pendingTranscriptsRef = useRef<PendingTranscript[]>(readStoredPending());
+  const pendingTranscriptsRef = useRef<PendingTranscript[]>([]);
+
+  // Restore persisted session after first client render — avoids hydration mismatch
+  useEffect(() => {
+    const stored = readStoredSession();
+    if (stored) setSession(stored);
+    pendingTranscriptsRef.current = readStoredPending();
+  }, []);
 
   const startSession = useCallback((params: VoiceSessionParams) => {
     pendingTranscriptsRef.current = [];

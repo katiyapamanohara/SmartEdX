@@ -7,6 +7,7 @@ import { authService } from "@/services/authService";
 import { instituteService, Course } from "@/services/instituteService";
 import { useFeatures } from "@/context/InstituteFeatureContext";
 import { useVoiceAgent } from "@/context/VoiceAgentContext";
+import { openPipWindowForNextSession } from "@/components/voice/pipBridge";
 import { useInstituteFeatures } from "@/hooks/useInstituteFeatures";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -493,8 +494,11 @@ export default function AiChatPage() {
     e.target.value = "";
   }
 
-  function openVoiceMode() {
+  async function openVoiceMode() {
     if (!selectedCourse || !activeChatId) return;
+    // Open Document PiP while the user-gesture is still active so the widget
+    // stays visible when switching to another browser tab.
+    await openPipWindowForNextSession();
     const user = authService.getUser();
     startSession({
       isDark, instituteLogo,

@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Body,
   Param,
@@ -26,10 +27,32 @@ export class LiveClassController {
   constructor(private readonly liveClassService: LiveClassService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get all sessions for the institute (students)' })
+  @ApiOperation({
+    summary:
+      'Get live/scheduled sessions visible to the logged-in student (filtered by course enrollment)',
+  })
   @ApiParam({ name: 'id', description: 'Institute ID' })
-  async getStudentSessions(@Param('id') instituteId: string) {
-    return this.liveClassService.getStudentSessions(instituteId);
+  async getStudentSessions(
+    @Param('id') instituteId: string,
+    @CurrentUser('userId') studentId: string,
+  ) {
+    return this.liveClassService.getStudentSessions(instituteId, studentId);
+  }
+
+  @Get('student-history')
+  @ApiOperation({
+    summary:
+      'Get all sessions (all statuses) visible to the logged-in student (for the past tab)',
+  })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  async getStudentSessionHistory(
+    @Param('id') instituteId: string,
+    @CurrentUser('userId') studentId: string,
+  ) {
+    return this.liveClassService.getAllStudentSessionsHistory(
+      instituteId,
+      studentId,
+    );
   }
 
   @Get('teacher')
@@ -105,6 +128,22 @@ export class LiveClassController {
     @CurrentUser('userId') userId: string,
   ) {
     return this.liveClassService.leaveSession(sessionId, userId);
+  }
+
+  @Patch(':sessionId')
+  @ApiOperation({ summary: 'Update a scheduled session (teacher)' })
+  async updateSession(
+    @Param('id') instituteId: string,
+    @Param('sessionId') sessionId: string,
+    @CurrentUser('userId') teacherId: string,
+    @Body() dto: CreateLiveSessionDto,
+  ) {
+    return this.liveClassService.updateSession(
+      sessionId,
+      teacherId,
+      instituteId,
+      dto,
+    );
   }
 
   @Delete(':sessionId')

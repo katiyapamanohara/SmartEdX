@@ -11,9 +11,12 @@ import {
 } from '../../infra/database/repositories';
 import { ModuleContentRepository } from '../../infra/database/repositories/module-content.repository';
 import { CourseModuleRepository } from '../../infra/database/repositories/course-module.repository';
+import { InstituteUserRepository } from '../../infra/database/repositories/institute-user.repository';
 import { VoiceAgentClient } from '../../infra/http/voice-agent.client';
 import { AiCoreClient } from '../../infra/http/ai-core.client';
 import { MinioService } from '../../infra/storage/minio.service';
+import { NotificationGateway } from './notification.gateway';
+import { randomUUID } from 'crypto';
 
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
@@ -43,6 +46,8 @@ export class CourseService {
     private readonly voiceAgentClient: VoiceAgentClient,
     private readonly aiCoreClient: AiCoreClient,
     private readonly minioService: MinioService,
+    private readonly notificationGateway: NotificationGateway,
+    private readonly instituteUserRepository: InstituteUserRepository,
   ) {}
 
   private mapCourseToResponse(course: Course) {
@@ -649,6 +654,8 @@ export class CourseService {
         feedback: string;
       }>;
     },
+    violations?: { type: string; timestamp: string; detail?: string }[],
+    integrityViolated?: boolean,
   ) {
     // Find the content (quiz)
     const content = await this.moduleContentRepository.findOne({
@@ -663,19 +670,30 @@ export class CourseService {
     const existing = content.studentAttempts || {};
     const prevAttempt = existing[userId];
     const attemptCount: number = prevAttempt?.attemptCount ?? 0;
-    if (attemptCount >= maxAttempts) {
+
+    // Allow integrity-violation submissions even if at max attempts
+    // (so the 0-mark + violation is recorded correctly)
+    if (attemptCount >= maxAttempts && !integrityViolated) {
       throw new ConflictException(
         `Maximum attempts (${maxAttempts}) reached for this assessment.`,
       );
     }
 
+    // Force 0 score when integrity is violated
+    const finalScore = integrityViolated ? 0 : score;
+
     // Build a new object so TypeORM detects the JSONB change
     const attemptEntry: Record<string, any> = {
-      score,
+      score: finalScore,
       answers: answers ?? {},
       attemptedAt: new Date().toISOString(),
-      attemptCount: attemptCount + 1,
+      // Set to maxAttempts when violated so no further attempts are possible
+      attemptCount: integrityViolated ? maxAttempts : attemptCount + 1,
     };
+
+    if (integrityViolated) {
+      attemptEntry.integrityViolated = true;
+    }
 
     if (voiceResult) {
       attemptEntry.type = 'voice';
@@ -687,17 +705,196 @@ export class CourseService {
       attemptEntry.questionResults = voiceResult.questionResults;
     }
 
+    // Also embed the raw violations array inside the attempt so the teacher
+    // assessments page can read them from studentAttempts[userId].violations
+    // without a separate integrityFlags lookup.
+    if (violations && violations.length > 0) {
+      attemptEntry.violations = violations;
+    }
+
     const updatedAttempts = { ...existing, [userId]: attemptEntry };
 
     // Use update() with the new object to force a direct SQL UPDATE
     await this.moduleContentRepository.update(contentId, {
       studentAttempts: updatedAttempts,
     } as any);
+
+    // ── Process integrity violations ──────────────────────────────────────────
+    if (violations && violations.length > 0) {
+      const VIOLATION_SEVERITY: Record<string, 'high' | 'medium' | 'low'> = {
+        tab_switch: 'high',
+        tab_switch_repeated: 'high',
+        tab_switch_timeout: 'high',
+        screen_share_stopped: 'high',
+        copy_attempt: 'high',
+        suspicious_screen: 'high',
+      };
+
+      // Build flag entries
+      const newFlags = violations.map((v) => ({
+        id: randomUUID(),
+        type: v.type,
+        severity: VIOLATION_SEVERITY[v.type] ?? 'high',
+        timestamp: v.timestamp,
+        detail: v.detail ?? '',
+        reviewed: false,
+      }));
+
+      // Persist flags on the module content
+      const existingFlags = content.integrityFlags || {};
+      const updatedFlags = {
+        ...existingFlags,
+        [userId]: [...(existingFlags[userId] ?? []), ...newFlags],
+      };
+      await this.moduleContentRepository.update(contentId, {
+        integrityFlags: updatedFlags,
+      } as any);
+
+      // Lookup student name/email for the notification
+      const studentUser = await this.instituteUserRepository.findById(userId);
+      const studentName = studentUser
+        ? [studentUser.firstName, studentUser.lastName].filter(Boolean).join(' ') || studentUser.email
+        : userId;
+
+      // Traverse content → module → course → teacher to find who to notify
+      try {
+        const courseModule = await this.courseModuleRepository.findOne({
+          where: { id: content.moduleId } as any,
+        });
+        if (courseModule) {
+          const course = await this.courseRepository.findOne({
+            where: { id: (courseModule as any).courseId } as any,
+            relations: ['teachers'],
+          } as any);
+          const teacherUserId = (course as any)?.teachers?.[0]?.userId;
+          if (teacherUserId) {
+            const highCount = newFlags.filter((f) => f.severity === 'high').length;
+            const latestViolation = newFlags[newFlags.length - 1];
+            this.notificationGateway.emitNotification(teacherUserId, {
+              type: 'cheat_alert',
+              title: integrityViolated
+                ? 'Student Auto-Failed — Integrity Violation'
+                : 'Cheating Detected During Assessment',
+              body: integrityViolated
+                ? `${studentName} was automatically given 0 marks in "${content.title}" due to exam integrity violations.`
+                : `${studentName} triggered a cheating violation (${violations.map((v) => v.type).join(', ')}) in "${content.title}".`,
+              metadata: {
+                examId: contentId,
+                examTitle: content.title,
+                studentId: userId,
+                studentName,
+                studentEmail: studentUser?.email ?? '',
+                violationType: latestViolation.type,
+                severity: latestViolation.severity,
+                totalHighFlags: highCount,
+                allFlags: newFlags,
+                autoFailed: !!integrityViolated,
+                timestamp: latestViolation.timestamp,
+              },
+              timestamp: latestViolation.timestamp,
+            });
+          }
+        }
+      } catch (err) {
+        this.logger.warn(`Could not emit integrity notification: ${err}`);
+      }
+    }
+
     return {
       success: true,
-      message: 'Quiz attempt recorded',
-      score,
+      message: integrityViolated
+        ? 'Assessment terminated due to integrity violation. Score set to 0.'
+        : 'Quiz attempt recorded',
+      score: finalScore,
+      integrityViolated: !!integrityViolated,
     };
+  }
+
+  // ── Real-time single violation report (fires immediately on each tab switch) ─
+  async reportQuizViolation(
+    instituteId: string,
+    contentId: string,
+    userId: string,
+    type: string,
+    timestamp: string,
+    detail?: string,
+  ) {
+    const content = await this.moduleContentRepository.findOne({
+      where: { id: contentId },
+    } as any);
+    if (!content) throw new Error('Assessment not found');
+
+    const VIOLATION_SEVERITY: Record<string, 'high' | 'medium' | 'low'> = {
+      tab_switch: 'high',
+      tab_switch_repeated: 'high',
+      tab_switch_timeout: 'high',
+      screen_share_stopped: 'high',
+      copy_attempt: 'high',
+      suspicious_screen: 'high',
+    };
+
+    const newFlag = {
+      id: randomUUID(),
+      type,
+      severity: VIOLATION_SEVERITY[type] ?? 'high',
+      timestamp,
+      detail: detail ?? '',
+      reviewed: false,
+    };
+
+    const existingFlags = content.integrityFlags || {};
+    const updatedFlags = {
+      ...existingFlags,
+      [userId]: [...(existingFlags[userId] ?? []), newFlag],
+    };
+    await this.moduleContentRepository.update(contentId, {
+      integrityFlags: updatedFlags,
+    } as any);
+
+    // Notify teacher in real-time
+    try {
+      const courseModule = await this.courseModuleRepository.findOne({
+        where: { id: content.moduleId } as any,
+      });
+      if (courseModule) {
+        const course = await this.courseRepository.findOne({
+          where: { id: (courseModule as any).courseId } as any,
+          relations: ['teachers'],
+        } as any);
+        const teacherUserId = (course as any)?.teachers?.[0]?.userId;
+        const studentUser = await this.instituteUserRepository.findById(userId);
+        const studentName = studentUser
+          ? [studentUser.firstName, studentUser.lastName].filter(Boolean).join(' ') || studentUser.email
+          : userId;
+
+        if (teacherUserId) {
+          const allUserFlags = updatedFlags[userId] ?? [];
+          this.notificationGateway.emitNotification(teacherUserId, {
+            type: 'cheat_alert',
+            title: 'Cheating Detected During Assessment',
+            body: `${studentName} left the exam window during "${content.title}". ${detail ?? ''}`,
+            metadata: {
+              examId: contentId,
+              examTitle: content.title,
+              studentId: userId,
+              studentName,
+              studentEmail: studentUser?.email ?? '',
+              violationType: type,
+              severity: newFlag.severity,
+              totalHighFlags: allUserFlags.filter((f: any) => f.severity === 'high').length,
+              allFlags: allUserFlags,
+              autoFailed: false,
+              timestamp,
+            },
+            timestamp,
+          });
+        }
+      }
+    } catch (err) {
+      this.logger.warn(`Could not emit real-time violation notification: ${err}`);
+    }
+
+    return { success: true, flag: newFlag };
   }
 
   async searchCourseKB(instituteId: string, courseId: string, query: string) {

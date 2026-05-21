@@ -32,7 +32,6 @@ type NavItem = {
 const FEATURE_NAV_ITEMS: { feature: string; item: NavItem }[] = [
   { feature: "recordings",     item: { icon: <MdVideoLibrary className="w-6 h-6" />, name: "Recordings",         path: "/teacher/recordings" } },
   { feature: "live_sessions",  item: { icon: <VideoIcon />,                          name: "Live Classes",        path: "/teacher/live-classes" } },
-  { feature: "exam_proctoring",item: { icon: <PieChartIcon />,                       name: "Integrity Monitor",   path: "/teacher/integrity-monitor" } },
   { feature: "virtual_labs",   item: { icon: <BoxCubeIcon />,                        name: "Virtual Labs",        path: "/teacher/virtual-labs" } },
 ];
 

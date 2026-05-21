@@ -8,6 +8,7 @@ import { ExamRepository } from '../../infra/database/repositories/exam.repositor
 import { CourseRepository } from '../../infra/database/repositories/course.repository';
 import { StudentRepository } from '../../infra/database/repositories/student.repository';
 import { InstituteUserRepository } from '../../infra/database/repositories/institute-user.repository';
+import { ModuleContentRepository } from '../../infra/database/repositories/module-content.repository';
 import { FaceRecClient } from '../../infra/http/face-rec.client';
 import { AiCoreClient } from '../../infra/http/ai-core.client';
 import { NotificationGateway } from './notification.gateway';
@@ -28,15 +29,10 @@ const HIGH_VIOLATION_THRESHOLD = 3;
 
 const SEVERITY_MAP: Record<IntegrityViolationType, IntegrityFlag['severity']> =
   {
-    face_absent: 'high',
-    face_verify_failed: 'high',
-    multiple_faces: 'high',
-    live_face_mismatch: 'high',
     screen_share_disabled: 'high',
     suspicious_screen: 'high',
     copy_attempt: 'high',
     tab_switch: 'high',
-    camera_disabled: 'medium',
     fullscreen_exit: 'medium',
   };
 
@@ -50,6 +46,7 @@ export class ExamService {
     private readonly faceRecClient: FaceRecClient,
     private readonly aiCoreClient: AiCoreClient,
     private readonly notificationGateway: NotificationGateway,
+    private readonly moduleContentRepository: ModuleContentRepository,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -73,9 +70,13 @@ export class ExamService {
     const attempt = userId
       ? (exam.studentAttempts?.[userId] ?? null)
       : undefined;
-    // Strip correct answers + sample answers for active exams (student safety)
+    // Strip correct answers + sample answers for active exams (student safety),
+    // but only when the student has NOT yet submitted — after submission they
+    // need correctAnswer to power the "Areas to Improve" feedback on the
+    // performance page.
+    const hasSubmitted = attempt !== null && attempt !== undefined;
     const questions =
-      status === 'active' && userId
+      status === 'active' && userId && !hasSubmitted
         ? exam.questions.map(
             ({ correctAnswer: _c, explanation: _e, sampleAnswer: _s, ...q }) =>
               q,
@@ -94,9 +95,7 @@ export class ExamService {
       status,
       passingScore: exam.passingScore,
       maxAttempts: exam.maxAttempts ?? 1,
-      requireFaceId: exam.requireFaceId ?? false,
       requireScreenShare: exam.requireScreenShare ?? false,
-      enableLiveFaceCheck: exam.enableLiveFaceCheck ?? false,
       autoFailOnCheat: exam.autoFailOnCheat ?? false,
       totalMarks,
       questionCount: exam.questions.length,
@@ -152,9 +151,7 @@ export class ExamService {
       durationMinutes: dto.durationMinutes,
       passingScore: dto.passingScore,
       maxAttempts: dto.maxAttempts ?? 1,
-      requireFaceId: dto.requireFaceId ?? false,
       requireScreenShare: dto.requireScreenShare ?? false,
-      enableLiveFaceCheck: dto.enableLiveFaceCheck ?? false,
       autoFailOnCheat: dto.autoFailOnCheat ?? false,
       questions: dto.questions as any,
       status,
@@ -194,9 +191,7 @@ export class ExamService {
     if (dto.questions !== undefined) patch.questions = dto.questions as any;
     if (dto.status !== undefined) patch.status = dto.status as ExamStatus;
     if (dto.courseId !== undefined) patch.courseId = dto.courseId;
-    if (dto.requireFaceId !== undefined) patch.requireFaceId = dto.requireFaceId;
     if (dto.requireScreenShare !== undefined) patch.requireScreenShare = dto.requireScreenShare;
-    if (dto.enableLiveFaceCheck !== undefined) patch.enableLiveFaceCheck = dto.enableLiveFaceCheck;
     if (dto.autoFailOnCheat !== undefined) patch.autoFailOnCheat = dto.autoFailOnCheat;
 
     // Auto-set status when scheduledAt is provided
@@ -552,52 +547,6 @@ export class ExamService {
     return { success: true, flag, autoFailed };
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Live face check (continuous recognition via face_recognition_server)
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  async liveFaceCheck(
-    instituteId: string,
-    examId: string,
-    userId: string,
-    imageB64: string,
-  ) {
-    const exam = await this.examRepository.findByIdWithRelations(
-      examId,
-      instituteId,
-    );
-    if (!exam) throw new NotFoundException('Exam not found');
-    if (!exam.enableLiveFaceCheck) {
-      return { verified: true, distance: 0, threshold: 0.5, autoFailed: false };
-    }
-
-    const student = await this.studentRepository.findOne({ where: { userId } });
-    if (!student?.faceDescriptor) {
-      // No descriptor enrolled — flag camera_disabled as warning, don't hard-fail
-      return { verified: false, distance: 1, threshold: 0.5, autoFailed: false, noDescriptor: true };
-    }
-
-    let verifyResult: { verified: boolean; distance: number; threshold: number };
-    try {
-      verifyResult = await this.faceRecClient.verifyImage(student.faceDescriptor, imageB64);
-    } catch {
-      return { verified: false, distance: 1, threshold: 0.5, autoFailed: false };
-    }
-
-    if (!verifyResult.verified) {
-      // Report live_face_mismatch and check auto-fail
-      const result = await this.reportIntegrityFlag(
-        instituteId,
-        examId,
-        userId,
-        'live_face_mismatch',
-      );
-      return { ...verifyResult, autoFailed: result.autoFailed ?? false };
-    }
-
-    return { ...verifyResult, autoFailed: false };
-  }
-
   // ── Screen content analysis ────────────────────────────────────────────────
 
   async screenCheck(
@@ -652,15 +601,31 @@ export class ExamService {
     instituteId: string,
     teacherUserId: string,
   ) {
+    // ── 1. Exam-type integrity flags ──────────────────────────────────────────
     const exams = await this.examRepository.findByCreator(
       teacherUserId,
       instituteId,
     );
 
+    // ── 2. Quiz/assessment integrity flags from module content ─────────────────
+    const courses = await this.courseRepository.findCoursesWithQuizzesByTeacher(
+      teacherUserId,
+      instituteId,
+    );
+
+    // Collect all userIds from both sources so we can batch-resolve names
     const userIdSet = new Set<string>();
     for (const exam of exams) {
       for (const uid of Object.keys(exam.integrityFlags ?? {}))
         userIdSet.add(uid);
+    }
+    for (const course of courses) {
+      for (const module of (course as any).modules ?? []) {
+        for (const content of module.contents ?? []) {
+          for (const uid of Object.keys(content.integrityFlags ?? {}))
+            userIdSet.add(uid);
+        }
+      }
     }
 
     const nameMap = new Map<string, string>();
@@ -684,8 +649,10 @@ export class ExamService {
       severity: string;
       timestamp: string;
       reviewed: boolean;
+      detail?: string;
     }[] = [];
 
+    // Push exam flags
     for (const exam of exams) {
       for (const [uid, flags] of Object.entries(exam.integrityFlags ?? {})) {
         for (const flag of flags) {
@@ -699,7 +666,34 @@ export class ExamService {
             severity: flag.severity,
             timestamp: flag.timestamp,
             reviewed: flag.reviewed,
+            detail: (flag as any).detail,
           });
+        }
+      }
+    }
+
+    // Push quiz/assessment content flags
+    for (const course of courses) {
+      for (const module of (course as any).modules ?? []) {
+        for (const content of module.contents ?? []) {
+          for (const [uid, flags] of Object.entries(
+            content.integrityFlags ?? {},
+          )) {
+            for (const flag of flags as any[]) {
+              rows.push({
+                flagId: flag.id,
+                examId: content.id,
+                examTitle: content.title,
+                userId: uid,
+                studentName: nameMap.get(uid) ?? uid,
+                type: flag.type,
+                severity: flag.severity,
+                timestamp: flag.timestamp,
+                reviewed: flag.reviewed,
+                detail: flag.detail,
+              });
+            }
+          }
         }
       }
     }
@@ -718,20 +712,37 @@ export class ExamService {
     flagId: string,
     teacherUserId: string,
   ) {
+    // Try exam-type first
     const exam = await this.examRepository.findByIdWithRelations(
       examId,
       instituteId,
     );
-    if (!exam) throw new NotFoundException('Exam not found');
-    if (exam.createdByUserId !== teacherUserId)
-      throw new ForbiddenException('Not your exam');
+    if (exam) {
+      if (exam.createdByUserId !== teacherUserId)
+        throw new ForbiddenException('Not your exam');
+      const flags = exam.integrityFlags?.[userId] ?? [];
+      const updatedFlags = flags.map((f) =>
+        f.id === flagId ? { ...f, reviewed: true } : f,
+      );
+      await this.examRepository.update(examId, {
+        integrityFlags: { ...exam.integrityFlags, [userId]: updatedFlags },
+      } as any);
+      return { success: true };
+    }
 
-    const flags = exam.integrityFlags?.[userId] ?? [];
-    const updatedFlags = flags.map((f) =>
+    // Fall back to quiz/assessment module content
+    const content = await this.moduleContentRepository.findOne({
+      where: { id: examId } as any,
+    });
+    if (!content) throw new NotFoundException('Assessment not found');
+
+    const existingFlags = content.integrityFlags || {};
+    const userFlags: any[] = existingFlags[userId] ?? [];
+    const updatedUserFlags = userFlags.map((f: any) =>
       f.id === flagId ? { ...f, reviewed: true } : f,
     );
-    await this.examRepository.update(examId, {
-      integrityFlags: { ...exam.integrityFlags, [userId]: updatedFlags },
+    await this.moduleContentRepository.update(examId, {
+      integrityFlags: { ...existingFlags, [userId]: updatedUserFlags },
     } as any);
     return { success: true };
   }

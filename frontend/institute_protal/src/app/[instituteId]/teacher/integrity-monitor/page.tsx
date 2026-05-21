@@ -18,6 +18,7 @@ type FlagRow = {
   severity: string;
   timestamp: string;
   reviewed: boolean;
+  detail?: string;
 };
 
 interface LiveAlert {
@@ -380,8 +381,9 @@ export default function TeacherIntegrityMonitorPage() {
               <thead className="border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-white/2">
                 <tr>
                   <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Student</th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Exam</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Assessment</th>
                   <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Violation</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Detail</th>
                   <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Severity</th>
                   <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Time</th>
                   <th className="px-5 py-3 text-end text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Action</th>
@@ -396,10 +398,20 @@ export default function TeacherIntegrityMonitorPage() {
                       key={f.flagId}
                       className={`hover:bg-gray-50 dark:hover:bg-white/2 transition-colors ${f.reviewed ? "opacity-50" : ""}`}
                     >
-                      <td className="px-5 py-4 font-medium text-gray-800 dark:text-white/90">{f.studentName}</td>
+                      <td className="px-5 py-4">
+                        <p className="font-medium text-gray-800 dark:text-white/90">{f.studentName}</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{f.userId}</p>
+                      </td>
                       <td className="px-5 py-4 text-gray-500 dark:text-gray-400 max-w-40 truncate">{f.examTitle}</td>
-                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300">
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300 font-medium">
                         {violationLabel(f.type)}
+                      </td>
+                      <td className="px-5 py-4 text-gray-500 dark:text-gray-400 text-xs max-w-48">
+                        {f.detail ? (
+                          <span className="block truncate" title={f.detail}>{f.detail}</span>
+                        ) : (
+                          <span className="text-gray-300 dark:text-gray-600">—</span>
+                        )}
                       </td>
                       <td className="px-5 py-4">
                         <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${sev.cls}`}>
