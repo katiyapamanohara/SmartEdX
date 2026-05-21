@@ -544,7 +544,7 @@ export default function StudentPerformancePage() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 dark:bg-white/[0.02] text-gray-500 dark:text-gray-400">
+            <thead className="bg-gray-50 dark:bg-white/2 text-gray-500 dark:text-gray-400">
               <tr>
                 <th className="px-5 py-3 text-left font-medium">Course</th>
                 <th className="px-5 py-3 text-left font-medium">Avg Score</th>
@@ -574,7 +574,7 @@ export default function StudentPerformancePage() {
                 courseRows.map((row) => (
                   <tr
                     key={row.id}
-                    className="hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors"
+                    className="hover:bg-gray-50 dark:hover:bg-white/2 transition-colors"
                   >
                     <td className="px-5 py-4 text-gray-800 dark:text-gray-200 font-medium">
                       {row.course}
@@ -613,7 +613,7 @@ export default function StudentPerformancePage() {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 dark:bg-white/[0.02] text-gray-500 dark:text-gray-400">
+              <thead className="bg-gray-50 dark:bg-white/2 text-gray-500 dark:text-gray-400">
                 <tr>
                   <th className="px-5 py-3 text-left font-medium">Exam</th>
                   <th className="px-5 py-3 text-left font-medium">Course</th>
@@ -638,7 +638,7 @@ export default function StudentPerformancePage() {
                   examRows.map((exam) => (
                     <tr
                       key={exam.id}
-                      className="hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors"
+                      className="hover:bg-gray-50 dark:hover:bg-white/2 transition-colors"
                     >
                       <td className="px-5 py-4 text-gray-800 dark:text-gray-200 font-medium">
                         {exam.title}
