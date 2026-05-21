@@ -293,6 +293,13 @@ export class ExamService {
       throw new BadRequestException('Exam is not currently active');
     }
 
+    // Cheating-detected failures are permanent — no re-attempts ever.
+    if ((prevAttempt as any)?.autoFailed) {
+      throw new BadRequestException(
+        'You have been disqualified from this exam due to integrity violations. Re-attempts are not permitted.',
+      );
+    }
+
     if (usedAttempts >= maxAttempts) {
       throw new BadRequestException(
         `Maximum attempts (${maxAttempts}) reached for this exam`,
@@ -340,7 +347,13 @@ export class ExamService {
     const percentage = Math.round((score / totalMarks) * 100);
     const passed = !hasPendingEssay && percentage >= exam.passingScore;
 
-    const attempt: ExamAttempt & { attemptCount: number } = {
+    // Resolve student name so it appears in the teacher's essay grader
+    const studentUser = await this.instituteUserRepository.findById(userId);
+    const studentName = studentUser
+      ? [studentUser.firstName, studentUser.lastName].filter(Boolean).join(' ') || studentUser.email
+      : undefined;
+
+    const attempt: ExamAttempt & { attemptCount: number; studentName?: string } = {
       answers: dto.answers,
       score,
       totalMarks,
@@ -348,6 +361,7 @@ export class ExamService {
       submittedAt: new Date().toISOString(),
       pendingEssayReview: hasPendingEssay,
       attemptCount: usedAttempts + 1,
+      ...(studentName ? { studentName } : {}),
       ...(Object.keys(shortAnswerGrades).length > 0 && {
         essayGrades: shortAnswerGrades,
       }),
@@ -468,62 +482,65 @@ export class ExamService {
 
     // Auto-fail check: count high-severity flags for this student
     let autoFailed = false;
-    if (exam.autoFailOnCheat) {
-      const highCount = userFlags.filter((f) => f.severity === 'high').length;
-      if (highCount >= HIGH_VIOLATION_THRESHOLD) {
-        const prevAttempt = exam.studentAttempts?.[userId];
-        // Only auto-fail if not already failed or submitted
-        if (!prevAttempt?.autoFailed) {
-          const totalMarks = exam.questions.reduce((s, q) => s + q.marks, 0);
-          const autoFailAttempt: ExamAttempt & { attemptCount: number; autoFailed: boolean } = {
-            answers: prevAttempt?.answers ?? {},
-            score: 0,
-            totalMarks,
-            passed: false,
-            submittedAt: new Date().toISOString(),
-            pendingEssayReview: false,
+    const highCount = userFlags.filter((f) => f.severity === 'high').length;
+
+    if (exam.autoFailOnCheat && highCount >= HIGH_VIOLATION_THRESHOLD) {
+      const prevAttempt = exam.studentAttempts?.[userId];
+      // Only auto-fail if not already failed or submitted
+      if (!prevAttempt?.autoFailed) {
+        const totalMarks = exam.questions.reduce((s, q) => s + q.marks, 0);
+        const autoFailAttempt: ExamAttempt & { attemptCount: number; autoFailed: boolean } = {
+          answers: prevAttempt?.answers ?? {},
+          score: 0,
+          totalMarks,
+          passed: false,
+          submittedAt: new Date().toISOString(),
+          pendingEssayReview: false,
+          autoFailed: true,
+          attemptCount: (prevAttempt?.attemptCount ?? 0) + 1,
+        };
+        const updatedAttempts = {
+          ...(exam.studentAttempts ?? {}),
+          [userId]: autoFailAttempt,
+        };
+        await this.examRepository.update(examId, {
+          integrityFlags: updatedFlags,
+          studentAttempts: updatedAttempts,
+        } as any);
+
+        // Notify teacher: student was auto-failed
+        this.notificationGateway.emitNotification(exam.createdByUserId, {
+          type: 'cheat_alert',
+          title: 'Student Auto-Failed — Cheating Detected',
+          body: `${studentName} was automatically failed in "${exam.title}" after ${highCount} high-severity violations.`,
+          metadata: {
+            examId,
+            examTitle: exam.title,
+            studentId: userId,
+            studentName,
+            studentEmail: studentUser?.email ?? '',
+            violationType: type,
+            severity: flag.severity,
+            totalHighFlags: highCount,
+            allFlags: userFlags,
             autoFailed: true,
-            attemptCount: (prevAttempt?.attemptCount ?? 0) + 1,
-          };
-          const updatedAttempts = {
-            ...(exam.studentAttempts ?? {}),
-            [userId]: autoFailAttempt,
-          };
-          await this.examRepository.update(examId, {
-            integrityFlags: updatedFlags,
-            studentAttempts: updatedAttempts,
-          } as any);
-
-          // Notify teacher: student was auto-failed
-          this.notificationGateway.emitNotification(exam.createdByUserId, {
-            type: 'cheat_alert',
-            title: 'Student Auto-Failed — Cheating Detected',
-            body: `${studentName} was automatically failed in "${exam.title}" after repeated violations.`,
-            metadata: {
-              examId,
-              examTitle: exam.title,
-              studentId: userId,
-              studentName,
-              studentEmail: studentUser?.email ?? '',
-              violationType: type,
-              severity: flag.severity,
-              totalHighFlags: userFlags.filter((f) => f.severity === 'high').length,
-              allFlags: userFlags,
-              autoFailed: true,
-              timestamp: flag.timestamp,
-            },
             timestamp: flag.timestamp,
-          });
+          },
+          timestamp: flag.timestamp,
+        });
 
-          return { success: true, flag, autoFailed: true };
-        }
+        return { success: true, flag, autoFailed: true };
       }
-    } else if (flag.severity === 'high') {
-      // autoFailOnCheat disabled — alert teacher in real time with full student details
+    }
+
+    // Always notify teacher for every high-severity violation in real time,
+    // regardless of autoFailOnCheat setting or whether threshold is met.
+    if (flag.severity === 'high') {
+      const isAutoFailed = autoFailed;
       this.notificationGateway.emitNotification(exam.createdByUserId, {
         type: 'cheat_alert',
-        title: 'Cheating Detected',
-        body: `${studentName} triggered a ${flag.severity}-severity violation (${type}) in "${exam.title}".`,
+        title: isAutoFailed ? 'Student Auto-Failed — Cheating Detected' : 'Cheating Violation Detected',
+        body: `${studentName} triggered a high-severity violation (${type}) in "${exam.title}". Total high flags: ${highCount}.`,
         metadata: {
           examId,
           examTitle: exam.title,
@@ -532,9 +549,9 @@ export class ExamService {
           studentEmail: studentUser?.email ?? '',
           violationType: type,
           severity: flag.severity,
-          totalHighFlags: userFlags.filter((f) => f.severity === 'high').length,
+          totalHighFlags: highCount,
           allFlags: userFlags,
-          autoFailed: false,
+          autoFailed: isAutoFailed,
           timestamp: flag.timestamp,
         },
         timestamp: flag.timestamp,
@@ -545,6 +562,75 @@ export class ExamService {
       integrityFlags: updatedFlags,
     } as any);
     return { success: true, flag, autoFailed };
+  }
+
+  // ── Force auto-fail (client-side termination: 10s countdown expired) ────────
+
+  async forceAutoFail(
+    instituteId: string,
+    examId: string,
+    userId: string,
+    reason: string,
+  ): Promise<{ success: boolean }> {
+    const exam = await this.examRepository.findByIdWithRelations(examId, instituteId);
+    if (!exam) throw new NotFoundException('Exam not found');
+
+    const prevAttempt = exam.studentAttempts?.[userId];
+    // No-op if already auto-failed or the student already submitted normally
+    if (prevAttempt?.autoFailed) return { success: true };
+    if (prevAttempt && prevAttempt.submittedAt && !prevAttempt.autoFailed) {
+      // Already has a real submission — don't overwrite with auto-fail
+      return { success: true };
+    }
+
+    const totalMarks = exam.questions.reduce((s, q) => s + q.marks, 0);
+    const autoFailAttempt: ExamAttempt & { attemptCount: number; autoFailed: boolean; autoFailReason: string } = {
+      answers: prevAttempt?.answers ?? {},
+      score: 0,
+      totalMarks,
+      passed: false,
+      submittedAt: new Date().toISOString(),
+      pendingEssayReview: false,
+      autoFailed: true,
+      autoFailReason: reason,
+      attemptCount: (prevAttempt?.attemptCount ?? 0) + 1,
+    };
+
+    await this.examRepository.update(examId, {
+      studentAttempts: {
+        ...(exam.studentAttempts ?? {}),
+        [userId]: autoFailAttempt,
+      },
+    } as any);
+
+    // Resolve student name for the notification
+    const studentUser = await this.instituteUserRepository.findById(userId);
+    const studentName = studentUser
+      ? [studentUser.firstName, studentUser.lastName].filter(Boolean).join(' ') || studentUser.email
+      : userId;
+
+    this.notificationGateway.emitNotification(exam.createdByUserId, {
+      type: 'cheat_alert',
+      title: 'Student Exam Terminated',
+      body: `${studentName}'s exam was terminated in "${exam.title}". Reason: ${reason}`,
+      metadata: {
+        examId,
+        examTitle: exam.title,
+        studentId: userId,
+        studentName,
+        studentEmail: studentUser?.email ?? '',
+        violationType: 'tab_switch',
+        severity: 'high',
+        totalHighFlags: (exam.integrityFlags?.[userId] ?? []).filter((f) => f.severity === 'high').length,
+        allFlags: exam.integrityFlags?.[userId] ?? [],
+        autoFailed: true,
+        autoFailReason: reason,
+        timestamp: autoFailAttempt.submittedAt,
+      },
+      timestamp: autoFailAttempt.submittedAt,
+    });
+
+    return { success: true };
   }
 
   // ── Screen content analysis ────────────────────────────────────────────────
@@ -601,41 +687,27 @@ export class ExamService {
     instituteId: string,
     teacherUserId: string,
   ) {
-    // ── 1. Exam-type integrity flags ──────────────────────────────────────────
+    // Exam-type integrity flags only — assessments/quizzes are excluded
     const exams = await this.examRepository.findByCreator(
       teacherUserId,
       instituteId,
     );
 
-    // ── 2. Quiz/assessment integrity flags from module content ─────────────────
-    const courses = await this.courseRepository.findCoursesWithQuizzesByTeacher(
-      teacherUserId,
-      instituteId,
-    );
-
-    // Collect all userIds from both sources so we can batch-resolve names
+    // Collect all student userIds so we can batch-resolve display names
     const userIdSet = new Set<string>();
     for (const exam of exams) {
       for (const uid of Object.keys(exam.integrityFlags ?? {}))
         userIdSet.add(uid);
-    }
-    for (const course of courses) {
-      for (const module of (course as any).modules ?? []) {
-        for (const content of module.contents ?? []) {
-          for (const uid of Object.keys(content.integrityFlags ?? {}))
-            userIdSet.add(uid);
-        }
-      }
     }
 
     const nameMap = new Map<string, string>();
     for (const uid of userIdSet) {
       const user = await this.instituteUserRepository.findById(uid);
       if (user) {
-        const name =
-          [user.firstName, user.lastName].filter(Boolean).join(' ') ||
-          user.email;
-        nameMap.set(uid, name);
+        nameMap.set(
+          uid,
+          [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email,
+        );
       }
     }
 
@@ -652,7 +724,6 @@ export class ExamService {
       detail?: string;
     }[] = [];
 
-    // Push exam flags
     for (const exam of exams) {
       for (const [uid, flags] of Object.entries(exam.integrityFlags ?? {})) {
         for (const flag of flags) {
@@ -672,32 +743,6 @@ export class ExamService {
       }
     }
 
-    // Push quiz/assessment content flags
-    for (const course of courses) {
-      for (const module of (course as any).modules ?? []) {
-        for (const content of module.contents ?? []) {
-          for (const [uid, flags] of Object.entries(
-            content.integrityFlags ?? {},
-          )) {
-            for (const flag of flags as any[]) {
-              rows.push({
-                flagId: flag.id,
-                examId: content.id,
-                examTitle: content.title,
-                userId: uid,
-                studentName: nameMap.get(uid) ?? uid,
-                type: flag.type,
-                severity: flag.severity,
-                timestamp: flag.timestamp,
-                reviewed: flag.reviewed,
-                detail: flag.detail,
-              });
-            }
-          }
-        }
-      }
-    }
-
     rows.sort(
       (a, b) =>
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
@@ -712,37 +757,20 @@ export class ExamService {
     flagId: string,
     teacherUserId: string,
   ) {
-    // Try exam-type first
     const exam = await this.examRepository.findByIdWithRelations(
       examId,
       instituteId,
     );
-    if (exam) {
-      if (exam.createdByUserId !== teacherUserId)
-        throw new ForbiddenException('Not your exam');
-      const flags = exam.integrityFlags?.[userId] ?? [];
-      const updatedFlags = flags.map((f) =>
-        f.id === flagId ? { ...f, reviewed: true } : f,
-      );
-      await this.examRepository.update(examId, {
-        integrityFlags: { ...exam.integrityFlags, [userId]: updatedFlags },
-      } as any);
-      return { success: true };
-    }
+    if (!exam) throw new NotFoundException('Exam not found');
+    if (exam.createdByUserId !== teacherUserId)
+      throw new ForbiddenException('Not your exam');
 
-    // Fall back to quiz/assessment module content
-    const content = await this.moduleContentRepository.findOne({
-      where: { id: examId } as any,
-    });
-    if (!content) throw new NotFoundException('Assessment not found');
-
-    const existingFlags = content.integrityFlags || {};
-    const userFlags: any[] = existingFlags[userId] ?? [];
-    const updatedUserFlags = userFlags.map((f: any) =>
+    const flags = exam.integrityFlags?.[userId] ?? [];
+    const updatedFlags = flags.map((f) =>
       f.id === flagId ? { ...f, reviewed: true } : f,
     );
-    await this.moduleContentRepository.update(examId, {
-      integrityFlags: { ...existingFlags, [userId]: updatedUserFlags },
+    await this.examRepository.update(examId, {
+      integrityFlags: { ...exam.integrityFlags, [userId]: updatedFlags },
     } as any);
     return { success: true };
   }

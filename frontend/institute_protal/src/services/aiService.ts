@@ -15,6 +15,13 @@ export interface GenerateFromFilePayload {
   question_type: "mcq" | "essay" | "both";
 }
 
+export interface GenerateFromUrlPayload {
+  document_url: string;
+  num_questions: number;
+  difficulty: "easy" | "medium" | "hard";
+  question_type: "mcq" | "essay" | "both";
+}
+
 class AIService {
   private readonly apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
@@ -45,6 +52,25 @@ class AIService {
   async generateQuestionsFromFile(payload: GenerateFromFilePayload): Promise<ExamQuestion[] | null> {
     const form = new FormData();
     form.append("file", payload.file);
+    form.append("num_questions", String(payload.num_questions));
+    form.append("difficulty", payload.difficulty);
+    form.append("question_type", payload.question_type);
+
+    const res = await fetch(`${this.apiUrl}/api/ai/quiz/generate-from-file`, {
+      method: "POST",
+      headers: this.authHeader(),
+      body: form,
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.questions ?? null;
+  }
+
+  /** Generate questions from an existing course document URL.
+   *  The gateway fetches the file server-side to avoid CORS issues. */
+  async generateQuestionsFromUrl(payload: GenerateFromUrlPayload): Promise<ExamQuestion[] | null> {
+    const form = new FormData();
+    form.append("document_url", payload.document_url);
     form.append("num_questions", String(payload.num_questions));
     form.append("difficulty", payload.difficulty);
     form.append("question_type", payload.question_type);

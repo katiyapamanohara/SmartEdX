@@ -179,8 +179,24 @@ function QuestionBuilder({
 
 // ─── AI Question Generator ─────────────────────────────────────────────────────
 
-function AIQuestionGenerator({ onImport }: { onImport: (qs: ExamQuestion[]) => void }) {
-  const [inputType, setInputType] = useState<"text" | "file">("text");
+interface CourseFileItem {
+  id: string;
+  title: string;
+  url: string;
+  type: string;
+  moduleName: string;
+}
+
+function AIQuestionGenerator({
+  onImport,
+  courseId,
+  instituteId,
+}: {
+  onImport: (qs: ExamQuestion[]) => void;
+  courseId?: string;
+  instituteId?: string;
+}) {
+  const [inputType, setInputType] = useState<"text" | "file" | "course_file">("text");
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [numQuestions, setNumQuestions] = useState(5);
@@ -191,6 +207,46 @@ function AIQuestionGenerator({ onImport }: { onImport: (qs: ExamQuestion[]) => v
   const [generated, setGenerated] = useState<(ExamQuestion & { selected: boolean })[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // ── Course files state ──
+  const [courseFiles, setCourseFiles] = useState<CourseFileItem[]>([]);
+  const [loadingCourseFiles, setLoadingCourseFiles] = useState(false);
+  const [selectedCourseFile, setSelectedCourseFile] = useState<CourseFileItem | null>(null);
+  const prevCourseIdRef = useRef<string | undefined>(undefined);
+
+  // Load course files whenever the course_file tab is active and courseId changes
+  useEffect(() => {
+    if (inputType !== "course_file") return;
+    if (!courseId || !instituteId) { setCourseFiles([]); return; }
+    if (prevCourseIdRef.current === courseId && courseFiles.length > 0) return;
+    prevCourseIdRef.current = courseId;
+    setLoadingCourseFiles(true);
+    setSelectedCourseFile(null);
+    instituteService.getCourseForTeacher(instituteId, courseId).then((data) => {
+      if (data) {
+        const files: CourseFileItem[] = data.modules.flatMap((m) =>
+          m.contents
+            .filter((c) => (c.type === "pdf" || c.type === "document") && c.url)
+            .map((c) => ({
+              id: c.id,
+              title: c.title,
+              url: c.url!,
+              type: c.type,
+              moduleName: m.title,
+            }))
+        );
+        setCourseFiles(files);
+      } else {
+        setCourseFiles([]);
+      }
+      setLoadingCourseFiles(false);
+    });
+  }, [inputType, courseId, instituteId]);
+
+  // Reset selected course file when switching away from course_file tab
+  useEffect(() => {
+    if (inputType !== "course_file") setSelectedCourseFile(null);
+  }, [inputType]);
+
   const generate = async () => {
     setError("");
     setGenerated([]);
@@ -200,13 +256,18 @@ function AIQuestionGenerator({ onImport }: { onImport: (qs: ExamQuestion[]) => v
     if (inputType === "file" && !file) {
       return setError("Please select a PDF or DOCX file.");
     }
+    if (inputType === "course_file" && !selectedCourseFile) {
+      return setError("Please select a course file to generate from.");
+    }
     setLoading(true);
     try {
       let qs: ExamQuestion[] | null = null;
       if (inputType === "text") {
         qs = await aiService.generateQuestionsFromText({ text, num_questions: numQuestions, difficulty, question_type: questionType });
-      } else {
+      } else if (inputType === "file") {
         qs = await aiService.generateQuestionsFromFile({ file: file!, num_questions: numQuestions, difficulty, question_type: questionType });
+      } else {
+        qs = await aiService.generateQuestionsFromUrl({ document_url: selectedCourseFile!.url, num_questions: numQuestions, difficulty, question_type: questionType });
       }
       if (!qs || qs.length === 0) {
         setError("AI did not return any questions. Try again.");
@@ -231,30 +292,37 @@ function AIQuestionGenerator({ onImport }: { onImport: (qs: ExamQuestion[]) => v
     setGenerated([]);
     setText("");
     setFile(null);
+    setSelectedCourseFile(null);
   };
+
+  const FILE_TYPE_ICON: Record<string, string> = { pdf: "📄", document: "📝" };
 
   return (
     <div className="flex flex-col gap-4">
       {/* Input type selector */}
-      <div className="flex rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 w-fit">
-        {(["text", "file"] as const).map((t) => (
+      <div className="flex rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 w-full sm:w-fit">
+        {([
+          { id: "text" as const, label: "Text / Description" },
+          { id: "file" as const, label: "Upload File" },
+          { id: "course_file" as const, label: "Course Files" },
+        ]).map((t, idx) => (
           <button
-            key={t}
+            key={t.id}
             type="button"
-            onClick={() => setInputType(t)}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
-              inputType === t
+            onClick={() => setInputType(t.id)}
+            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 text-sm font-medium transition-colors ${idx > 0 ? "border-l border-gray-200 dark:border-gray-700" : ""} ${
+              inputType === t.id
                 ? "bg-brand-500 text-white"
                 : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
             }`}
           >
-            {t === "text" ? "Text / Description" : "Upload File (PDF/DOCX)"}
+            {t.label}
           </button>
         ))}
       </div>
 
-      {/* Input */}
-      {inputType === "text" ? (
+      {/* Input — Text */}
+      {inputType === "text" && (
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -262,7 +330,10 @@ function AIQuestionGenerator({ onImport }: { onImport: (qs: ExamQuestion[]) => v
           rows={5}
           className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-800 dark:text-white placeholder-gray-400 outline-none focus:border-brand-400 resize-none"
         />
-      ) : (
+      )}
+
+      {/* Input — Upload File */}
+      {inputType === "file" && (
         <div>
           <input
             ref={fileRef}
@@ -277,11 +348,77 @@ function AIQuestionGenerator({ onImport }: { onImport: (qs: ExamQuestion[]) => v
             className="w-full rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-white/5 px-4 py-6 text-sm text-gray-500 dark:text-gray-400 hover:border-brand-400 hover:text-brand-500 transition-colors text-center"
           >
             {file ? (
-              <span className="font-medium text-gray-700 dark:text-gray-300">{file.name}</span>
+              <span className="font-medium text-gray-700 dark:text-gray-300">📎 {file.name}</span>
             ) : (
-              "Click to select PDF, DOCX, or PPTX"
+              <>
+                <span className="block text-2xl mb-1">⬆️</span>
+                Click to select PDF, DOCX, or PPTX
+              </>
             )}
           </button>
+        </div>
+      )}
+
+      {/* Input — Course Files */}
+      {inputType === "course_file" && (
+        <div>
+          {!courseId ? (
+            <div className="flex items-center gap-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-4">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="text-amber-500 shrink-0">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+              <p className="text-sm text-amber-700 dark:text-amber-300">
+                Please select a <strong>course</strong> in the <strong>Details</strong> tab first to browse its uploaded files.
+              </p>
+            </div>
+          ) : loadingCourseFiles ? (
+            <div className="flex flex-col gap-2">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-14 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
+              ))}
+            </div>
+          ) : courseFiles.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-white/3 px-4 py-10 text-center">
+              <span className="text-3xl">📂</span>
+              <p className="text-sm font-semibold text-gray-600 dark:text-gray-300">No documents found in this course</p>
+              <p className="text-xs text-gray-400">Upload PDF or Word files to the course modules to use them here.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 max-h-56 overflow-y-auto pr-1">
+              {courseFiles.map((cf) => (
+                <button
+                  key={cf.id}
+                  type="button"
+                  onClick={() => setSelectedCourseFile(cf)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all ${
+                    selectedCourseFile?.id === cf.id
+                      ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10"
+                      : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-brand-300 dark:hover:border-brand-700"
+                  }`}
+                >
+                  <span className="text-xl shrink-0">{FILE_TYPE_ICON[cf.type] ?? "📄"}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-semibold truncate ${selectedCourseFile?.id === cf.id ? "text-brand-700 dark:text-brand-300" : "text-gray-800 dark:text-white"}`}>
+                      {cf.title}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                      {cf.moduleName} · <span className="uppercase">{cf.type}</span>
+                    </p>
+                  </div>
+                  {selectedCourseFile?.id === cf.id && (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="text-brand-500 shrink-0">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+          {selectedCourseFile && (
+            <p className="mt-2 text-xs text-brand-600 dark:text-brand-400 font-medium">
+              ✓ Using: <span className="font-semibold">{selectedCourseFile.title}</span>
+            </p>
+          )}
         </div>
       )}
 
@@ -419,9 +556,10 @@ interface ExamModalProps {
   initial?: Exam;
   onSave: (payload: CreateExamPayload & { status?: ExamStatus }) => Promise<void>;
   onClose: () => void;
+  instituteId: string;
 }
 
-function ExamModal({ courses, initial, onSave, onClose }: ExamModalProps) {
+function ExamModal({ courses, initial, onSave, onClose, instituteId }: ExamModalProps) {
   const [tab, setTab] = useState<"details" | "ai" | "questions">("details");
   const [title, setTitle] = useState(initial?.title ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
@@ -656,7 +794,7 @@ function ExamModal({ courses, initial, onSave, onClose }: ExamModalProps) {
 
           {/* ── AI Generate Tab — always mounted so generated results survive tab switches ── */}
           <div className={tab !== "ai" ? "hidden" : ""}>
-            <AIQuestionGenerator onImport={handleImportAI} />
+            <AIQuestionGenerator onImport={handleImportAI} courseId={courseId} instituteId={instituteId} />
           </div>
 
           {/* ── Questions Tab ─────────────────────────────────────────────── */}
@@ -1783,10 +1921,10 @@ export default function TeacherExamsPage() {
 
       {/* ── Modals ── */}
       {showCreate && (
-        <ExamModal courses={courses} onSave={handleCreate} onClose={() => setShowCreate(false)} />
+        <ExamModal courses={courses} onSave={handleCreate} onClose={() => setShowCreate(false)} instituteId={instituteId} />
       )}
       {editExam && (
-        <ExamModal courses={courses} initial={editExam} onSave={handleUpdate} onClose={() => setEditExam(null)} />
+        <ExamModal courses={courses} initial={editExam} onSave={handleUpdate} onClose={() => setEditExam(null)} instituteId={instituteId} />
       )}
       {attemptsExam && (
         <AttemptsModal exam={attemptsExam} onClose={() => setAttemptsExam(null)} />

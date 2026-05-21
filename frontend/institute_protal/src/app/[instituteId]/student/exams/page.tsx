@@ -238,13 +238,16 @@ function TakeExamModal({
       if (now - last < 10_000) return;
       flagCooldown.current[type] = now;
 
-      setFlagWarning(`⚠️ ${warnMsg}`);
-      setTimeout(() => setFlagWarning(""), 6000);
+      if (warnMsg) {
+        setFlagWarning(`⚠️ ${warnMsg}`);
+        setTimeout(() => setFlagWarning(""), 6000);
+      }
 
       const res = await examService.reportIntegrityFlag(instituteId, exam.id, type);
       if (res?.autoFailed && !submitRef.current) {
         submitRef.current = true;
         setAutoFailed(true);
+        // Backend already recorded the auto-fail via reportIntegrityFlag
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -275,10 +278,10 @@ function TakeExamModal({
       }
     };
 
-    // ── 10-second auto-terminate countdown ──────────────────────────────────
-    // When the student leaves the exam window (switches app, browser, or tab),
-    // a visible countdown starts. If they do not return within 10 s the exam is
-    // auto-terminated immediately. On return within the window they see a warning.
+    // ── 10-second countdown on window leave ─────────────────────────────────
+    // When autoFailOnCheat is ON  → countdown expires → exam is auto-terminated.
+    // When autoFailOnCheat is OFF → countdown just shows a warning; departure is
+    //   still flagged to the teacher but the exam is NOT terminated.
 
     const startCountdown = () => {
       if (countdownRef.current || submitRef.current) return;
@@ -289,10 +292,24 @@ function TakeExamModal({
           if (prev === null || prev <= 1) {
             clearInterval(countdownRef.current!);
             countdownRef.current = null;
-            // Auto-terminate — no second chances
-            if (!submitRef.current) {
+            // Only auto-terminate when the teacher has enabled Auto-Fail on Cheating
+            if (!submitRef.current && exam.autoFailOnCheat) {
               submitRef.current = true;
               setAutoFailed(true);
+              examService.forceAutoFail(
+                instituteId,
+                exam.id,
+                "Student left the exam window for more than 10 seconds",
+              );
+            } else if (!exam.autoFailOnCheat) {
+              // Auto-fail disabled — clear overlay and warn instead of terminating
+              setLeaveCountdown(null);
+              leaveViolationsRef.current += 1;
+              const n = leaveViolationsRef.current;
+              setFlagWarning(
+                `⚠️ Violation #${n}: You left the exam window. This has been reported to your teacher.`
+              );
+              setTimeout(() => setFlagWarning(""), 9000);
             }
             return null;
           }
@@ -308,10 +325,15 @@ function TakeExamModal({
         setLeaveCountdown(null);
         leaveViolationsRef.current += 1;
         const n = leaveViolationsRef.current;
+        // Tailor the warning message based on whether auto-fail is active
         setFlagWarning(
-          `⚠️ Violation #${n}: You left the exam window. ${
-            n >= 2 ? "FINAL WARNING — leave once more and your exam is terminated." : "Leave again and your exam will be TERMINATED immediately."
-          }`
+          exam.autoFailOnCheat
+            ? `⚠️ Violation #${n}: You left the exam window. ${
+                n >= 2
+                  ? "FINAL WARNING — leave once more and your exam is terminated."
+                  : "Leave again and your exam will be TERMINATED immediately."
+              }`
+            : `⚠️ Violation #${n}: You left the exam window. This has been reported to your teacher.`
         );
         setTimeout(() => setFlagWarning(""), 9000);
       }
@@ -471,7 +493,7 @@ function TakeExamModal({
   const progress = Math.round((answered / total) * 100);
 
   return (
-    <div className="fixed inset-0 z-50 bg-gray-50 dark:bg-gray-950 overflow-y-auto">
+    <div className="fixed inset-0 z-999999 bg-gray-50 dark:bg-gray-950 overflow-y-auto">
       {/* Auto-fail overlay */}
       {autoFailed && <AutoFailBanner onClose={onClose} />}
 
@@ -499,9 +521,18 @@ function TakeExamModal({
             <p className="text-xl font-bold text-red-600 dark:text-red-400 mb-2">You Left the Exam!</p>
             <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
               Access to other applications is <strong>not allowed</strong> during an exam.<br />
-              Return to this window immediately.<br />
-              Your exam will be <span className="font-semibold text-red-500">automatically terminated</span> in{" "}
-              <span className="font-black text-red-600">{leaveCountdown}</span> second{leaveCountdown !== 1 ? "s" : ""}.
+              Return to this window immediately.{" "}
+              {exam.autoFailOnCheat ? (
+                <>
+                  Your exam will be{" "}
+                  <span className="font-semibold text-red-500">automatically terminated</span> in{" "}
+                  <span className="font-black text-red-600">{leaveCountdown}</span> second{leaveCountdown !== 1 ? "s" : ""}.
+                </>
+              ) : (
+                <>
+                  This departure is being <span className="font-semibold text-amber-500">reported to your teacher</span>.
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -760,100 +791,166 @@ function ResultModal({
   );
 }
 
-// ─── Exam Card ────────────────────────────────────────────────────────────────
+// ─── Exam Row ─────────────────────────────────────────────────────────────────
 
-function ExamCard({ exam, onStart }: { exam: Exam; onStart: (exam: Exam) => void }) {
+function ExamRow({ exam, onStart }: { exam: Exam; onStart: (exam: Exam) => void }) {
   const attempt = exam.myAttempt;
   const pct = attempt ? Math.round((attempt.score / attempt.totalMarks) * 100) : null;
   const maxAttempts = exam.maxAttempts ?? 1;
   const usedAttempts = attempt?.attemptCount ?? (attempt ? 1 : 0);
   const attemptsLeft = maxAttempts - usedAttempts;
-  // Allow retry even if exam is "completed" (scheduled window passed) as long as
-  // the teacher published it (not a draft) and the student has attempts remaining.
-  // Auto-failed attempts still consume an attempt slot but don't block future retries —
-  // the teacher set maxAttempts > 1 knowing retries are possible even after a cheat termination.
-  const canRetry = !!attempt && attemptsLeft > 0 && exam.status !== "draft";
+  const cheatingDetected = !!(attempt as any)?.autoFailed;
+  const canRetry = !!attempt && !cheatingDetected && attemptsLeft > 0 && exam.status !== "draft";
 
-  // Build start button label from required proctoring steps
-  const startLabel = [
-    exam.requireScreenShare && "Screen Share",
-  ].filter(Boolean);
+  // Client-side time gate: treat as live only if scheduledAt has actually passed.
+  // This prevents a stale "active" status (set by teacher) from allowing entry before the real start time.
+  const scheduledMs = exam.scheduledAt ? new Date(exam.scheduledAt).getTime() : null;
+  const nowMs = Date.now();
+  const beforeSchedule = scheduledMs !== null && nowMs < scheduledMs;
+  const isLive = exam.status === "active" && !beforeSchedule;
+
+  // Live countdown for "upcoming" state (scheduled but time not yet reached)
+  const [secsToStart, setSecsToStart] = useState<number | null>(
+    beforeSchedule && scheduledMs ? Math.max(0, Math.floor((scheduledMs - nowMs) / 1000)) : null,
+  );
+  useEffect(() => {
+    if (!beforeSchedule || scheduledMs === null) { setSecsToStart(null); return; }
+    const tick = setInterval(() => {
+      const remaining = Math.max(0, Math.floor((scheduledMs - Date.now()) / 1000));
+      setSecsToStart(remaining);
+      if (remaining === 0) clearInterval(tick); // parent will reload via its own timer
+    }, 1000);
+    return () => clearInterval(tick);
+  }, [beforeSchedule, scheduledMs]);
 
   return (
-    <div className={`rounded-2xl border bg-white dark:bg-white/3 p-5 flex flex-col gap-3 ${exam.status === "active" ? "border-green-300 dark:border-green-700 ring-1 ring-green-200 dark:ring-green-900" : "border-gray-200 dark:border-gray-800"}`}>
+    <div className={`rounded-2xl border bg-white dark:bg-white/3 p-5 transition-shadow hover:shadow-sm ${
+      isLive
+        ? "border-green-300 dark:border-green-700 ring-1 ring-green-100 dark:ring-green-900/50"
+        : "border-gray-200 dark:border-gray-800"
+    }`}>
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-semibold text-gray-900 dark:text-white truncate">{exam.title}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{exam.courseName}</p>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          {statusBadge(exam.status)}
-          <div className="flex flex-wrap gap-1 justify-end">
+        {/* Left: title + meta */}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-semibold text-gray-900 dark:text-white text-sm leading-snug">
+              {exam.title}
+            </h3>
             {exam.requireScreenShare && (
-              <span className="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded-full">🖥 Screen</span>
+              <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H3.75A2.25 2.25 0 0 1 1.5 15V5.25A2.25 2.25 0 0 1 3.75 3h16.5A2.25 2.25 0 0 1 21 5.25Z" />
+                </svg>
+                Proctored
+              </span>
             )}
           </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{exam.courseName}</p>
+          {exam.description && (
+            <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400 line-clamp-1">{exam.description}</p>
+          )}
+          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-400 dark:text-gray-500">
+            <span>{fmtDate(exam.scheduledAt)}</span>
+            <span>·</span>
+            <span>{exam.durationMinutes} min</span>
+            <span>·</span>
+            <span>{exam.questionCount} questions</span>
+            <span>·</span>
+            <span>Pass {exam.passingScore}%</span>
+            {/* Hide attempt counter when disqualified — it's misleading alongside remaining attempts */}
+            {maxAttempts > 1 && !cheatingDetected && (
+              <>
+                <span>·</span>
+                <span>{usedAttempts}/{maxAttempts} attempts</span>
+              </>
+            )}
+          </div>
+
+          {/* Disqualification notice — shown inline below meta so it's unmissable */}
+          {cheatingDetected && (
+            <div className="mt-2 flex items-start gap-2 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2 max-w-xs">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="text-red-500 shrink-0 mt-0.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+              <div>
+                <p className="text-xs font-semibold text-red-700 dark:text-red-400">Disqualified — Integrity Violation</p>
+                <p className="text-[11px] text-red-600/80 dark:text-red-400/70 mt-0.5">
+                  Your exam was terminated due to cheating violations. Re-attempts are permanently blocked.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right: status badge + result + CTA */}
+        <div className="flex flex-col items-end gap-2 shrink-0">
+          {statusBadge(exam.status)}
+
+          {attempt && !cheatingDetected && (
+            attempt.pendingEssayReview ? (
+              <span className="rounded-full px-2 py-1 text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
+                Pending Review · {pct}%
+              </span>
+            ) : (
+              <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                attempt.passed
+                  ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400"
+                  : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
+              }`}>
+                {attempt.passed ? "Passed" : "Failed"} · {pct}%
+              </span>
+            )
+          )}
+
+          {/* Action buttons */}
+          {!attempt && isLive && (
+            <button
+              onClick={() => onStart(exam)}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors"
+            >
+              {exam.requireScreenShare && (
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                </svg>
+              )}
+              Start Exam
+            </button>
+          )}
+          {canRetry && (
+            <button
+              onClick={() => onStart(exam)}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold border border-brand-300 dark:border-brand-700 text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-500/10 transition-colors"
+            >
+              Retry ({attemptsLeft} left)
+            </button>
+          )}
+          {/* Scheduled: show live countdown while time hasn't arrived */}
+          {!attempt && (exam.status === "scheduled" || (exam.status === "active" && beforeSchedule)) && (
+            <div className="flex flex-col items-end gap-1">
+              <span className="text-[11px] text-blue-600 dark:text-blue-400 font-medium">
+                Starts {fmtDate(exam.scheduledAt)}
+              </span>
+              {secsToStart !== null && secsToStart > 0 && (
+                <span className="font-mono text-[11px] font-semibold text-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 px-2 py-0.5 rounded-full">
+                  {secsToStart >= 3600
+                    ? `${Math.floor(secsToStart / 3600)}h ${String(Math.floor((secsToStart % 3600) / 60)).padStart(2, "0")}m`
+                    : secsToStart >= 60
+                    ? `${Math.floor(secsToStart / 60)}m ${String(secsToStart % 60).padStart(2, "0")}s`
+                    : `${secsToStart}s`}
+                </span>
+              )}
+              {secsToStart === 0 && (
+                <span className="text-[11px] text-green-600 dark:text-green-400 font-semibold animate-pulse">
+                  Starting…
+                </span>
+              )}
+            </div>
+          )}
+          {!attempt && exam.status === "completed" && (
+            <span className="text-[11px] text-gray-400">Not attempted</span>
+          )}
         </div>
       </div>
-
-      {exam.description && <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2">{exam.description}</p>}
-
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
-        <span>📅 {fmtDate(exam.scheduledAt)}</span>
-        <span>⏱ {exam.durationMinutes} min</span>
-        <span>📝 {exam.questionCount} questions</span>
-        <span>🎯 Pass: {exam.passingScore}%</span>
-        {maxAttempts > 1 && <span>🔁 {usedAttempts}/{maxAttempts} attempts</span>}
-      </div>
-
-      {attempt && (
-        (attempt as any).autoFailed ? (
-          <div className="flex items-center gap-3 rounded-xl px-4 py-3 bg-red-50 dark:bg-red-900/20">
-            <span className="text-lg font-bold text-red-500">0%</span>
-            <div>
-              <p className="text-sm font-semibold text-red-600 dark:text-red-400">Failed — Cheating Detected</p>
-              <p className="text-xs text-gray-400">Your exam was terminated due to integrity violations.</p>
-            </div>
-          </div>
-        ) : attempt.pendingEssayReview ? (
-          <div className="flex items-center gap-3 rounded-xl px-4 py-3 bg-yellow-50 dark:bg-yellow-900/20">
-            <span className="text-lg font-bold text-yellow-600 dark:text-yellow-400">{pct}%</span>
-            <div>
-              <p className="text-sm font-semibold text-yellow-700 dark:text-yellow-300">Pending Review</p>
-              <p className="text-xs text-gray-400">Essay answers awaiting teacher grading</p>
-            </div>
-          </div>
-        ) : (
-          <div className={`flex items-center gap-3 rounded-xl px-4 py-3 ${attempt.passed ? "bg-green-50 dark:bg-green-900/20" : "bg-red-50 dark:bg-red-900/20"}`}>
-            <span className={`text-lg font-bold ${attempt.passed ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>{pct}%</span>
-            <div>
-              <p className={`text-sm font-semibold ${attempt.passed ? "text-green-700 dark:text-green-300" : "text-red-600 dark:text-red-400"}`}>
-                {attempt.passed ? "Passed" : "Failed"}
-              </p>
-              <p className="text-xs text-gray-400">{attempt.score}/{attempt.totalMarks} marks · {new Date(attempt.submittedAt).toLocaleDateString()}</p>
-            </div>
-          </div>
-        )
-      )}
-
-      {canRetry && (
-        <button onClick={() => onStart(exam)} className="w-full py-2.5 rounded-xl bg-green-500 text-white font-semibold text-sm hover:bg-green-600 transition-colors">
-          Retry Exam ({attemptsLeft} attempt{attemptsLeft !== 1 ? "s" : ""} left)
-        </button>
-      )}
-
-      {!attempt && exam.status === "active" && (
-        <button onClick={() => onStart(exam)} className="mt-1 w-full py-2.5 rounded-xl bg-green-500 text-white font-semibold text-sm hover:bg-green-600 transition-colors">
-          {startLabel.length > 0 ? `🔒 ${startLabel.join(" + ")} · Start Exam` : "Start Exam"}
-        </button>
-      )}
-
-      {!attempt && exam.status === "scheduled" && (
-        <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Starts {fmtDate(exam.scheduledAt)}</p>
-      )}
-      {!attempt && exam.status === "completed" && (
-        <p className="text-xs text-gray-400">Exam has ended · not attempted</p>
-      )}
     </div>
   );
 }
@@ -887,6 +984,22 @@ export default function StudentExamsPage() {
   }, [instituteId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Auto-reload when the next scheduled exam's start time arrives so the
+  // Start button appears without the student needing to refresh manually.
+  useEffect(() => {
+    const upcoming = exams
+      .filter((e) => e.scheduledAt && (e.status === "scheduled" || e.status === "active"))
+      .map((e) => new Date(e.scheduledAt!).getTime())
+      .filter((t) => t > Date.now())
+      .sort((a, b) => a - b);
+
+    if (upcoming.length === 0) return;
+    const msUntilNext = upcoming[0] - Date.now();
+    // Add a small buffer (500 ms) so the server status has updated by the time we reload
+    const t = setTimeout(() => load(), msUntilNext + 500);
+    return () => clearTimeout(t);
+  }, [exams, load]);
 
   // ── Gate helpers ──────────────────────────────────────────────────────────
 
@@ -974,8 +1087,19 @@ export default function StudentExamsPage() {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => <div key={i} className="h-44 rounded-2xl bg-gray-100 dark:bg-gray-800 animate-pulse" />)}
+        <div className="space-y-3">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="animate-pulse rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-2/3 rounded bg-gray-200 dark:bg-gray-700" />
+                  <div className="h-3 w-1/3 rounded bg-gray-100 dark:bg-gray-800" />
+                  <div className="h-3 w-1/2 rounded bg-gray-100 dark:bg-gray-800" />
+                </div>
+                <div className="h-5 w-16 rounded-full bg-gray-200 dark:bg-gray-700" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : exams.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 text-center gap-3">
@@ -991,25 +1115,38 @@ export default function StudentExamsPage() {
         <div className="flex flex-col gap-8">
           {grouped.active.length > 0 && (
             <section>
-              <h2 className="text-sm font-semibold text-green-600 dark:text-green-400 uppercase tracking-wide mb-3">🟢 Live Now</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {grouped.active.map((e) => <ExamCard key={e.id} exam={e} onStart={handleStart} />)}
+              <h2 className="text-xs font-semibold text-green-600 dark:text-green-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse inline-block" />
+                Live Now
+              </h2>
+              <div className="space-y-3">
+                {grouped.active.map((e) => <ExamRow key={e.id} exam={e} onStart={handleStart} />)}
               </div>
             </section>
           )}
           {grouped.scheduled.length > 0 && (
             <section>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {grouped.scheduled.map((e) => <ExamCard key={e.id} exam={e} onStart={handleStart} />)}
+              <h2 className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+                </svg>
+                Upcoming
+              </h2>
+              <div className="space-y-3">
+                {grouped.scheduled.map((e) => <ExamRow key={e.id} exam={e} onStart={handleStart} />)}
               </div>
             </section>
           )}
           {grouped.completed.length > 0 && (
             <section>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {grouped.completed.map((e) => <ExamCard key={e.id} exam={e} onStart={handleStart} />)}
+              <h2 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
+                Completed
+              </h2>
+              <div className="space-y-3">
+                {grouped.completed.map((e) => <ExamRow key={e.id} exam={e} onStart={handleStart} />)}
               </div>
             </section>
           )}
