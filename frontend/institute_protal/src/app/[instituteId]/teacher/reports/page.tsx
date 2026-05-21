@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { authService } from "@/services/authService";
 import { examService, Exam } from "@/services/examService";
+import { instituteService, Institute } from "@/services/instituteService";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -97,58 +98,218 @@ function downloadCSV(rows: string[][], filename: string) {
 
 // ── PDF (print) download ──────────────────────────────────────────────────────
 
-function printStudentReport(report: StudentReport) {
+interface PDFContext {
+  institute: Institute | null;
+  teacherName: string;
+  studentCourses: CourseEntry[];
+}
+
+function printStudentReport(report: StudentReport, context: PDFContext) {
   const win = window.open("", "_blank");
   if (!win) return;
 
   const quizRows = report.quizzes.map((q) => `
     <tr>
-      <td>${q.courseName}</td>
-      <td>${q.contentTitle}</td>
-      <td>${q.score !== null ? `${q.score}/${q.totalMarks}` : "—"}</td>
-      <td>${q.score !== null ? pct(q.score, q.totalMarks) + "%" : "—"}</td>
-      <td>${fmtDate(q.attemptedAt)}</td>
+      <td class="col-course">${q.courseName}</td>
+      <td class="col-content">${q.contentTitle}</td>
+      <td class="col-score">${q.score !== null ? `${q.score}/${q.totalMarks}` : "—"}</td>
+      <td class="col-pct">${q.score !== null ? pct(q.score, q.totalMarks) + "%" : "—"}</td>
+      <td class="col-date">${fmtDate(q.attemptedAt)}</td>
     </tr>`).join("");
 
   const examRows = report.exams.map((e) => `
     <tr>
-      <td>${e.examTitle}</td>
-      <td>${e.score}/${e.totalMarks}</td>
-      <td>${pct(e.score, e.totalMarks)}%</td>
-      <td>${e.passed ? "✓ Pass" : "✗ Fail"}</td>
-      <td>${fmtDate(e.submittedAt)}</td>
+      <td class="col-exam">${e.examTitle}</td>
+      <td class="col-score">${e.score}/${e.totalMarks}</td>
+      <td class="col-pct">${pct(e.score, e.totalMarks)}%</td>
+      <td class="col-status ${e.passed ? 'pass' : 'fail'}">${e.passed ? "Pass" : "Fail"}</td>
+      <td class="col-date">${fmtDate(e.submittedAt)}</td>
     </tr>`).join("");
+
+  const coursesList = context.studentCourses.map(c => c.courseName).join(", ") || "—";
+  const statusBg = (report.overallAvg ?? 0) >= 70 ? "#10b981" : (report.overallAvg ?? 0) >= 50 ? "#f59e0b" : "#ef4444";
+  const statusColor = (report.overallAvg ?? 0) >= 70 ? "#065f46" : (report.overallAvg ?? 0) >= 50 ? "#92400e" : "#7f1d1d";
 
   win.document.write(`<!DOCTYPE html><html><head><title>Student Report - ${report.name}</title>
 <style>
-  body { font-family: Arial, sans-serif; margin: 40px; color: #111; }
-  h1 { font-size: 22px; margin-bottom: 4px; }
-  .meta { font-size: 13px; color: #555; margin-bottom: 24px; }
-  .summary { display: flex; gap: 24px; margin-bottom: 28px; }
-  .card { border: 1px solid #ddd; border-radius: 8px; padding: 14px 20px; text-align: center; min-width: 100px; }
-  .card .val { font-size: 28px; font-weight: bold; }
-  .card .lbl { font-size: 12px; color: #666; margin-top: 2px; }
-  h2 { font-size: 15px; border-bottom: 2px solid #eee; padding-bottom: 6px; margin: 24px 0 12px; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { background: #f4f4f4; padding: 8px 10px; text-align: left; border-bottom: 2px solid #ddd; }
-  td { padding: 7px 10px; border-bottom: 1px solid #eee; }
-  .none { color: #aaa; font-style: italic; }
-  @media print { body { margin: 20px; } }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: #fff; color: #1f2937; line-height: 1.5;
+  }
+  .container { max-width: 900px; margin: 0 auto; padding: 40px 30px; }
+
+  /* Header */
+  .header {
+    border-bottom: 3px solid #3b82f6; padding-bottom: 24px; margin-bottom: 32px; display: flex; justify-content: space-between; align-items: flex-start;
+  }
+  .header-left { flex: 1; }
+  .institute-name { font-size: 24px; font-weight: 700; color: #3b82f6; margin-bottom: 4px; }
+  .report-title { font-size: 14px; color: #6b7280; font-weight: 500; }
+  .header-right { text-align: right; }
+  .generated-date { font-size: 12px; color: #9ca3af; }
+
+  /* Student Info Section */
+  .info-section {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 28px;
+    background: #f9fafb; padding: 20px; border-radius: 8px; border-left: 4px solid #3b82f6;
+  }
+  .info-group { }
+  .info-label { font-size: 12px; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .info-value { font-size: 15px; font-weight: 600; color: #111; margin-top: 4px; }
+
+  /* Status Bar */
+  .status-bar {
+    display: flex; gap: 16px; margin-bottom: 28px;
+  }
+  .status-card {
+    flex: 1; background: linear-gradient(135deg, ${statusBg} 0%, ${statusBg}dd 100%);
+    color: white; padding: 20px; border-radius: 8px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+  .status-value { font-size: 32px; font-weight: 700; line-height: 1; }
+  .status-label { font-size: 12px; font-weight: 500; margin-top: 6px; opacity: 0.9; }
+
+  /* Summary Cards */
+  .summary-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;
+  }
+  .summary-card {
+    background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; text-align: center;
+  }
+  .summary-value { font-size: 26px; font-weight: 700; color: #3b82f6; }
+  .summary-label { font-size: 13px; color: #6b7280; margin-top: 6px; font-weight: 500; }
+
+  /* Section Headers */
+  .section-header {
+    font-size: 16px; font-weight: 700; color: #111; margin: 28px 0 16px;
+    padding-bottom: 12px; border-bottom: 2px solid #e5e7eb;
+  }
+
+  /* Tables */
+  .table-wrapper { margin-bottom: 24px; }
+  table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+  }
+  th {
+    background: #f3f4f6; padding: 12px; text-align: left; border-bottom: 2px solid #d1d5db;
+    font-weight: 600; color: #374151;
+  }
+  td {
+    padding: 11px 12px; border-bottom: 1px solid #e5e7eb;
+  }
+  tr:last-child td { border-bottom: none; }
+
+  .col-course, .col-exam, .col-content { font-weight: 500; }
+  .col-pct { font-weight: 600; color: #3b82f6; }
+  .col-status.pass { color: #059669; font-weight: 600; }
+  .col-status.fail { color: #dc2626; font-weight: 600; }
+  .col-date { color: #6b7280; font-size: 12px; }
+
+  .empty-state {
+    text-align: center; padding: 32px 16px; color: #9ca3af; font-style: italic;
+  }
+
+  /* Footer */
+  .footer {
+    margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb;
+    text-align: center; font-size: 12px; color: #9ca3af;
+  }
+
+  @media print {
+    body { margin: 0; padding: 0; }
+    .container { padding: 20px; }
+    .page-break { page-break-after: always; }
+  }
 </style></head><body>
-<h1>Student Report: ${report.name}</h1>
-<div class="meta">Email: ${report.email} &nbsp;|&nbsp; Generated: ${new Date().toLocaleString()}</div>
-<div class="summary">
-  <div class="card"><div class="val">${report.overallAvg !== null ? report.overallAvg + "%" : "—"}</div><div class="lbl">Overall Avg</div></div>
-  <div class="card"><div class="val">${grade(report.overallAvg)}</div><div class="lbl">Grade</div></div>
-  <div class="card"><div class="val">${report.quizAvg !== null ? report.quizAvg + "%" : "—"}</div><div class="lbl">Quiz Avg</div></div>
-  <div class="card"><div class="val">${report.examAvg !== null ? report.examAvg + "%" : "—"}</div><div class="lbl">Exam Avg</div></div>
-  <div class="card"><div class="val">${report.quizzes.filter(q => q.score !== null).length}</div><div class="lbl">Quizzes Done</div></div>
-  <div class="card"><div class="val">${report.exams.length}</div><div class="lbl">Exams Done</div></div>
+<div class="container">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <div class="institute-name">${context.institute?.name || "Institute"}</div>
+      <div class="report-title">Student Performance Report</div>
+    </div>
+    <div class="header-right">
+      <div class="generated-date">${new Date().toLocaleString()}</div>
+    </div>
+  </div>
+
+  <!-- Student Info -->
+  <div class="info-section">
+    <div class="info-group">
+      <div class="info-label">Student Name</div>
+      <div class="info-value">${report.name}</div>
+    </div>
+    <div class="info-group">
+      <div class="info-label">Student ID</div>
+      <div class="info-value">${report.userId}</div>
+    </div>
+    <div class="info-group">
+      <div class="info-label">Email</div>
+      <div class="info-value">${report.email}</div>
+    </div>
+    <div class="info-group">
+      <div class="info-label">Instructor</div>
+      <div class="info-value">${context.teacherName || "—"}</div>
+    </div>
+  </div>
+
+  <!-- Status Badge -->
+  <div class="status-bar">
+    <div class="status-card">
+      <div class="status-value">${report.overallAvg !== null ? report.overallAvg + "%" : "—"}</div>
+      <div class="status-label">Overall Performance</div>
+    </div>
+  </div>
+
+  <!-- Summary Grid -->
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="summary-value">${grade(report.overallAvg)}</div>
+      <div class="summary-label">Grade</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-value">${report.quizAvg !== null ? report.quizAvg + "%" : "—"}</div>
+      <div class="summary-label">Quiz Average</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-value">${report.examAvg !== null ? report.examAvg + "%" : "—"}</div>
+      <div class="summary-label">Exam Average</div>
+    </div>
+  </div>
+
+  <!-- Course Info -->
+  <div class="info-section">
+    <div class="info-group">
+      <div class="info-label">Enrolled Courses</div>
+      <div class="info-value">${coursesList}</div>
+    </div>
+    <div class="info-group">
+      <div class="info-label">Status</div>
+      <div class="info-value">${(report.overallAvg ?? 0) >= 50 ? "Passing" : report.overallAvg === null ? "No Data" : "At Risk"}</div>
+    </div>
+  </div>
+
+  <!-- Quiz Results -->
+  <div class="section-header">Quiz Results</div>
+  <div class="table-wrapper">
+    ${report.quizzes.length === 0
+      ? '<div class="empty-state">No quiz attempts yet</div>'
+      : `<table><thead><tr><th>Course</th><th>Quiz Title</th><th>Score</th><th>Percentage</th><th>Attempt Date</th></tr></thead><tbody>${quizRows}</tbody></table>`}
+  </div>
+
+  <!-- Exam Results -->
+  <div class="section-header">Exam Results</div>
+  <div class="table-wrapper">
+    ${report.exams.length === 0
+      ? '<div class="empty-state">No exam attempts yet</div>'
+      : `<table><thead><tr><th>Exam Title</th><th>Score</th><th>Percentage</th><th>Status</th><th>Attempt Date</th></tr></thead><tbody>${examRows}</tbody></table>`}
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <p>This is an official performance report generated by ${context.institute?.name || "the institute"}.</p>
+  </div>
 </div>
-<h2>Quiz Results</h2>
-${report.quizzes.length === 0 ? '<p class="none">No quiz attempts yet.</p>' : `<table><thead><tr><th>Course</th><th>Quiz</th><th>Score</th><th>%</th><th>Date</th></tr></thead><tbody>${quizRows}</tbody></table>`}
-<h2>Exam Results</h2>
-${report.exams.length === 0 ? '<p class="none">No exam attempts yet.</p>' : `<table><thead><tr><th>Exam</th><th>Score</th><th>%</th><th>Result</th><th>Date</th></tr></thead><tbody>${examRows}</tbody></table>`}
 </body></html>`);
   win.document.close();
   win.print();
@@ -168,6 +329,8 @@ export default function TeacherReportsPage() {
   const [sortKey, setSortKey] = useState<"name" | "quizAvg" | "examAvg" | "overall">("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [filterCourse, setFilterCourse] = useState("All");
+  const [institute, setInstitute] = useState<Institute | null>(null);
+  const [teacherName, setTeacherName] = useState("");
   const modalRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -175,7 +338,9 @@ export default function TeacherReportsPage() {
     setLoading(true);
     try {
       const token = authService.getToken();
-      const [rawStudents, rawExams] = await Promise.all([
+      const user = authService.getUser();
+
+      const [rawStudents, rawExams, instituteData] = await Promise.all([
         fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/institutes/institutes/${instituteId}/courses/student-report`, {
           headers: { Authorization: `Bearer ${token}` },
         }).then(async (r) => {
@@ -186,10 +351,17 @@ export default function TeacherReportsPage() {
           return r.json();
         }),
         examService.getMyExams(instituteId),
+        instituteService.getInstituteById(instituteId),
       ]);
-      console.log('[student-report] rawStudents:', rawStudents);
+
       setStudents(rawStudents as StudentRow[]);
       setExams(rawExams);
+      setInstitute(instituteData);
+
+      if (user) {
+        const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ");
+        setTeacherName(fullName);
+      }
     } finally {
       setLoading(false);
     }
@@ -271,35 +443,89 @@ export default function TeacherReportsPage() {
 
   function openStudent(r: StudentReport) { setSelectedStudent(r); }
 
+  const getPDFContext = (studentId: string): PDFContext => {
+    const studentData = students.find((s) => s.userId === studentId);
+    return {
+      institute,
+      teacherName,
+      studentCourses: studentData?.courses ?? [],
+    };
+  };
+
   function exportAllCSV() {
-    const header = ["Name", "Email", "Quiz Avg %", "Exam Avg %", "Overall %", "Grade", "Quizzes Attempted", "Exams Attempted"];
-    const rows = filtered.map((r) => [
-      r.name, r.email,
-      r.quizAvg !== null ? String(r.quizAvg) : "",
-      r.examAvg !== null ? String(r.examAvg) : "",
-      r.overallAvg !== null ? String(r.overallAvg) : "",
-      grade(r.overallAvg),
-      String(r.quizzes.filter((q) => q.score !== null).length),
-      String(r.exams.length),
-    ]);
-    downloadCSV([header, ...rows], `student_report_${new Date().toISOString().split("T")[0]}.csv`);
+    const header = [
+      "Student ID", "Name", "Email", "Enrolled Courses",
+      "Overall Avg %", "Grade", "Status",
+      "Quiz Avg %", "Quizzes Attempted", "Total Quizzes",
+      "Exam Avg %", "Exams Attempted", "Exams Passed"
+    ];
+    
+    const rows = filtered.map((r) => {
+      const studentCourses = students.find((s) => s.userId === r.userId)?.courses ?? [];
+      const coursesStr = studentCourses.map(c => c.courseName).join("; ");
+      const status = (r.overallAvg ?? 0) >= 50 ? "Passing" : r.overallAvg === null ? "No Data" : "At Risk";
+      const passedExams = r.exams.filter(e => e.passed).length;
+      const quizzesAttempted = r.quizzes.filter((q) => q.score !== null).length;
+
+      return [
+        r.userId, r.name, r.email, coursesStr,
+        r.overallAvg !== null ? String(r.overallAvg) : "—",
+        grade(r.overallAvg), status,
+        r.quizAvg !== null ? String(r.quizAvg) : "—",
+        String(quizzesAttempted), String(r.quizzes.length),
+        r.examAvg !== null ? String(r.examAvg) : "—",
+        String(r.exams.length), String(passedExams)
+      ];
+    });
+    
+    downloadCSV([header, ...rows], `Class_Report_${new Date().toISOString().split("T")[0]}.csv`);
   }
 
   function exportDetailCSV(r: StudentReport) {
+    const status = (r.overallAvg ?? 0) >= 50 ? "Passing" : r.overallAvg === null ? "No Data" : "At Risk";
+    
     const rows: string[][] = [
-      ["Student Report:", r.name],
+      ["STUDENT PERFORMANCE REPORT"],
+      ["Name:", r.name],
       ["Email:", r.email],
-      ["Generated:", new Date().toLocaleString()],
+      ["Student ID:", r.userId],
+      ["Generated On:", new Date().toLocaleString()],
       [],
-      ["=== QUIZZES ==="],
-      ["Course", "Quiz", "Score", "Total", "%", "Date"],
-      ...r.quizzes.map((q) => [q.courseName, q.contentTitle, String(q.score ?? "—"), String(q.totalMarks), q.score !== null ? String(pct(q.score, q.totalMarks)) : "—", fmtDate(q.attemptedAt)]),
+      ["--- OVERALL SUMMARY ---"],
+      ["Overall Average:", r.overallAvg !== null ? `${r.overallAvg}%` : "—"],
+      ["Grade:", grade(r.overallAvg)],
+      ["Status:", status],
+      ["Quiz Average:", r.quizAvg !== null ? `${r.quizAvg}%` : "—"],
+      ["Exam Average:", r.examAvg !== null ? `${r.examAvg}%` : "—"],
+      ["Total Quizzes Available:", String(r.quizzes.length)],
+      ["Quizzes Attempted:", String(r.quizzes.filter((q) => q.score !== null).length)],
+      ["Exams Attempted:", String(r.exams.length)],
+      ["Exams Passed:", String(r.exams.filter(e => e.passed).length)],
       [],
-      ["=== EXAMS ==="],
-      ["Exam", "Score", "Total", "%", "Result", "Date"],
-      ...r.exams.map((e) => [e.examTitle, String(e.score), String(e.totalMarks), String(pct(e.score, e.totalMarks)), e.passed ? "Pass" : "Fail", fmtDate(e.submittedAt)]),
+      ["--- DETAILED QUIZ RESULTS ---"],
+      ["Course Name", "Quiz Title", "Score Achieved", "Total Marks", "Percentage", "Attempt Date"],
+      ...r.quizzes.map((q) => [
+        q.courseName, 
+        q.contentTitle, 
+        String(q.score ?? "Not Attempted"), 
+        String(q.totalMarks), 
+        q.score !== null ? `${pct(q.score, q.totalMarks)}%` : "—", 
+        fmtDate(q.attemptedAt)
+      ]),
+      [],
+      ["--- DETAILED EXAM RESULTS ---"],
+      ["Course ID", "Exam Title", "Score Achieved", "Total Marks", "Percentage", "Result Status", "Attempt Date"],
+      ...r.exams.map((e) => [
+        e.courseId, 
+        e.examTitle, 
+        String(e.score), 
+        String(e.totalMarks), 
+        `${pct(e.score, e.totalMarks)}%`, 
+        e.passed ? "Pass" : "Fail", 
+        fmtDate(e.submittedAt)
+      ]),
     ];
-    downloadCSV(rows, `${r.name.replace(/\s+/g, "_")}_report.csv`);
+    downloadCSV(rows, `Student_Report_${r.name.replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.csv`);
   }
 
   const SortBtn = ({ k, label }: { k: typeof sortKey; label: string }) => (
@@ -487,7 +713,7 @@ export default function TeacherReportsPage() {
                             CSV
                           </button>
                           <button
-                            onClick={() => printStudentReport(r)}
+                            onClick={() => printStudentReport(r, getPDFContext(r.userId))}
                             className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-brand-200 dark:border-brand-500/40 text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-500/10 transition-colors"
                             title="Download PDF"
                           >
@@ -533,7 +759,7 @@ export default function TeacherReportsPage() {
                   CSV
                 </button>
                 <button
-                  onClick={() => printStudentReport(selectedStudent)}
+                  onClick={() => printStudentReport(selectedStudent, getPDFContext(selectedStudent.userId))}
                   className="px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-500 text-white hover:bg-brand-600"
                 >
                   PDF

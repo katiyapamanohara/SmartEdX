@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { LiveSessionRepository } from '../../infra/database/repositories/live-session.repository';
 import { LiveParticipantRepository } from '../../infra/database/repositories/live-participant.repository';
+import { CourseRepository } from '../../infra/database/repositories/course.repository';
 import { LiveSession, LiveSessionStatus } from './entities/live-session.entity';
 import { CreateLiveSessionDto } from './dto/create-live-session.dto';
 
@@ -13,6 +14,7 @@ export class LiveClassService {
   constructor(
     private readonly liveSessionRepo: LiveSessionRepository,
     private readonly liveParticipantRepo: LiveParticipantRepository,
+    private readonly courseRepo: CourseRepository,
   ) {}
 
   async createSession(
@@ -40,9 +42,33 @@ export class LiveClassService {
     return sessions.map((s) => this.formatSession(s, teacherId));
   }
 
-  async getStudentSessions(instituteId: string) {
-    const sessions =
-      await this.liveSessionRepo.findLiveAndScheduled(instituteId);
+  async getStudentSessions(instituteId: string, studentId: string) {
+    // Resolve the course IDs this student is enrolled in
+    const enrolledCourses = await this.courseRepo.findByStudentUserId(
+      studentId,
+      instituteId,
+    );
+    const enrolledCourseIds = enrolledCourses.map((c) => c.id);
+
+    // Return sessions linked to those courses + sessions with no course (open to all)
+    const sessions = await this.liveSessionRepo.findByEnrolledCoursesOrAll(
+      instituteId,
+      enrolledCourseIds,
+    );
+    return sessions.map((s) => this.formatSession(s, null));
+  }
+
+  async getAllStudentSessionsHistory(instituteId: string, studentId: string) {
+    const enrolledCourses = await this.courseRepo.findByStudentUserId(
+      studentId,
+      instituteId,
+    );
+    const enrolledCourseIds = enrolledCourses.map((c) => c.id);
+
+    const sessions = await this.liveSessionRepo.findAllByEnrolledCoursesOrAll(
+      instituteId,
+      enrolledCourseIds,
+    );
     return sessions.map((s) => this.formatSession(s, null));
   }
 
