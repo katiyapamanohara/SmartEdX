@@ -286,8 +286,11 @@ export default function StudentPerformancePage() {
           const questions: any[] = exam.questions ?? [];
           for (const q of questions) {
             if (q.type !== "mcq" || q.correctAnswer === undefined) continue;
-            const myAnswerIdx = exam.myAttempt.answers[q.id];
-            if (myAnswerIdx === undefined || myAnswerIdx === q.correctAnswer) continue;
+            const myAnswerRaw = exam.myAttempt.answers[q.id];
+            if (myAnswerRaw === undefined) continue;
+            // Normalise to number — JSONB may deserialise the stored index as a string
+            const myAnswerIdx = Number(myAnswerRaw);
+            if (myAnswerIdx === Number(q.correctAnswer)) continue;
             areas.push({
               id: `exam-${exam.id}-${q.id}`,
               source: "exam",
@@ -297,7 +300,7 @@ export default function StudentPerformancePage() {
               questionText: q.question,
               scorePercent: 0,
               myAnswer: q.options?.[myAnswerIdx] ?? `Option ${myAnswerIdx + 1}`,
-              correctAnswer: q.options?.[q.correctAnswer] ?? `Option ${q.correctAnswer + 1}`,
+              correctAnswer: q.options?.[Number(q.correctAnswer)] ?? `Option ${Number(q.correctAnswer) + 1}`,
             });
           }
         }
@@ -331,8 +334,11 @@ export default function StudentPerformancePage() {
             const questions: any[] = content.quizData?.questions ?? [];
             for (const q of questions) {
               if (q.correctAnswer === undefined) continue;
-              const myAnswerIdx = attempt.answers[q.id];
-              if (myAnswerIdx === undefined || myAnswerIdx === q.correctAnswer) continue;
+              const myAnswerRaw = attempt.answers[q.id];
+              if (myAnswerRaw === undefined) continue;
+              // Normalise to number — JSONB may deserialise the stored index as a string
+              const myAnswerIdx = Number(myAnswerRaw);
+              if (myAnswerIdx === Number(q.correctAnswer)) continue;
               areas.push({
                 id: `quiz-${content.id}-${q.id}`,
                 source: "quiz-mcq",
@@ -342,7 +348,7 @@ export default function StudentPerformancePage() {
                 questionText: q.question,
                 scorePercent: 0,
                 myAnswer: q.options?.[myAnswerIdx] ?? `Option ${myAnswerIdx + 1}`,
-                correctAnswer: q.options?.[q.correctAnswer] ?? `Option ${q.correctAnswer + 1}`,
+                correctAnswer: q.options?.[Number(q.correctAnswer)] ?? `Option ${Number(q.correctAnswer) + 1}`,
               });
             }
           }

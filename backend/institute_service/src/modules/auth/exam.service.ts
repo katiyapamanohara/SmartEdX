@@ -70,9 +70,13 @@ export class ExamService {
     const attempt = userId
       ? (exam.studentAttempts?.[userId] ?? null)
       : undefined;
-    // Strip correct answers + sample answers for active exams (student safety)
+    // Strip correct answers + sample answers for active exams (student safety),
+    // but only when the student has NOT yet submitted — after submission they
+    // need correctAnswer to power the "Areas to Improve" feedback on the
+    // performance page.
+    const hasSubmitted = attempt !== null && attempt !== undefined;
     const questions =
-      status === 'active' && userId
+      status === 'active' && userId && !hasSubmitted
         ? exam.questions.map(
             ({ correctAnswer: _c, explanation: _e, sampleAnswer: _s, ...q }) =>
               q,
