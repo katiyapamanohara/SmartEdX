@@ -452,9 +452,9 @@ export default function TeacherPerformancePage() {
             ))}
           </div>
         ) : classWeakAreas.length === 0 ? (
-          <div className="px-5 py-8 flex flex-col items-center gap-2 text-center">
-            <span className="text-2xl">✅</span>
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+          <div className="px-5 py-10 flex flex-col items-center gap-2 text-center">
+            <span className="text-3xl">✅</span>
+            <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
               No class-wide weak areas detected
             </p>
             <p className="text-xs text-gray-400 dark:text-gray-500">
@@ -462,91 +462,114 @@ export default function TeacherPerformancePage() {
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-red-100 dark:divide-red-900/30">
-            {classWeakAreas.map((area) => (
-              <div key={area.id} className="px-5 py-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    {/* Labels row */}
-                    <div className="flex items-center flex-wrap gap-2 mb-1.5">
-                      <span className="text-xs font-medium text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-500/15 px-2 py-0.5 rounded-full">
-                        {area.source === "exam"
-                          ? "Exam"
-                          : area.source === "quiz-voice"
-                          ? "Voice Quiz"
-                          : "Quiz"}
+          <div className="p-4 flex flex-col gap-3">
+            {classWeakAreas.map((area, idx) => {
+              const failColor =
+                area.isPendingEssay
+                  ? "border-l-amber-400 dark:border-l-amber-500"
+                  : area.failRate >= 70
+                  ? "border-l-red-500 dark:border-l-red-400"
+                  : area.failRate >= 50
+                  ? "border-l-orange-500 dark:border-l-orange-400"
+                  : "border-l-amber-400 dark:border-l-amber-400";
+
+              const barColor =
+                area.failRate >= 70 ? "bg-red-500" : area.failRate >= 50 ? "bg-orange-500" : "bg-amber-500";
+
+              const rateColor =
+                area.failRate >= 70
+                  ? "text-red-600 dark:text-red-400"
+                  : area.failRate >= 50
+                  ? "text-orange-600 dark:text-orange-400"
+                  : "text-amber-600 dark:text-amber-400";
+
+              return (
+                <div
+                  key={area.id}
+                  className={`rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 border-l-4 ${failColor} overflow-hidden`}
+                >
+                  {/* ── Card header: pills + fail rate badge ── */}
+                  <div className="flex items-start justify-between gap-3 px-4 pt-4 pb-2">
+                    <div className="flex items-center flex-wrap gap-2 min-w-0">
+                      <span className="text-xs font-bold text-gray-400 dark:text-gray-500 shrink-0">
+                        #{idx + 1}
+                      </span>
+                      <span className="text-xs font-medium text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-500/15 px-2 py-0.5 rounded-full shrink-0">
+                        {area.source === "exam" ? "Exam" : area.source === "quiz-voice" ? "Voice Quiz" : "Quiz"}
                       </span>
                       {area.questionType !== "mcq" && area.questionType !== "voice" && (
-                        <span className="text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-500/15 px-2 py-0.5 rounded-full capitalize">
+                        <span className="text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-500/15 px-2 py-0.5 rounded-full shrink-0 capitalize">
                           {area.questionType.replace("_", " ")}
                         </span>
                       )}
                       {area.isPendingEssay && (
-                        <span className="text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-500/15 px-2 py-0.5 rounded-full">
+                        <span className="text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-500/15 px-2 py-0.5 rounded-full shrink-0">
                           ⏳ Pending your review
                         </span>
                       )}
-                      <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                      <span className="text-xs text-gray-400 dark:text-gray-500 truncate">
                         {area.sourceTitle} · {area.courseName}
                       </span>
                     </div>
 
-                    {/* Question text */}
-                    <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
-                      {area.questionText}
-                    </p>
-
-                    {/* Avg score for short_answer / voice */}
-                    {area.avgScore !== undefined && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        Class avg score: <span className="font-semibold text-gray-700 dark:text-gray-300">{area.avgScore}%</span>
-                      </p>
+                    {/* Fail rate badge */}
+                    {!area.isPendingEssay && (
+                      <div className="shrink-0 text-right">
+                        <p className={`text-xl font-bold leading-none ${rateColor}`}>{area.failRate}%</p>
+                        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                          {area.failCount}/{area.totalAttempts} students
+                        </p>
+                      </div>
+                    )}
+                    {area.isPendingEssay && (
+                      <div className="shrink-0 text-right">
+                        <p className="text-xl font-bold leading-none text-amber-600 dark:text-amber-400">
+                          {area.failCount}
+                        </p>
+                        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                          awaiting grade
+                        </p>
+                      </div>
                     )}
                   </div>
 
-                  {/* Fail rate badge */}
-                  <div className="shrink-0 text-right">
-                    <div
-                      className={`text-lg font-bold ${
-                        area.failRate >= 70
-                          ? "text-red-600 dark:text-red-400"
-                          : area.failRate >= 50
-                          ? "text-orange-600 dark:text-orange-400"
-                          : "text-amber-600 dark:text-amber-400"
-                      }`}
-                    >
-                      {area.failRate}%
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {area.failCount}/{area.totalAttempts} failed
-                    </div>
+                  {/* ── Question text ── */}
+                  <div className="px-4 pb-3">
+                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 leading-snug">
+                      {area.questionText}
+                    </p>
                   </div>
-                </div>
 
-                {/* Fail rate bar */}
-                <div className="mt-2.5 h-1.5 w-full bg-red-100 dark:bg-red-900/30 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${
-                      area.failRate >= 70
-                        ? "bg-red-500"
-                        : area.failRate >= 50
-                        ? "bg-orange-500"
-                        : "bg-amber-500"
-                    }`}
-                    style={{ width: `${area.failRate}%` }}
-                  />
-                </div>
+                  {/* ── Fail rate bar + avg score ── */}
+                  {!area.isPendingEssay && (
+                    <div className="px-4 pb-3 flex items-center gap-3">
+                      <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${barColor} transition-all`}
+                          style={{ width: `${area.failRate}%` }}
+                        />
+                      </div>
+                      {area.avgScore !== undefined && (
+                        <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">
+                          Class avg: <span className="font-semibold text-gray-700 dark:text-gray-300">{area.avgScore}%</span>
+                        </span>
+                      )}
+                    </div>
+                  )}
 
-                {/* Related study material — lazy KB search */}
-                {area.courseId && (
-                  <RelatedStudyMaterial
-                    instituteId={instituteId}
-                    courseId={area.courseId}
-                    questionText={area.questionText}
-                  />
-                )}
-              </div>
-            ))}
+                  {/* ── Study material expander ── */}
+                  {area.courseId && (
+                    <div className="border-t border-gray-100 dark:border-gray-800 px-4 py-3">
+                      <RelatedStudyMaterial
+                        instituteId={instituteId}
+                        courseId={area.courseId}
+                        questionText={area.questionText}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

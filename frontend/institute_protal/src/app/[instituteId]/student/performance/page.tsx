@@ -370,7 +370,7 @@ export default function StudentPerformancePage() {
         {stats.map((s) => (
           <div
             key={s.label}
-            className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/[0.03] p-5"
+            className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/3 p-5"
           >
             <span className="text-sm text-gray-500 dark:text-gray-400">{s.label}</span>
             <div className="flex items-center justify-between mt-1">
@@ -402,110 +402,143 @@ export default function StudentPerformancePage() {
         {loading ? (
           <div className="p-5 flex flex-col gap-3">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="animate-pulse h-16 bg-orange-100 dark:bg-orange-900/20 rounded-xl" />
+              <div key={i} className="animate-pulse h-24 bg-orange-100 dark:bg-orange-900/20 rounded-xl" />
             ))}
           </div>
         ) : weakAreas.length === 0 ? (
-          <div className="px-5 py-8 flex flex-col items-center gap-2 text-center">
-            <span className="text-2xl">🎉</span>
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              No weak areas found
-            </p>
+          <div className="px-5 py-10 flex flex-col items-center gap-2 text-center">
+            <span className="text-3xl">🎉</span>
+            <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">No weak areas found</p>
             <p className="text-xs text-gray-400 dark:text-gray-500">
               Complete MCQ exams or quizzes and any wrong answers will appear here with study tips.
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-orange-100 dark:divide-orange-900/30">
-            {weakAreas.map((area) => (
-              <div key={area.id} className="px-5 py-4">
-                {/* Source label row */}
-                <div className="flex items-center flex-wrap gap-2 mb-1.5">
-                  <span className="text-xs font-medium text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-500/15 px-2 py-0.5 rounded-full">
-                    {area.source === "exam"
-                      ? "Exam"
-                      : area.source === "quiz-voice"
-                      ? "Voice Quiz"
-                      : "Quiz"}
-                  </span>
-                  {/* Question type pill */}
-                  {area.questionType && area.questionType !== "mcq" && (
-                    <span className="text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-500/15 px-2 py-0.5 rounded-full capitalize">
-                      {area.questionType.replace("_", " ")}
-                    </span>
+          <div className="p-4 flex flex-col gap-3">
+            {weakAreas.map((area, idx) => {
+              // Card accent colour by type
+              const borderColor =
+                area.pendingReview
+                  ? "border-l-amber-400 dark:border-l-amber-500"
+                  : area.source === "quiz-voice" || area.questionType === "short_answer"
+                  ? "border-l-orange-400 dark:border-l-orange-500"
+                  : "border-l-red-400 dark:border-l-red-500";
+
+              const isMcq =
+                area.questionType === "mcq" ||
+                (!area.questionType && area.source !== "quiz-voice");
+
+              return (
+                <div
+                  key={area.id}
+                  className={`rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 border-l-4 ${borderColor} overflow-hidden`}
+                >
+                  {/* ── Card header ── */}
+                  <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-2">
+                    {/* Left: index + pills */}
+                    <div className="flex items-center flex-wrap gap-2 min-w-0">
+                      <span className="text-xs font-bold text-gray-400 dark:text-gray-500 shrink-0">
+                        #{idx + 1}
+                      </span>
+                      <span className="text-xs font-medium text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-500/15 px-2 py-0.5 rounded-full shrink-0">
+                        {area.source === "exam" ? "Exam" : area.source === "quiz-voice" ? "Voice Quiz" : "Quiz"}
+                      </span>
+                      {area.questionType && area.questionType !== "mcq" && (
+                        <span className="text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-500/15 px-2 py-0.5 rounded-full shrink-0 capitalize">
+                          {area.questionType.replace("_", " ")}
+                        </span>
+                      )}
+                      {area.pendingReview && (
+                        <span className="text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-500/15 px-2 py-0.5 rounded-full shrink-0">
+                          ⏳ Pending review
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-400 dark:text-gray-500 truncate">
+                        {area.sourceTitle} · {area.courseName}
+                      </span>
+                    </div>
+                    {/* Right: score % for voice/short_answer */}
+                    {(area.source === "quiz-voice" || area.questionType === "short_answer") && (
+                      <span className="shrink-0 text-sm font-bold text-red-600 dark:text-red-400">
+                        {area.scorePercent}%
+                      </span>
+                    )}
+                  </div>
+
+                  {/* ── Question text ── */}
+                  <div className="px-4 pb-3">
+                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 leading-snug">
+                      {area.questionText}
+                    </p>
+                  </div>
+
+                  {/* ── Answer comparison (MCQ) ── */}
+                  {isMcq && area.correctAnswer && (
+                    <div className="mx-4 mb-3 grid grid-cols-2 gap-2 text-xs">
+                      <div className="flex flex-col gap-1 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 px-3 py-2">
+                        <span className="font-semibold text-red-500 dark:text-red-400 uppercase tracking-wide text-[10px]">
+                          Your answer
+                        </span>
+                        <span className="text-red-700 dark:text-red-300 font-medium">
+                          {area.myAnswer ?? "Not answered"}
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-1 rounded-lg bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20 px-3 py-2">
+                        <span className="font-semibold text-green-600 dark:text-green-400 uppercase tracking-wide text-[10px]">
+                          Correct answer
+                        </span>
+                        <span className="text-green-700 dark:text-green-300 font-medium">
+                          {area.correctAnswer}
+                        </span>
+                      </div>
+                    </div>
                   )}
-                  {area.pendingReview && (
-                    <span className="text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-500/15 px-2 py-0.5 rounded-full">
-                      Pending review
-                    </span>
+
+                  {/* ── Short answer: student response ── */}
+                  {area.questionType === "short_answer" && area.myAnswer && area.myAnswer !== "Not answered" && (
+                    <div className="mx-4 mb-3 rounded-lg bg-gray-50 dark:bg-white/4 border border-gray-200 dark:border-gray-700 px-3 py-2 text-xs">
+                      <p className="font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px] mb-1">Your answer</p>
+                      <p className="text-gray-700 dark:text-gray-300">{area.myAnswer}</p>
+                    </div>
                   )}
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                    {area.sourceTitle} · {area.courseName}
-                  </span>
-                  {(area.source === "quiz-voice" || area.questionType === "short_answer") && (
-                    <span className="ml-auto text-xs font-semibold text-red-600 dark:text-red-400">
-                      {area.scorePercent}%
-                    </span>
+
+                  {/* ── AI / teacher feedback ── */}
+                  {area.feedback && (
+                    <div className="mx-4 mb-3 flex gap-2 rounded-lg bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/20 px-3 py-2">
+                      <span className="text-orange-400 shrink-0 mt-0.5">💬</span>
+                      <p className="text-xs text-gray-600 dark:text-gray-300 italic leading-relaxed">{area.feedback}</p>
+                    </div>
+                  )}
+
+                  {/* ── Essay pending ── */}
+                  {area.questionType === "essay" && area.pendingReview && (
+                    <div className="mx-4 mb-3 flex gap-2 items-center rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-3 py-2">
+                      <span className="text-amber-500 shrink-0">⏳</span>
+                      <p className="text-xs text-amber-700 dark:text-amber-300">
+                        Awaiting teacher grading — study the related material below to prepare.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* ── Study material expander ── */}
+                  {area.courseId && (
+                    <div className="border-t border-gray-100 dark:border-gray-800 px-4 py-3">
+                      <RelatedStudyMaterial
+                        instituteId={instituteId}
+                        courseId={area.courseId}
+                        questionText={area.questionText}
+                      />
+                    </div>
                   )}
                 </div>
-
-                {/* Question text */}
-                <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">
-                  {area.questionText}
-                </p>
-
-                {/* MCQ: your answer vs correct */}
-                {(area.questionType === "mcq" || (!area.questionType && area.source !== "quiz-voice")) && area.correctAnswer && (
-                  <div className="flex flex-wrap gap-3 text-xs mb-2">
-                    <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 px-2.5 py-1 rounded-lg">
-                      <span className="font-semibold">Your answer:</span>
-                      {area.myAnswer ?? "Not answered"}
-                    </span>
-                    <span className="flex items-center gap-1.5 text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-500/10 px-2.5 py-1 rounded-lg">
-                      <span className="font-semibold">Correct:</span>
-                      {area.correctAnswer}
-                    </span>
-                  </div>
-                )}
-
-                {/* Short answer: what the student wrote */}
-                {area.questionType === "short_answer" && area.myAnswer && area.myAnswer !== "Not answered" && (
-                  <div className="text-xs mb-2 p-2.5 rounded-lg bg-gray-50 dark:bg-white/4 border border-gray-200 dark:border-gray-700">
-                    <span className="font-semibold text-gray-600 dark:text-gray-400">Your answer: </span>
-                    <span className="text-gray-700 dark:text-gray-300">{area.myAnswer}</span>
-                  </div>
-                )}
-
-                {/* AI / teacher feedback */}
-                {area.feedback && (
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 italic border-l-2 border-orange-300 dark:border-orange-600 pl-2">
-                    {area.feedback}
-                  </p>
-                )}
-
-                {/* Essay pending review notice */}
-                {area.questionType === "essay" && area.pendingReview && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mb-2">
-                    ⏳ Awaiting teacher grading — study the related material below to prepare.
-                  </p>
-                )}
-
-                {/* Related content from Qdrant — lazy loaded on expand */}
-                {area.courseId && (
-                  <RelatedStudyMaterial
-                    instituteId={instituteId}
-                    courseId={area.courseId}
-                    questionText={area.questionText}
-                  />
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
 
       {/* Course Performance Table */}
-      <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.03] overflow-hidden">
+      <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="font-semibold text-gray-800 dark:text-white">Course Performance</h3>
         </div>
@@ -574,7 +607,7 @@ export default function StudentPerformancePage() {
 
       {/* Exams Table */}
       {(loading || examRows.length > 0) && (
-        <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.03] overflow-hidden">
+        <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
             <h3 className="font-semibold text-gray-800 dark:text-white">Exam Results</h3>
           </div>
@@ -656,7 +689,7 @@ export default function StudentPerformancePage() {
 
       {/* Empty state */}
       {!loading && courseRows.length === 0 && examRows.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.03] px-6 py-8 text-center flex flex-col items-center gap-3">
+        <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 px-6 py-8 text-center flex flex-col items-center gap-3">
           <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
             <PieChartIcon className="w-6 h-6 text-gray-400" />
           </div>
