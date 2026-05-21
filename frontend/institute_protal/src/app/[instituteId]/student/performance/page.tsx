@@ -163,6 +163,7 @@ export default function StudentPerformancePage() {
       setLoading(true);
       try {
         const userId = authService.getUserId();
+        console.log("[Performance] userId:", userId);
 
         const [assessmentGroups, exams, courses]: [StudentAssessmentGroup[], any[], Course[]] =
           await Promise.all([
@@ -170,6 +171,10 @@ export default function StudentPerformancePage() {
             instituteService.getStudentExams(instituteId),
             instituteService.getMyEnrolledCourses(instituteId),
           ]);
+
+        console.log("[Performance] assessmentGroups:", assessmentGroups);
+        console.log("[Performance] exams:", exams);
+        console.log("[Performance] courses:", courses);
 
         // ── Build per-course rows from quizzes ───────────────────────────────
         const courseMap = new Map<string, CourseRow>();
@@ -282,11 +287,13 @@ export default function StudentPerformancePage() {
 
         // 1. Exam MCQ — wrong answers
         for (const exam of exams) {
-          if (!exam.myAttempt?.answers) continue;
+          const attempt = exam.myAttempt;
+          console.log(`[Performance] exam "${exam.title}" status=${exam.status} hasAttempt=${!!attempt} answersKeys=${attempt?.answers ? Object.keys(attempt.answers).length : 0} questionsCount=${(exam.questions ?? []).length} firstQType=${exam.questions?.[0]?.type} firstQHasCorrect=${exam.questions?.[0]?.correctAnswer !== undefined}`);
+          if (!attempt?.answers) continue;
           const questions: any[] = exam.questions ?? [];
           for (const q of questions) {
             if (q.type !== "mcq" || q.correctAnswer === undefined) continue;
-            const myAnswerRaw = exam.myAttempt.answers[q.id];
+            const myAnswerRaw = attempt.answers[q.id];
             if (myAnswerRaw === undefined) continue;
             // Normalise to number — JSONB may deserialise the stored index as a string
             const myAnswerIdx = Number(myAnswerRaw);
@@ -310,6 +317,7 @@ export default function StudentPerformancePage() {
           for (const { content } of group.quizzes) {
             const attempt = userId && content.studentAttempts?.[userId];
             if (!attempt?.questionResults) continue;
+            console.log(`[Performance] voice quiz "${content.title}" questionResults:`, attempt.questionResults);
             for (const qr of attempt.questionResults as any[]) {
               if ((qr.percentage ?? 100) >= 60) continue;
               areas.push({
@@ -330,6 +338,7 @@ export default function StudentPerformancePage() {
         for (const group of assessmentGroups) {
           for (const { content } of group.quizzes) {
             const attempt = userId && content.studentAttempts?.[userId];
+            console.log(`[Performance] mcq quiz "${content.title}" hasAttempt=${!!attempt} answers=${JSON.stringify(attempt?.answers ?? null)} hasQResults=${!!attempt?.questionResults}`);
             if (!attempt?.answers || attempt?.questionResults) continue;
             const questions: any[] = content.quizData?.questions ?? [];
             for (const q of questions) {
@@ -354,6 +363,7 @@ export default function StudentPerformancePage() {
           }
         }
 
+        console.log("[Performance] weak areas found:", areas.length, areas);
         areas.sort((a, b) => a.scorePercent - b.scorePercent);
         setWeakAreas(areas);
       } finally {
@@ -420,84 +430,92 @@ export default function StudentPerformancePage() {
         ))}
       </div>
 
-      {/* Weak Areas */}
-      {(loading || weakAreas.length > 0) && (
-        <div className="rounded-2xl border border-orange-200 dark:border-orange-800/50 bg-orange-50/50 dark:bg-orange-500/[0.05] overflow-hidden">
-          <div className="px-5 py-4 border-b border-orange-200 dark:border-orange-800/50 flex items-center gap-2">
-            <span className="text-lg">⚠️</span>
-            <div>
-              <h3 className="font-semibold text-gray-800 dark:text-white">Areas to Improve</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                Questions you got wrong — expand each to see related study material from your course
-              </p>
-            </div>
+      {/* Weak Areas — always shown once data has loaded (or while loading) */}
+      <div className="rounded-2xl border border-orange-200 dark:border-orange-800/50 bg-orange-50/50 dark:bg-orange-500/5 overflow-hidden">
+        <div className="px-5 py-4 border-b border-orange-200 dark:border-orange-800/50 flex items-center gap-2">
+          <span className="text-lg">⚠️</span>
+          <div>
+            <h3 className="font-semibold text-gray-800 dark:text-white">Areas to Improve</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              Questions you got wrong — expand each to see related study material from your course
+            </p>
           </div>
+        </div>
 
-          {loading ? (
-            <div className="p-5 flex flex-col gap-3">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="animate-pulse h-16 bg-orange-100 dark:bg-orange-900/20 rounded-xl" />
-              ))}
-            </div>
-          ) : (
-            <div className="divide-y divide-orange-100 dark:divide-orange-900/30">
-              {weakAreas.map((area) => (
-                <div key={area.id} className="px-5 py-4">
-                  {/* Source label */}
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-xs font-medium text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-500/15 px-2 py-0.5 rounded-full">
-                      {area.source === "exam"
-                        ? "Exam"
-                        : area.source === "quiz-voice"
-                        ? "Voice Quiz"
-                        : "Quiz"}
+        {loading ? (
+          <div className="p-5 flex flex-col gap-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="animate-pulse h-16 bg-orange-100 dark:bg-orange-900/20 rounded-xl" />
+            ))}
+          </div>
+        ) : weakAreas.length === 0 ? (
+          <div className="px-5 py-8 flex flex-col items-center gap-2 text-center">
+            <span className="text-2xl">🎉</span>
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              No weak areas found
+            </p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              Complete MCQ exams or quizzes and any wrong answers will appear here with study tips.
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-orange-100 dark:divide-orange-900/30">
+            {weakAreas.map((area) => (
+              <div key={area.id} className="px-5 py-4">
+                {/* Source label */}
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-xs font-medium text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-500/15 px-2 py-0.5 rounded-full">
+                    {area.source === "exam"
+                      ? "Exam"
+                      : area.source === "quiz-voice"
+                      ? "Voice Quiz"
+                      : "Quiz"}
+                  </span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    {area.sourceTitle} · {area.courseName}
+                  </span>
+                  {area.source === "quiz-voice" && (
+                    <span className="ml-auto text-xs font-semibold text-red-600 dark:text-red-400">
+                      {area.scorePercent}%
                     </span>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                      {area.sourceTitle} · {area.courseName}
-                    </span>
-                    {area.source === "quiz-voice" && (
-                      <span className="ml-auto text-xs font-semibold text-red-600 dark:text-red-400">
-                        {area.scorePercent}%
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Question */}
-                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">
-                    {area.questionText}
-                  </p>
-
-                  {/* MCQ answer comparison */}
-                  {(area.source === "exam" || area.source === "quiz-mcq") && (
-                    <div className="flex flex-wrap gap-3 text-xs mb-2">
-                      <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 px-2.5 py-1 rounded-lg">
-                        <span className="font-semibold">Your answer:</span>
-                        {area.myAnswer}
-                      </span>
-                      <span className="flex items-center gap-1.5 text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-500/10 px-2.5 py-1 rounded-lg">
-                        <span className="font-semibold">Correct:</span>
-                        {area.correctAnswer}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Voice feedback */}
-                  {area.source === "quiz-voice" && area.feedback && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 italic">
-                      {area.feedback}
-                    </p>
-                  )}
-
-                  {/* Related content from Qdrant — lazy loaded on expand */}
-                  {area.courseId && (
-                    <RelatedContent instituteId={instituteId} area={area} />
                   )}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+
+                {/* Question */}
+                <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">
+                  {area.questionText}
+                </p>
+
+                {/* MCQ answer comparison */}
+                {(area.source === "exam" || area.source === "quiz-mcq") && (
+                  <div className="flex flex-wrap gap-3 text-xs mb-2">
+                    <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 px-2.5 py-1 rounded-lg">
+                      <span className="font-semibold">Your answer:</span>
+                      {area.myAnswer}
+                    </span>
+                    <span className="flex items-center gap-1.5 text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-500/10 px-2.5 py-1 rounded-lg">
+                      <span className="font-semibold">Correct:</span>
+                      {area.correctAnswer}
+                    </span>
+                  </div>
+                )}
+
+                {/* Voice feedback */}
+                {area.source === "quiz-voice" && area.feedback && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 italic">
+                    {area.feedback}
+                  </p>
+                )}
+
+                {/* Related content from Qdrant — lazy loaded on expand */}
+                {area.courseId && (
+                  <RelatedContent instituteId={instituteId} area={area} />
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Course Performance Table */}
       <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.03] overflow-hidden">
