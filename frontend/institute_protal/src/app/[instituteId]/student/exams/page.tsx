@@ -238,13 +238,16 @@ function TakeExamModal({
       if (now - last < 10_000) return;
       flagCooldown.current[type] = now;
 
-      setFlagWarning(`⚠️ ${warnMsg}`);
-      setTimeout(() => setFlagWarning(""), 6000);
+      if (warnMsg) {
+        setFlagWarning(`⚠️ ${warnMsg}`);
+        setTimeout(() => setFlagWarning(""), 6000);
+      }
 
       const res = await examService.reportIntegrityFlag(instituteId, exam.id, type);
       if (res?.autoFailed && !submitRef.current) {
         submitRef.current = true;
         setAutoFailed(true);
+        // Backend already recorded the auto-fail via reportIntegrityFlag
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -289,10 +292,16 @@ function TakeExamModal({
           if (prev === null || prev <= 1) {
             clearInterval(countdownRef.current!);
             countdownRef.current = null;
-            // Auto-terminate — no second chances
+            // Auto-terminate — persist to backend so teacher sees it
             if (!submitRef.current) {
               submitRef.current = true;
               setAutoFailed(true);
+              // Persist auto-fail to backend: saves the attempt + notifies teacher
+              examService.forceAutoFail(
+                instituteId,
+                exam.id,
+                "Student left the exam window for more than 10 seconds",
+              );
             }
             return null;
           }
@@ -768,11 +777,9 @@ function ExamCard({ exam, onStart }: { exam: Exam; onStart: (exam: Exam) => void
   const maxAttempts = exam.maxAttempts ?? 1;
   const usedAttempts = attempt?.attemptCount ?? (attempt ? 1 : 0);
   const attemptsLeft = maxAttempts - usedAttempts;
-  // Allow retry even if exam is "completed" (scheduled window passed) as long as
-  // the teacher published it (not a draft) and the student has attempts remaining.
-  // Auto-failed attempts still consume an attempt slot but don't block future retries —
-  // the teacher set maxAttempts > 1 knowing retries are possible even after a cheat termination.
-  const canRetry = !!attempt && attemptsLeft > 0 && exam.status !== "draft";
+  // Cheating-detected failures are permanent — no re-attempts regardless of maxAttempts.
+  const cheatingDetected = !!(attempt as any)?.autoFailed;
+  const canRetry = !!attempt && !cheatingDetected && attemptsLeft > 0 && exam.status !== "draft";
 
   // Build start button label from required proctoring steps
   const startLabel = [

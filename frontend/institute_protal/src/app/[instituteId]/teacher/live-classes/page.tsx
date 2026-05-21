@@ -8,6 +8,7 @@ interface LiveSession {
   id: string;
   title: string;
   description?: string;
+  courseId?: string;
   courseName?: string;
   teacherName?: string;
   status: "scheduled" | "live" | "ended";

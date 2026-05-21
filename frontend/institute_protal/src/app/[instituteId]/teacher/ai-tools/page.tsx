@@ -1022,19 +1022,30 @@ function ChatTypingIndicator() {
 // TAB 1 — LESSON PLAN GENERATOR
 // ══════════════════════════════════════════════════════════════════════════════
 
+interface CourseMaterial { id: string; title: string; url: string; type: string; moduleName: string; }
+
 function LessonPlanTab({ instituteId }: { instituteId: string }) {
   const [topic, setTopic] = useState("");
   const [subject, setSubject] = useState("");
+  const [selectedCourseId, setSelectedCourseId] = useState("");
   const [gradeLevel] = useState("");
   const [duration, setDuration] = useState(60);
   const [objectives, setObjectives] = useState("");
   const [courses, setCourses] = useState<{ id: string; name: string }[]>([]);
 
+  // ── Course material state ──────────────────────────────────────────────────
+  const [courseMaterials, setCourseMaterials] = useState<CourseMaterial[]>([]);
+  const [materialsLoading, setMaterialsLoading] = useState(false);
+  const [materialSource, setMaterialSource] = useState<"upload" | "course">("upload");
+  const [selectedMaterialId, setSelectedMaterialId] = useState("");
+  const [fetchingMaterial, setFetchingMaterial] = useState(false);
+
   useEffect(() => {
     instituteService.getMyTeacherCourses(instituteId)
-      .then(courses => setCourses(courses.map(c => ({ id: c.id, name: c.name }))))
+      .then(cs => setCourses(cs.map(c => ({ id: c.id, name: c.name }))))
       .catch(() => {});
   }, [instituteId]);
+
   const [context, setContext] = useState("");
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1042,8 +1053,67 @@ function LessonPlanTab({ instituteId }: { instituteId: string }) {
   const [error, setError] = useState("");
   const lessonFileRef = useRef<HTMLInputElement>(null);
 
+  // ── Load course materials when course changes ──────────────────────────────
+  async function loadCourseMaterials(courseId: string) {
+    if (!courseId) { setCourseMaterials([]); return; }
+    setMaterialsLoading(true);
+    setCourseMaterials([]);
+    setSelectedMaterialId("");
+    setUploadedFile(null);
+    try {
+      const data = await instituteService.getCourseForTeacher(instituteId, courseId);
+      if (!data) return;
+      const mats: CourseMaterial[] = [];
+      for (const mod of data.modules) {
+        for (const c of mod.contents) {
+          if ((c.type === "pdf" || c.type === "document") && c.url) {
+            mats.push({ id: c.id, title: c.title, url: c.url, type: c.type, moduleName: mod.title });
+          }
+        }
+      }
+      setCourseMaterials(mats);
+    } catch { /* ignore */ }
+    finally { setMaterialsLoading(false); }
+  }
+
+  // ── Fetch a course material as a File blob ────────────────────────────────
+  async function selectCourseMaterial(mat: CourseMaterial) {
+    if (selectedMaterialId === mat.id) {
+      // Deselect
+      setSelectedMaterialId("");
+      setUploadedFile(null);
+      return;
+    }
+    setSelectedMaterialId(mat.id);
+    setFetchingMaterial(true);
+    setError("");
+    try {
+      const token = getToken();
+      const res = await fetch(mat.url, token ? { headers: { Authorization: `Bearer ${token}` } } : {});
+      if (!res.ok) throw new Error("fetch failed");
+      const blob = await res.blob();
+      const rawExt = mat.url.split(".").pop()?.split("?")[0]?.toLowerCase() ?? "pdf";
+      const safeExt = ["pdf", "docx", "pptx", "txt", "md"].includes(rawExt) ? rawExt : "pdf";
+      const mimeMap: Record<string, string> = {
+        pdf: "application/pdf",
+        docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        txt: "text/plain",
+        md:  "text/markdown",
+      };
+      const file = new File([blob], `${mat.title}.${safeExt}`, { type: blob.type || mimeMap[safeExt] || "application/octet-stream" });
+      setUploadedFile(file);
+      if (!topic.trim()) setTopic(mat.title);
+    } catch {
+      setError("Could not load this material. Try downloading and uploading it manually.");
+      setSelectedMaterialId("");
+    } finally {
+      setFetchingMaterial(false);
+    }
+  }
+
   async function generate() {
-    if (!topic.trim() && !uploadedFile) { setError("Enter a topic or upload a file."); return; }
+    if (!topic.trim() && !uploadedFile) { setError("Enter a topic or upload / select a material."); return; }
     setError(""); setLoading(true); setPlan(null);
     try {
       let result: LessonPlan;
@@ -1051,8 +1121,8 @@ function LessonPlanTab({ instituteId }: { instituteId: string }) {
         const token = getToken();
         const fd = new FormData();
         fd.append("file", uploadedFile);
-        if (topic.trim())     fd.append("topic", topic.trim());
-        if (subject.trim())   fd.append("subject", subject.trim());
+        if (topic.trim())      fd.append("topic", topic.trim());
+        if (subject.trim())    fd.append("subject", subject.trim());
         if (gradeLevel.trim()) fd.append("gradeLevel", gradeLevel.trim());
         fd.append("durationMinutes", String(duration));
         if (objectives.trim())
@@ -1125,13 +1195,21 @@ function LessonPlanTab({ instituteId }: { instituteId: string }) {
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Course</label>
               {courses.length > 0 ? (
                 <select
-                  value={subject}
-                  onChange={e => setSubject(e.target.value)}
+                  value={selectedCourseId}
+                  onChange={e => {
+                    const id = e.target.value;
+                    const name = courses.find(c => c.id === id)?.name ?? "";
+                    setSelectedCourseId(id);
+                    setSubject(name);
+                    setUploadedFile(null);
+                    setSelectedMaterialId("");
+                    loadCourseMaterials(id);
+                  }}
                   className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
                 >
                   <option value="">— select course —</option>
                   {courses.map(c => (
-                    <option key={c.id} value={c.name}>{c.name}</option>
+                    <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
               ) : (
@@ -1162,30 +1240,116 @@ function LessonPlanTab({ instituteId }: { instituteId: string }) {
               className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none" />
           </div>
 
-          {/* File upload */}
+          {/* ── Material source section ──────────────────────────────────────── */}
           <div>
-            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-              Upload Material — optional (PDF, PPTX, DOCX, TXT)
-            </label>
-            <input ref={lessonFileRef} type="file"
-              accept=".pdf,.pptx,.docx,.txt,.md"
-              onChange={e => { setUploadedFile(e.target.files?.[0] ?? null); e.target.value = ""; }}
-              className="hidden" />
-            {uploadedFile ? (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-900/10 text-sm">
-                <span className="text-brand-500 shrink-0">📎</span>
-                <span className="flex-1 truncate text-brand-700 dark:text-brand-400 text-xs">{uploadedFile.name}</span>
-                <button onClick={() => setUploadedFile(null)}
-                  className="text-brand-400 hover:text-red-500 transition-colors text-xs font-bold shrink-0">✕</button>
-              </div>
-            ) : (
-              <button onClick={() => lessonFileRef.current?.click()}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700 text-sm text-gray-500 dark:text-gray-400 hover:border-brand-300 dark:hover:border-brand-600 hover:text-brand-600 transition-colors">
-                <span>📎</span> Click to upload course material…
-              </button>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                Upload Material <span className="text-gray-400 font-normal">— optional (PDF, PPTX, DOCX, TXT)</span>
+              </label>
+              {/* Source toggle — only show "Course Materials" tab when a course is selected */}
+              {selectedCourseId && (
+                <div className="flex rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 text-[11px] font-medium">
+                  <button
+                    onClick={() => { setMaterialSource("upload"); setSelectedMaterialId(""); setUploadedFile(null); }}
+                    className={`px-2.5 py-1 transition-colors ${materialSource === "upload" ? "bg-brand-500 text-white" : "bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"}`}>
+                    📎 Upload New
+                  </button>
+                  <button
+                    onClick={() => setMaterialSource("course")}
+                    className={`px-2.5 py-1 border-l border-gray-200 dark:border-gray-700 transition-colors ${materialSource === "course" ? "bg-brand-500 text-white" : "bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"}`}>
+                    📚 Course PDFs
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Upload new file */}
+            {materialSource === "upload" && (
+              <>
+                <input ref={lessonFileRef} type="file"
+                  accept=".pdf,.pptx,.docx,.txt,.md"
+                  onChange={e => { setUploadedFile(e.target.files?.[0] ?? null); setSelectedMaterialId(""); e.target.value = ""; }}
+                  className="hidden" />
+                {uploadedFile && !selectedMaterialId ? (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-900/10 text-sm">
+                    <span className="text-brand-500 shrink-0">📎</span>
+                    <span className="flex-1 truncate text-brand-700 dark:text-brand-400 text-xs">{uploadedFile.name}</span>
+                    <button onClick={() => setUploadedFile(null)}
+                      className="text-brand-400 hover:text-red-500 transition-colors text-xs font-bold shrink-0">✕</button>
+                  </div>
+                ) : (
+                  <button onClick={() => lessonFileRef.current?.click()}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700 text-sm text-gray-500 dark:text-gray-400 hover:border-brand-300 dark:hover:border-brand-600 hover:text-brand-600 transition-colors">
+                    <span>📎</span> Click to upload course material…
+                  </button>
+                )}
+                {uploadedFile && !topic.trim() && !selectedMaterialId && (
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Topic will be auto-detected from the uploaded file.</p>
+                )}
+              </>
             )}
-            {uploadedFile && !topic.trim() && (
-              <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Topic will be auto-detected from the uploaded file.</p>
+
+            {/* Course PDFs picker */}
+            {materialSource === "course" && selectedCourseId && (
+              <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                {materialsLoading ? (
+                  <div className="flex items-center justify-center gap-2 py-6 text-sm text-gray-400">
+                    <Spinner /> Loading course materials…
+                  </div>
+                ) : courseMaterials.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <p className="text-sm text-gray-400 dark:text-gray-500">No PDF / document materials found in this course.</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-600 mt-1">Upload PDFs to your course modules and they will appear here.</p>
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-gray-100 dark:divide-gray-800 max-h-52 overflow-y-auto custom-scrollbar">
+                    {courseMaterials.map(mat => {
+                      const isSelected = selectedMaterialId === mat.id;
+                      return (
+                        <li key={mat.id}>
+                          <button
+                            onClick={() => selectCourseMaterial(mat)}
+                            disabled={fetchingMaterial}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors disabled:opacity-60 ${
+                              isSelected
+                                ? "bg-brand-50 dark:bg-brand-500/10"
+                                : "hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                            }`}
+                          >
+                            <span className={`shrink-0 text-base ${isSelected ? "text-brand-500" : "text-gray-400"}`}>
+                              {mat.type === "pdf" ? "📄" : "📝"}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-xs font-medium truncate ${isSelected ? "text-brand-700 dark:text-brand-400" : "text-gray-800 dark:text-gray-200"}`}>
+                                {mat.title}
+                              </p>
+                              <p className="text-[10px] text-gray-400 dark:text-gray-500 truncate">{mat.moduleName}</p>
+                            </div>
+                            {isSelected && fetchingMaterial ? (
+                              <Spinner />
+                            ) : isSelected ? (
+                              <span className="shrink-0 w-4 h-4 rounded-full bg-brand-500 flex items-center justify-center">
+                                <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                </svg>
+                              </span>
+                            ) : null}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                {/* Show selected file badge below the list */}
+                {uploadedFile && selectedMaterialId && (
+                  <div className="flex items-center gap-2 px-3 py-2 border-t border-brand-100 dark:border-brand-800 bg-brand-50 dark:bg-brand-900/10">
+                    <span className="text-brand-500 shrink-0 text-xs">✓ Loaded:</span>
+                    <span className="flex-1 truncate text-brand-700 dark:text-brand-400 text-xs">{uploadedFile.name}</span>
+                    <button onClick={() => { setUploadedFile(null); setSelectedMaterialId(""); }}
+                      className="text-brand-400 hover:text-red-500 transition-colors text-xs font-bold shrink-0">✕</button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
@@ -1268,6 +1432,7 @@ function LessonPlanTab({ instituteId }: { instituteId: string }) {
 function EssayGraderTab({ instituteId }: { instituteId: string }) {
   const [exams, setExams] = useState<Exam[]>([]);
   const [loadingExams, setLoadingExams] = useState(true);
+  const [fetchError, setFetchError] = useState("");
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [selectedQuestionId, setSelectedQuestionId] = useState("");
@@ -1278,7 +1443,21 @@ function EssayGraderTab({ instituteId }: { instituteId: string }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    examService.getMyExams(instituteId).then(e => { setExams(e); setLoadingExams(false); });
+    setLoadingExams(true);
+    setFetchError("");
+    // Try teacher's own exams first; if none, fall back to all institute exams
+    examService.getMyExams(instituteId)
+      .then(async (myExams) => {
+        if (myExams.length > 0) { setExams(myExams); return; }
+        // Fall back to all institute exams (useful when exams were created by admins)
+        const allExams = await examService.getAllExams(instituteId).catch(() => []);
+        setExams(allExams);
+      })
+      .catch(() => {
+        setFetchError("Failed to load exams. Please check your connection and try again.");
+        setExams([]);
+      })
+      .finally(() => setLoadingExams(false));
   }, [instituteId]);
 
   const essayQuestions = useMemo(() =>
@@ -1332,6 +1511,23 @@ function EssayGraderTab({ instituteId }: { instituteId: string }) {
   const gradeColor = { A: "text-green-600", B: "text-blue-600", C: "text-yellow-600", D: "text-orange-600", F: "text-red-600" };
 
   if (loadingExams) return <div className="p-12 text-center text-sm text-gray-400"><Spinner /> Loading exams…</div>;
+
+  if (fetchError) return (
+    <div className="p-12 flex flex-col items-center justify-center text-center gap-3">
+      <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+        <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+        </svg>
+      </div>
+      <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{fetchError}</p>
+      <button
+        onClick={() => { setFetchError(""); setLoadingExams(true); examService.getMyExams(instituteId).then(async e => { if (e.length > 0) { setExams(e); } else { const all = await examService.getAllExams(instituteId).catch(() => []); setExams(all); } }).catch(() => setFetchError("Failed to load exams. Please check your connection and try again.")).finally(() => setLoadingExams(false)); }}
+        className="px-4 py-2 text-sm font-medium rounded-lg bg-brand-500 text-white hover:bg-brand-600 transition-colors"
+      >
+        Retry
+      </button>
+    </div>
+  );
 
   return (
     <div className="p-6 space-y-5">
@@ -1471,10 +1667,33 @@ function EssayGraderTab({ instituteId }: { instituteId: string }) {
       )}
 
       {!selectedExam && (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          
-          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Select an exam with essay questions to begin</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">AI will analyze the student's answer and provide detailed feedback</p>
+        <div className="flex flex-col items-center justify-center py-16 text-center gap-2">
+          {exams.length === 0 ? (
+            <>
+              <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-1">
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">No exams found</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 max-w-xs">Create an exam with essay-type questions first, then return here to AI-grade student submissions.</p>
+            </>
+          ) : exams.every(e => !e.questions?.some(q => q.type === "essay")) ? (
+            <>
+              <div className="w-10 h-10 rounded-full bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center mb-1">
+                <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">No essay questions found</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 max-w-xs">Your exams don't have any essay-type questions. Add an essay question to an exam to enable AI grading.</p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Select an exam with essay questions to begin</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">AI will analyze the student's answer and provide detailed feedback</p>
+            </>
+          )}
         </div>
       )}
     </div>

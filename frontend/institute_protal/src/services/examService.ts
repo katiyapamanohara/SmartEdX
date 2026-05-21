@@ -149,6 +149,24 @@ class ExamService {
     return res.json();
   }
 
+  /** Persist a client-side auto-fail (e.g. 10-second leave-window countdown expired) */
+  async forceAutoFail(
+    instituteId: string,
+    examId: string,
+    reason: string,
+  ): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.base(instituteId)}/${examId}/force-auto-fail`, {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify({ reason }),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
   async reportIntegrityFlag(
     instituteId: string,
     examId: string,

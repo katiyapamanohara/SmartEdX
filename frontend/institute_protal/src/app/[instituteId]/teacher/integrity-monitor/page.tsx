@@ -285,9 +285,9 @@ export default function TeacherIntegrityMonitorPage() {
       {/* Header */}
       <div className="py-4 flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Integrity Monitor</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Exam Integrity Monitor</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Real-time academic integrity alerts and historical violation log
+            Real-time cheating alerts and violation history for your exams
           </p>
         </div>
         {/* Live indicator */}
@@ -330,7 +330,7 @@ export default function TeacherIntegrityMonitorPage() {
           { label: "Pending Review", value: loading ? "—" : pending, color: "text-amber-500" },
           { label: "Reviewed", value: loading ? "—" : reviewed, color: "text-green-500" },
         ].map((s) => (
-          <div key={s.label} className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/[0.03] p-5">
+          <div key={s.label} className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/3 p-5">
             <span className="text-xs text-gray-500 dark:text-gray-400">{s.label}</span>
             <p className={`mt-1 text-3xl font-bold ${s.color}`}>{s.value}</p>
           </div>
@@ -338,7 +338,7 @@ export default function TeacherIntegrityMonitorPage() {
       </div>
 
       {/* Flags table */}
-      <div className="overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.03]">
+      <div className="overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3">
         <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between flex-wrap gap-3">
           <h2 className="font-semibold text-gray-800 dark:text-white">Flagged Incidents</h2>
           <div className="flex items-center gap-2 flex-wrap">
