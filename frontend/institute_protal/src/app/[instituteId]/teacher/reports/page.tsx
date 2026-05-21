@@ -96,6 +96,178 @@ function downloadCSV(rows: string[][], filename: string) {
   URL.revokeObjectURL(url);
 }
 
+function printAllStudentsPDF(reports: StudentReport[], context: { institute: Institute | null; teacherName: string }, allCourses: Array<{id: string; name: string}>) {
+  const win = window.open("", "_blank");
+  if (!win) return;
+
+  const avgOverall = avg(reports.map((r) => r.overallAvg ?? NaN).filter((n) => !isNaN(n)));
+  const passCount = reports.filter((r) => (r.overallAvg ?? 0) >= 50).length;
+
+  const classTable = reports.map((r) => `
+    <tr>
+      <td>${r.name}</td>
+      <td>${r.email}</td>
+      <td>${r.overallAvg !== null ? r.overallAvg + "%" : "—"}</td>
+      <td>${grade(r.overallAvg)}</td>
+      <td class="status ${(r.overallAvg ?? 0) >= 50 ? 'pass' : r.overallAvg === null ? 'nodata' : 'risk'}">${(r.overallAvg ?? 0) >= 50 ? "Passing" : r.overallAvg === null ? "No Data" : "At Risk"}</td>
+      <td>${r.quizAvg !== null ? r.quizAvg + "%" : "—"}</td>
+      <td>${r.examAvg !== null ? r.examAvg + "%" : "—"}</td>
+    </tr>`).join("");
+
+  const courseList = allCourses.map(c => c.name).join(", ") || "—";
+  const statusBg = (avgOverall ?? 0) >= 70 ? "#10b981" : (avgOverall ?? 0) >= 50 ? "#f59e0b" : "#ef4444";
+
+  win.document.write(`<!DOCTYPE html><html><head><title>Class Report - ${context.institute?.name || "Institute"}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: #fff; color: #1f2937; line-height: 1.5;
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 40px 30px; }
+
+  .header {
+    border-bottom: 3px solid #3b82f6; padding-bottom: 24px; margin-bottom: 32px; display: flex; justify-content: space-between; align-items: flex-start;
+  }
+  .header-left { flex: 1; }
+  .institute-name { font-size: 28px; font-weight: 700; color: #3b82f6; margin-bottom: 4px; }
+  .report-title { font-size: 16px; color: #6b7280; font-weight: 500; }
+  .header-right { text-align: right; }
+  .generated-date { font-size: 12px; color: #9ca3af; }
+
+  .info-section {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 28px;
+    background: #f9fafb; padding: 20px; border-radius: 8px; border-left: 4px solid #3b82f6;
+  }
+  .info-group { }
+  .info-label { font-size: 12px; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .info-value { font-size: 15px; font-weight: 600; color: #111; margin-top: 4px; }
+
+  .summary-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px;
+  }
+  .summary-card {
+    background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 18px; text-align: center;
+  }
+  .summary-value { font-size: 28px; font-weight: 700; color: #3b82f6; }
+  .summary-label { font-size: 13px; color: #6b7280; margin-top: 6px; font-weight: 500; }
+
+  .status-badge {
+    display: inline-block; padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;
+    background: linear-gradient(135deg, ${statusBg} 0%, ${statusBg}dd 100%); color: white;
+  }
+
+  .section-header {
+    font-size: 16px; font-weight: 700; color: #111; margin: 28px 0 16px;
+    padding-bottom: 12px; border-bottom: 2px solid #e5e7eb;
+  }
+
+  .table-wrapper { margin-bottom: 24px; overflow-x: auto; }
+  table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+  }
+  th {
+    background: #f3f4f6; padding: 12px; text-align: left; border-bottom: 2px solid #d1d5db;
+    font-weight: 600; color: #374151;
+  }
+  td {
+    padding: 11px 12px; border-bottom: 1px solid #e5e7eb;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) { background: #fafafa; }
+
+  .status.pass { color: #059669; font-weight: 600; }
+  .status.risk { color: #dc2626; font-weight: 600; }
+  .status.nodata { color: #9ca3af; font-weight: 600; }
+
+  .footer {
+    margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb;
+    text-align: center; font-size: 12px; color: #9ca3af;
+  }
+
+  @media print {
+    body { margin: 0; padding: 0; }
+    .container { padding: 20px; }
+  }
+</style></head><body>
+<div class="container">
+  <div class="header">
+    <div class="header-left">
+      <div class="institute-name">${context.institute?.name || "Institute"}</div>
+      <div class="report-title">Class Performance Report</div>
+    </div>
+    <div class="header-right">
+      <div class="generated-date">${new Date().toLocaleString()}</div>
+    </div>
+  </div>
+
+  <div class="info-section">
+    <div class="info-group">
+      <div class="info-label">Instructor</div>
+      <div class="info-value">${context.teacherName || "—"}</div>
+    </div>
+    <div class="info-group">
+      <div class="info-label">Total Students</div>
+      <div class="info-value">${reports.length}</div>
+    </div>
+    <div class="info-group">
+      <div class="info-label">Courses</div>
+      <div class="info-value">${courseList}</div>
+    </div>
+    <div class="info-group">
+      <div class="info-label">Report Generated</div>
+      <div class="info-value">${new Date().toLocaleDateString()}</div>
+    </div>
+  </div>
+
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="summary-value">${reports.length}</div>
+      <div class="summary-label">Total Students</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-value">${avgOverall !== null ? avgOverall + "%" : "—"}</div>
+      <div class="summary-label">Class Average</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-value">${passCount}</div>
+      <div class="summary-label">Passing (≥50%)</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-value">${reports.length - passCount}</div>
+      <div class="summary-label">At Risk</div>
+    </div>
+  </div>
+
+  <div class="section-header">Student Performance Overview</div>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Student Name</th>
+          <th>Email</th>
+          <th>Overall %</th>
+          <th>Grade</th>
+          <th>Status</th>
+          <th>Quiz Avg</th>
+          <th>Exam Avg</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${classTable}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    <p>This is an official class performance report generated by ${context.institute?.name || "the institute"}.</p>
+  </div>
+</div>
+</body></html>`);
+  win.document.close();
+  win.print();
+}
+
 // ── PDF (print) download ──────────────────────────────────────────────────────
 
 interface PDFContext {
@@ -561,9 +733,21 @@ export default function TeacherReportsPage() {
             {loading ? "Loading…" : "Refresh"}
           </button>
           <button
+            onClick={() => printAllStudentsPDF(filtered, { institute, teacherName }, allCourses)}
+            disabled={loading || filtered.length === 0}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 transition-colors"
+            title="Export class report as PDF"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2m0 0v-8m0 8l-6-4m6 4l6-4" />
+            </svg>
+            Export PDF
+          </button>
+          <button
             onClick={exportAllCSV}
             disabled={loading || filtered.length === 0}
             className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
+            title="Export class report as CSV"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
