@@ -8,6 +8,7 @@ import { instituteService } from "@/services/instituteService";
 import { useInstituteFeatures } from "@/hooks/useInstituteFeatures";
 import { useFeatures } from "@/context/InstituteFeatureContext";
 import { useVoiceAgent } from "@/context/VoiceAgentContext";
+import { openPipWindowForNextSession } from "@/components/voice/pipBridge";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -894,21 +895,24 @@ function AIChatTab({ instituteId, selectedCourse, onCourseSelect }: {
               disabled={chatLoading}
               className="flex-1 resize-none bg-transparent text-sm text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 outline-none leading-relaxed disabled:opacity-50 max-h-[120px]" />
             <button
-              onClick={() =>
-                input.trim() || pendingFile
-                  ? sendMessage(input, pendingFile)
-                  : voiceEnabled ? startSession({
-                      isDark,
-                      instituteLogo: null,
-                      studentContext: { selected_course: selectedCourse.name },
-                      course: { id: selectedCourse.id, name: selectedCourse.name, code: "" } as any,
-                      instituteId,
-                      chatId:   activeChatId ?? undefined,
-                      userId:   authService.getUser()?.id,
-                      userRole: "teacher",
-                      label: "Teacher Assistant",
-                    }) : undefined
-              }
+              onClick={async () => {
+                if (input.trim() || pendingFile) {
+                  sendMessage(input, pendingFile);
+                } else if (voiceEnabled) {
+                  await openPipWindowForNextSession();
+                  startSession({
+                    isDark,
+                    instituteLogo: null,
+                    studentContext: { selected_course: selectedCourse.name },
+                    course: { id: selectedCourse.id, name: selectedCourse.name, code: "" } as any,
+                    instituteId,
+                    chatId:   activeChatId ?? undefined,
+                    userId:   authService.getUser()?.id,
+                    userRole: "teacher",
+                    label: "Teacher Assistant",
+                  });
+                }
+              }}
               disabled={chatLoading || (!input.trim() && !pendingFile && !voiceEnabled)}
               title={!voiceEnabled && !input.trim() && !pendingFile ? "Voice Agent not enabled" : undefined}
               className="shrink-0 w-9 h-9 rounded-full bg-gray-700 dark:bg-gray-600 hover:bg-gray-800 dark:hover:bg-gray-500 text-white flex items-center justify-center transition-all hover:scale-105 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"

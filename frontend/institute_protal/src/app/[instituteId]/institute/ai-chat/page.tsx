@@ -8,6 +8,7 @@ import { instituteService, Course } from "@/services/instituteService";
 import { useInstituteFeatures } from "@/hooks/useInstituteFeatures";
 import { useFeatures } from "@/context/InstituteFeatureContext";
 import { useVoiceAgent } from "@/context/VoiceAgentContext";
+import { openPipWindowForNextSession } from "@/components/voice/pipBridge";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -478,8 +479,14 @@ export default function InstituteAiChatPage() {
     e.target.value = "";
   }
 
-  function openVoiceMode() {
+  async function openVoiceMode() {
     if (!activeChatId) return;
+
+    // Open Document PiP NOW — we still have the user gesture from the button click.
+    // VoiceModal will pick this window up via pipBridge and render straight into it,
+    // so the widget stays visible even when the user switches to another browser tab.
+    await openPipWindowForNextSession();
+
     const wsBase     = process.env.NEXT_PUBLIC_VOICE_AGENT_WS_URL ?? "ws://localhost:5001/voice-agent";
     const voiceUser  = authService.getUserId() ?? "instructor";
     const voiceSid   = `iva-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

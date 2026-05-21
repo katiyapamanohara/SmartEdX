@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Course, instituteService } from "@/services/instituteService";
 import { authService } from "@/services/authService";
+import { takePipWindow } from "@/components/voice/pipBridge";
 
 export interface StudentContext {
   student_name?: string;
@@ -150,25 +151,34 @@ export default function VoiceModal({
   }, []);
 
   // ── Activate PiP on forcePip ──────────────────────────────────────────────
-  // NOTE: documentPictureInPicture.requestWindow() requires a user gesture.
-  // We cannot call it from a useEffect (no gesture). Instead we show a hint
-  // banner so the user can click to float the widget above other apps.
+  // Claim the Document PiP window pre-opened by the button-click handler via
+  // pipBridge (user gesture was still active then).  If nothing is in the
+  // bridge, fall back to the hint banner so the user can pin manually.
   useEffect(() => {
     if (!forcePip) return;
     setPipMode(true);
-    // If system PiP is supported but not yet open, nudge the user to click
-    if ((window as any).documentPictureInPicture && !sysPipWindowRef.current) {
+
+    const bridgeWin = takePipWindow();
+    if (bridgeWin && !bridgeWin.closed) {
+      bridgeWin.addEventListener("pagehide", () => {
+        sysPipWindowRef.current = null;
+        setSysPipWindow(null);
+        sysPipAutoOpenedRef.current = false;
+      });
+      sysPipWindowRef.current = bridgeWin;
+      setSysPipWindow(bridgeWin);
+      sysPipAutoOpenedRef.current = true;
+    } else {
       setShowPipHint(true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forcePip]);
 
-  // ── When session connects in PiP mode, re-surface hint if needed ──────────
+  // ── Re-surface hint when WS connects (if bridge window wasn't available) ──
   useEffect(() => {
-    if (!pipMode || !supportsDocPip || sysPipWindowRef.current || step !== "session") return;
-    // Show hint so user can click to open OS-level window (requires gesture)
+    if (!pipMode || sysPipWindowRef.current || step !== "session") return;
     setShowPipHint(true);
-  }, [step, pipMode, supportsDocPip]);
+  }, [step, pipMode]);
 
   // ── Resume audio contexts when user returns to this tab ───────────────────
   useEffect(() => {
@@ -935,39 +945,49 @@ export default function VoiceModal({
             userSelect: "none",
           }}
         >
-          {/* "Float above other apps" banner — shown when OS-level PiP is available but not yet open */}
-          {showPipHint && supportsDocPip && !sysPipWindow && step === "session" && (
-            <button
-              onClick={async () => { setShowPipHint(false); try { await openSystemPip(); } catch {} }}
-              style={{
-                width: "100%",
-                padding: "9px 12px",
-                background: isDark ? "rgba(59,130,246,0.2)" : "rgba(37,99,235,0.1)",
-                borderBottom: `1px solid ${isDark ? "rgba(59,130,246,0.3)" : "rgba(37,99,235,0.2)"}`,
-                display: "flex",
-                alignItems: "center",
-                gap: 7,
-                border: "none",
-                cursor: "pointer",
-                textAlign: "left",
-              }}
-            >
-              <svg width="14" height="14" fill="none" stroke={isDark ? "#93c5fd" : "#2563eb"} strokeWidth={2} viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
-                <rect x="2" y="3" width="20" height="14" rx="2" />
-                <rect x="12.5" y="9.5" width="7.5" height="5" rx="1" fill={isDark ? "#93c5fd" : "#2563eb"} opacity="0.3" />
-                <rect x="12.5" y="9.5" width="7.5" height="5" rx="1" />
-              </svg>
-              <span style={{ flex: 1, fontSize: 10, fontWeight: 600, color: isDark ? "#93c5fd" : "#1d4ed8", lineHeight: 1.4 }}>
-                Click to stay visible above other apps
-              </span>
-              <span
-                role="button"
-                onClick={e => { e.stopPropagation(); setShowPipHint(false); }}
-                style={{ color: isDark ? "#6b7280" : "#9ca3af", display: "flex", alignItems: "center", padding: 2 }}
+          {/* "Stay visible" banner — click to pin (OS PiP) or warn if browser unsupported */}
+          {showPipHint && !sysPipWindow && step === "session" && (
+            supportsDocPip ? (
+              <button
+                onClick={async () => { setShowPipHint(false); try { await openSystemPip(); } catch {} }}
+                style={{
+                  width: "100%",
+                  padding: "9px 12px",
+                  background: isDark ? "rgba(59,130,246,0.2)" : "rgba(37,99,235,0.1)",
+                  borderBottom: `1px solid ${isDark ? "rgba(59,130,246,0.3)" : "rgba(37,99,235,0.2)"}`,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 7,
+                  border: "none",
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
               >
-                <svg width="9" height="9" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-              </span>
-            </button>
+                <svg width="14" height="14" fill="none" stroke={isDark ? "#93c5fd" : "#2563eb"} strokeWidth={2} viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+                  <rect x="2" y="3" width="20" height="14" rx="2" />
+                  <rect x="12.5" y="9.5" width="7.5" height="5" rx="1" fill={isDark ? "#93c5fd" : "#2563eb"} opacity="0.3" />
+                  <rect x="12.5" y="9.5" width="7.5" height="5" rx="1" />
+                </svg>
+                <span style={{ flex: 1, fontSize: 10, fontWeight: 600, color: isDark ? "#93c5fd" : "#1d4ed8", lineHeight: 1.4 }}>
+                  Hides when you switch apps — click to float above all
+                </span>
+                <span
+                  role="button"
+                  onClick={e => { e.stopPropagation(); setShowPipHint(false); }}
+                  style={{ color: isDark ? "#6b7280" : "#9ca3af", display: "flex", alignItems: "center", padding: 2 }}
+                >
+                  <svg width="9" height="9" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                </span>
+              </button>
+            ) : (
+              <div style={{ padding: "8px 12px", background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, display: "flex", alignItems: "center", gap: 6 }}>
+                <svg width="12" height="12" fill="none" stroke={isDark ? "#facc15" : "#d97706"} strokeWidth={2} viewBox="0 0 24 24" style={{ flexShrink: 0 }}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"/></svg>
+                <span style={{ fontSize: 10, color: isDark ? "#fbbf24" : "#92400e", lineHeight: 1.4 }}>Hides when switching tabs — use Chrome 116+ to pin</span>
+                <span role="button" onClick={() => setShowPipHint(false)} style={{ marginLeft: "auto", color: isDark ? "#6b7280" : "#9ca3af", display: "flex", alignItems: "center", padding: 2, cursor: "pointer" }}>
+                  <svg width="9" height="9" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+                </span>
+              </div>
+            )
           )}
           {/* Drag handle */}
           <div
@@ -1220,7 +1240,13 @@ export default function VoiceModal({
               // Try to open OS-level floating window immediately while we still
               // have the user-gesture — this window stays on top of ALL apps.
               if (supportsDocPip && !sysPipWindowRef.current) {
-                try { await openSystemPip(); } catch {}
+                await openSystemPip();
+                // openSystemPip swallows its own errors; if the window still
+                // isn't open (user cancelled) surface the pin-hint banner.
+                if (!sysPipWindowRef.current) setShowPipHint(true);
+              } else if (!sysPipWindowRef.current) {
+                // Browser doesn't support Document PiP — show the warning hint.
+                setShowPipHint(true);
               }
             }}
             className={`w-16 h-16 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95 ${isDark ? "text-white" : "text-gray-900"}`}

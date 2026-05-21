@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Course, instituteService } from "@/services/instituteService";
 import { authService } from "@/services/authService";
+import { takePipWindow } from "@/components/voice/pipBridge";
 
 export interface StudentContext {
   student_name?: string;
@@ -101,6 +102,7 @@ export default function VoiceModal({
   // PiP — disabled in assessment mode
   const [pipMode, setPipMode]   = useState(false);
   const [pipPos, setPipPos]     = useState({ x: 0, y: 0 });
+  const [showPipHint, setShowPipHint] = useState(false);
   const [sysPipWindow, setSysPipWindow] = useState<Window | null>(null);
   const pipDragRef              = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
   const sysPipWindowRef         = useRef<Window | null>(null);
@@ -649,21 +651,47 @@ export default function VoiceModal({
     return () => document.removeEventListener("visibilitychange", h);
   }, [isAssessment]);
 
-  // ForcePip (chat mode)
+  // ForcePip (chat mode) — switch to PiP layout.
+  // Claim any pre-opened Document PiP window from the bridge (opened by the
+  // button-click handler while the user gesture was still active).  If none,
+  // fall back to the hint banner so the user can pin manually.
   useEffect(() => {
     if (!forcePip || isAssessment) return;
     setPipMode(true);
-    if ((window as any).documentPictureInPicture && !sysPipWindowRef.current) openSystemPip().catch(() => {});
+
+    const bridgeWin = takePipWindow();
+    if (bridgeWin && !bridgeWin.closed) {
+      // Window was already opened by the button click — use it directly.
+      bridgeWin.addEventListener("pagehide", () => {
+        sysPipWindowRef.current = null;
+        setSysPipWindow(null);
+        sysPipAutoOpenedRef.current = false;
+      });
+      sysPipWindowRef.current = bridgeWin;
+      setSysPipWindow(bridgeWin);
+      sysPipAutoOpenedRef.current = true;
+    } else if ((window as any).documentPictureInPicture) {
+      // No pre-opened window — show hint so user can click to pin.
+      setShowPipHint(true);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forcePip, isAssessment]);
 
-  // Auto system PiP
+  // Re-surface pin-hint once WS connects (in case bridge window wasn't available)
   useEffect(() => {
-    if (!pipMode || !supportsDocPip || sysPipWindowRef.current || step !== "session" || sysPipAutoOpenedRef.current || isAssessment) return;
-    sysPipAutoOpenedRef.current = true;
-    openSystemPip().catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, pipMode, supportsDocPip, isAssessment]);
+    if (!pipMode || sysPipWindowRef.current || step !== "session" || isAssessment) return;
+    setShowPipHint(true);
+  }, [step, pipMode, isAssessment]);
+
+  // Show pin-hint when user switches to another tab (so it's ready when they return)
+  useEffect(() => {
+    if (!pipMode || isAssessment) return;
+    function onVisibilityChange() {
+      if (document.visibilityState === "hidden" && !sysPipWindowRef.current) setShowPipHint(true);
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [pipMode, isAssessment]);
 
   // ── PiP helpers ────────────────────────────────────────────────────────────
   async function openSystemPip() {
@@ -1023,12 +1051,38 @@ export default function VoiceModal({
         )}
         {!sysPipWindow && (
           <div style={{ position: "fixed", left: pipPos.x, top: pipPos.y, zIndex: 300000, width: 204, background: isDark ? "#1f2937" : "#fff", borderRadius: 20, boxShadow: "0 25px 60px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06)", overflow: "hidden", userSelect: "none" }}>
+            {/* Drag handle */}
             <div onMouseDown={handlePipDragStart} style={{ cursor: "grab", background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)", padding: "9px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${bdr}` }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 3, marginRight: 8, opacity: 0.4 }}>{[0,1,2].map((i)=><div key={i} style={{ display:"flex",gap:3 }}><div style={{ width:3,height:3,borderRadius:"50%",background:isDark?"#fff":"#000" }}/><div style={{ width:3,height:3,borderRadius:"50%",background:isDark?"#fff":"#000" }}/></div>)}</div>
               <span style={{ flex: 1, fontSize: 11, fontWeight: 600, color: c2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{selectedCourse?.name ?? "Voice Agent"}</span>
-              {supportsDocPip && step === "session" && <button onClick={openSystemPip} title="Float" style={{ marginLeft: 4, padding: 4, borderRadius: 6, border: "none", background: "rgba(59,130,246,0.15)", cursor: "pointer", color: isDark ? "#93c5fd" : "#2563eb", display: "flex", alignItems: "center" }}><svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><rect x="12.5" y="9.5" width="7.5" height="5" rx="1" fill="currentColor" opacity="0.3"/><rect x="12.5" y="9.5" width="7.5" height="5" rx="1"/></svg></button>}
+              {supportsDocPip && step === "session" && <button onClick={openSystemPip} title="Float above other apps" style={{ marginLeft: 4, padding: 4, borderRadius: 6, border: "none", background: "rgba(59,130,246,0.15)", cursor: "pointer", color: isDark ? "#93c5fd" : "#2563eb", display: "flex", alignItems: "center" }}><svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><rect x="12.5" y="9.5" width="7.5" height="5" rx="1" fill="currentColor" opacity="0.3"/><rect x="12.5" y="9.5" width="7.5" height="5" rx="1"/></svg></button>}
               <button onClick={() => setPipMode(false)} title="Expand" style={{ marginLeft: 4, padding: 4, borderRadius: 6, border: "none", background: "none", cursor: "pointer", color: c2, display: "flex", alignItems: "center" }}><svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15"/></svg></button>
             </div>
+
+            {/* "Stay visible above other apps" hint — shown until user pins or dismisses */}
+            {showPipHint && step === "session" && (
+              supportsDocPip ? (
+                <button
+                  onClick={async () => { setShowPipHint(false); try { await openSystemPip(); } catch {} }}
+                  style={{ width: "100%", padding: "9px 12px", background: isDark ? "rgba(59,130,246,0.2)" : "rgba(37,99,235,0.1)", borderBottom: `1px solid ${isDark ? "rgba(59,130,246,0.3)" : "rgba(37,99,235,0.2)"}`, display: "flex", alignItems: "center", gap: 7, border: "none", cursor: "pointer", textAlign: "left" }}
+                >
+                  <svg width="14" height="14" fill="none" stroke={isDark ? "#93c5fd" : "#2563eb"} strokeWidth={2} viewBox="0 0 24 24" style={{ flexShrink: 0 }}><rect x="2" y="3" width="20" height="14" rx="2"/><rect x="12.5" y="9.5" width="7.5" height="5" rx="1" fill={isDark ? "#93c5fd" : "#2563eb"} opacity="0.3"/><rect x="12.5" y="9.5" width="7.5" height="5" rx="1"/></svg>
+                  <span style={{ flex: 1, fontSize: 10, fontWeight: 600, color: isDark ? "#93c5fd" : "#1d4ed8", lineHeight: 1.4 }}>Hides when you switch apps — click to float above all</span>
+                  <span role="button" onClick={e => { e.stopPropagation(); setShowPipHint(false); }} style={{ color: c2, display: "flex", alignItems: "center", padding: 2 }}>
+                    <svg width="9" height="9" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+                  </span>
+                </button>
+              ) : (
+                <div style={{ padding: "8px 12px", background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", borderBottom: `1px solid ${bdr}`, display: "flex", alignItems: "center", gap: 6 }}>
+                  <svg width="12" height="12" fill="none" stroke={isDark ? "#facc15" : "#d97706"} strokeWidth={2} viewBox="0 0 24 24" style={{ flexShrink: 0 }}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"/></svg>
+                  <span style={{ fontSize: 10, color: isDark ? "#fbbf24" : "#92400e", lineHeight: 1.4 }}>Hides when switching tabs — use Chrome 116+ to pin</span>
+                  <span role="button" onClick={() => setShowPipHint(false)} style={{ marginLeft: "auto", color: c2, display: "flex", alignItems: "center", padding: 2, cursor: "pointer" }}>
+                    <svg width="9" height="9" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+                  </span>
+                </div>
+              )
+            )}
+
             {sharedPipBody(false)}
           </div>
         )}
@@ -1073,7 +1127,7 @@ export default function VoiceModal({
           </button>
         )}
         {step === "session" && (
-          <button onClick={() => { setPipMode(true); if ((window as any).documentPictureInPicture && !sysPipWindowRef.current) openSystemPip().catch(() => {}); }}
+          <button onClick={async () => { setPipMode(true); if ((window as any).documentPictureInPicture && !sysPipWindowRef.current) { await openSystemPip(); if (!sysPipWindowRef.current) setShowPipHint(true); } else if (!sysPipWindowRef.current) { setShowPipHint(true); } }}
             className="w-16 h-16 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95" style={{ background: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)", backdropFilter: "blur(12px)" }}>
             <svg className="w-6 h-6" style={{ color: c1 }} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" strokeLinecap="round" strokeLinejoin="round"/><rect x="12.5" y="10" width="7" height="4.5" rx="1" fill="currentColor" opacity="0.25"/><rect x="12.5" y="10" width="7" height="4.5" rx="1"/></svg>
           </button>

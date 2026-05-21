@@ -27,6 +27,16 @@ import { InstituteRole } from '../../modules/auth/entities/institute-role.entity
         ssl: configService.get<string>('DB_SSL') === 'true'
           ? { rejectUnauthorized: false }
           : false,
+        retryAttempts: 5,
+        retryDelay: 3000,
+        connectTimeoutMS: 15000,
+        extra: {
+          connectionTimeoutMillis: 15000,
+          idleTimeoutMillis: 30000,
+          max: 10,
+          keepAlive: true,
+          keepAliveInitialDelayMillis: 10000,
+        },
       }),
       inject: [ConfigService],
     }),
