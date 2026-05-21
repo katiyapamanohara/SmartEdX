@@ -22,11 +22,21 @@ export class LiveClassService {
     teacherId: string,
     dto: CreateLiveSessionDto,
   ): Promise<LiveSession> {
+    let courseName: string | undefined;
+
+    if (dto.courseId) {
+      const course = await this.courseRepo.findOne(dto.courseId);
+      if (!course) throw new NotFoundException('Course not found');
+      if (course.instituteId !== instituteId)
+        throw new ForbiddenException('Course does not belong to this institute');
+      courseName = course.name;
+    }
+
     return this.liveSessionRepo.create({
       title: dto.title,
       description: dto.description,
       courseId: dto.courseId,
-      courseName: dto.courseName,
+      courseName,
       teacherId,
       instituteId,
       status: LiveSessionStatus.SCHEDULED,
@@ -133,6 +143,40 @@ export class LiveClassService {
 
     await this.liveSessionRepo.delete(sessionId);
     return { success: true };
+  }
+
+  async updateSession(
+    sessionId: string,
+    teacherId: string,
+    instituteId: string,
+    dto: CreateLiveSessionDto,
+  ): Promise<LiveSession> {
+    const session = await this.liveSessionRepo.findWithDetails(sessionId);
+    if (!session) throw new NotFoundException('Session not found');
+    if (session.teacherId !== teacherId)
+      throw new ForbiddenException('Not your session');
+    if (session.status === LiveSessionStatus.LIVE)
+      throw new ForbiddenException('Cannot edit a live session');
+
+    let courseName: string | undefined;
+
+    if (dto.courseId) {
+      const course = await this.courseRepo.findOne(dto.courseId);
+      if (!course) throw new NotFoundException('Course not found');
+      if (course.instituteId !== instituteId)
+        throw new ForbiddenException('Course does not belong to this institute');
+      courseName = course.name;
+    }
+
+    await this.liveSessionRepo.update(sessionId, {
+      title: dto.title,
+      description: dto.description,
+      courseId: dto.courseId,
+      courseName,
+      scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : undefined,
+    });
+
+    return this.getSession(sessionId);
   }
 
   async joinSession(sessionId: string, userId: string, instituteId: string) {

@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Body,
   Param,
@@ -127,6 +128,22 @@ export class LiveClassController {
     @CurrentUser('userId') userId: string,
   ) {
     return this.liveClassService.leaveSession(sessionId, userId);
+  }
+
+  @Patch(':sessionId')
+  @ApiOperation({ summary: 'Update a scheduled session (teacher)' })
+  async updateSession(
+    @Param('id') instituteId: string,
+    @Param('sessionId') sessionId: string,
+    @CurrentUser('userId') teacherId: string,
+    @Body() dto: CreateLiveSessionDto,
+  ) {
+    return this.liveClassService.updateSession(
+      sessionId,
+      teacherId,
+      instituteId,
+      dto,
+    );
   }
 
   @Delete(':sessionId')

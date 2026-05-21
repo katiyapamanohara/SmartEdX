@@ -13,10 +13,6 @@ export class CreateLiveSessionDto {
   courseId?: string;
 
   @IsOptional()
-  @IsString()
-  courseName?: string;
-
-  @IsOptional()
   @IsDateString()
   scheduledAt?: string;
 }
