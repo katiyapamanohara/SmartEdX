@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { instituteService } from "@/services/instituteService";
 import {
   FiMic, FiMicOff, FiX, FiAward, FiAlertCircle,
-  FiVolume2, FiLoader, FiWifi, FiWifiOff,
+  FiVolume2, FiLoader, FiWifi, FiWifiOff, FiMonitor,
 } from "react-icons/fi";
 import { authService } from "@/services/authService";
 
@@ -66,7 +66,6 @@ function float32ToInt16(buffer: Float32Array): ArrayBuffer {
 
 /** Decode base64 (standard or URL-safe) into an ArrayBuffer. */
 function base64ToArrayBuffer(b64: string): ArrayBuffer {
-  // Normalize URL-safe base64 → standard, then fix padding
   const std = b64.replace(/-/g, "+").replace(/_/g, "/");
   const padded = std + "=".repeat((4 - (std.length % 4)) % 4);
   const binary = atob(padded);
@@ -154,7 +153,7 @@ function Avatar({ state }: { state: AvatarState }) {
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
-type Step = "intro" | "connecting" | "session" | "evaluating" | "results" | "error";
+type Step = "screenshare" | "intro" | "connecting" | "session" | "evaluating" | "results" | "error" | "autofailed";
 
 export default function VoiceAssessmentPlayer({
   isOpen, onClose, assessmentData, onCompleted,
@@ -162,21 +161,27 @@ export default function VoiceAssessmentPlayer({
   const params = useParams();
   const instituteId = (params?.instituteId as string) ?? "";
 
-  const [step, setStep] = useState<Step>("intro");
+  const [step, setStep] = useState<Step>("screenshare");
   const [avatarState, setAvatarState] = useState<AvatarState>("idle");
   const [micActive, setMicActive] = useState(false);
   const [evalResult, setEvalResult] = useState<EvalResult | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
   const [statusText, setStatusText] = useState("");
-  const [audioChunks, setAudioChunks] = useState(0);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
+  // Screen share
+  const [screenShareError, setScreenShareError] = useState("");
+  const [screenShareStatus, setScreenShareStatus] = useState<"idle" | "sharing" | "error">("idle");
+  const screenStreamRef = useRef<MediaStream | null>(null);
+
+  // Proctoring state
+  const [violationWarning, setViolationWarning] = useState("");
+  const [leaveCountdown, setLeaveCountdown] = useState<number | null>(null);
+  const leaveViolationsRef = useRef(0);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoFailedRef = useRef(false);
+
   // WebSocket + WebAudio refs
-  // playCtxRef:       dedicated playback context (created on button click, always running)
-  // micCtxRef:        mic capture context (16 kHz, created after getUserMedia)
-  // activeSourcesRef: all scheduled AudioBufferSourceNodes — stopped on barge-in
-  // isAISpeakingRef:  true while AI audio is queued/playing — gates local VAD barge-in
-  // playVersionRef:   incremented on interruption to discard in-flight decodeAudioData
   const wsRef             = useRef<WebSocket | null>(null);
   const playCtxRef        = useRef<AudioContext | null>(null);
   const micCtxRef         = useRef<AudioContext | null>(null);
@@ -187,17 +192,68 @@ export default function VoiceAssessmentPlayer({
   const activeSourcesRef  = useRef<AudioBufferSourceNode[]>([]);
   const isAISpeakingRef   = useRef(false);
   const playVersionRef    = useRef(0);
-  // Stable ref so onaudioprocess closure can call stopAllAudio without stale capture
   const stopAllAudioRef   = useRef<() => void>(() => {});
-  // True once an evaluation result has been received — prevents ws.onclose from
-  // showing an error when the session ends normally after evaluation.
   const hasResultRef      = useRef(false);
 
-  // ── Stop all queued/playing AI audio (barge-in or interruption) ─────────────
+  // ── Submit zero score on cheating ────────────────────────────────────────────
+  const submitZeroScore = useCallback(async () => {
+    if (!assessmentData?.id || !instituteId) return;
+    const totalMarks = assessmentData.questions.reduce((s, q) => s + q.marks, 0);
+    try {
+      await instituteService.submitVoiceAssessmentResult(instituteId, assessmentData.id, {
+        score: 0,
+        voiceResult: {
+          totalScore: 0,
+          totalMarks,
+          grade: "F",
+          passed: false,
+          overallFeedback: "Assessment automatically failed: cheating violation detected during the session.",
+          questionResults: assessmentData.questions.map((q) => ({
+            questionId: q.id,
+            question: q.question,
+            studentAnswer: "",
+            expectedAnswer: q.expected_answer,
+            score: 0,
+            marksAvailable: q.marks,
+            percentage: 0,
+            feedback: "Not evaluated — session terminated due to integrity violation.",
+          })),
+        },
+      });
+    } catch { /* silent — already shown auto-fail UI */ }
+  }, [assessmentData, instituteId]);
+
+  // ── Trigger auto-fail ────────────────────────────────────────────────────────
+  const triggerAutoFail = useCallback(async () => {
+    if (autoFailedRef.current) return;
+    autoFailedRef.current = true;
+
+    // Stop mic & WS
+    processorRef.current?.disconnect();
+    processorRef.current = null;
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    micCtxRef.current?.close().catch(() => {});
+    micCtxRef.current = null;
+    playVersionRef.current += 1;
+    for (const src of activeSourcesRef.current) { try { src.stop(0); } catch (_) {} }
+    activeSourcesRef.current = [];
+    if (wsRef.current && wsRef.current.readyState <= WebSocket.OPEN) wsRef.current.close();
+    wsRef.current = null;
+    screenStreamRef.current?.getTracks().forEach((t) => t.stop());
+
+    setStep("autofailed");
+    setAvatarState("idle");
+    setMicActive(false);
+
+    await submitZeroScore();
+  }, [submitZeroScore]);
+
+  // ── Stop all queued/playing AI audio ────────────────────────────────────────
   const stopAllAudio = useCallback(() => {
-    playVersionRef.current += 1;                       // invalidate in-flight decodes
+    playVersionRef.current += 1;
     for (const src of activeSourcesRef.current) {
-      try { src.stop(0); } catch (_) {}                // safe even if already ended
+      try { src.stop(0); } catch (_) {}
     }
     activeSourcesRef.current = [];
     const ctx = playCtxRef.current;
@@ -206,11 +262,9 @@ export default function VoiceAssessmentPlayer({
     setAvatarState((prev) => (prev === "speaking" ? "listening" : prev));
   }, []);
 
-  // Keep stopAllAudioRef current so onaudioprocess closure can call it without
-  // capturing a stale reference (onaudioprocess is created once in ws.onopen).
   stopAllAudioRef.current = stopAllAudio;
 
-  // ── Stop mic only (keep WS open) ─────────────────────────────────────────────
+  // ── Stop mic only ────────────────────────────────────────────────────────────
   const stopMic = useCallback(() => {
     processorRef.current?.disconnect();
     processorRef.current = null;
@@ -224,17 +278,24 @@ export default function VoiceAssessmentPlayer({
   // ── Reset on open/close ──────────────────────────────────────────────────────
   useEffect(() => {
     if (isOpen && assessmentData) {
-      setStep("intro");
+      setStep("screenshare");
       setAvatarState("idle");
       setMicActive(false);
       setEvalResult(null);
       setErrorMsg("");
       setStatusText("");
+      setScreenShareError("");
+      setScreenShareStatus("idle");
+      setViolationWarning("");
+      setLeaveCountdown(null);
+      leaveViolationsRef.current = 0;
+      autoFailedRef.current = false;
       hasResultRef.current = false;
     }
     if (!isOpen) {
       disconnect();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, assessmentData?.id]);
 
   // ── Cleanup on unmount ───────────────────────────────────────────────────────
@@ -242,7 +303,6 @@ export default function VoiceAssessmentPlayer({
 
   // ── Disconnect helper ────────────────────────────────────────────────────────
   const disconnect = useCallback(() => {
-    // Stop any buffered AI audio first
     playVersionRef.current += 1;
     for (const src of activeSourcesRef.current) { try { src.stop(0); } catch (_) {} }
     activeSourcesRef.current = [];
@@ -256,14 +316,135 @@ export default function VoiceAssessmentPlayer({
     micCtxRef.current = null;
     playCtxRef.current?.close().catch(() => {});
     playCtxRef.current = null;
-    if (wsRef.current && wsRef.current.readyState <= WebSocket.OPEN) {
-      wsRef.current.close();
-    }
+    if (wsRef.current && wsRef.current.readyState <= WebSocket.OPEN) wsRef.current.close();
     wsRef.current = null;
     nextPlayTimeRef.current = 0;
-    setAudioChunks(0);
     setMicActive(false);
+    screenStreamRef.current?.getTracks().forEach((t) => t.stop());
+    screenStreamRef.current = null;
   }, []);
+
+  // ── Screen share liveness + tab-switch proctoring (active during session) ────
+  useEffect(() => {
+    if (step !== "session") return;
+
+    // 1. Screen share liveness — check every 5 s
+    const livenessCheck = setInterval(() => {
+      const stream = screenStreamRef.current;
+      if (!stream) {
+        triggerAutoFail();
+        return;
+      }
+      const allEnded = stream.getTracks().every((t) => t.readyState === "ended");
+      if (allEnded) {
+        triggerAutoFail();
+      }
+    }, 5_000);
+
+    // 2. Tab / window switch — countdown + auto-fail
+    const COUNTDOWN_SECS = 10;
+
+    const startCountdown = () => {
+      if (countdownRef.current || autoFailedRef.current) return;
+      setLeaveCountdown(COUNTDOWN_SECS);
+      countdownRef.current = setInterval(() => {
+        setLeaveCountdown((prev) => {
+          if (prev === null || prev <= 1) {
+            clearInterval(countdownRef.current!);
+            countdownRef.current = null;
+            if (!autoFailedRef.current) triggerAutoFail();
+            return null;
+          }
+          return prev - 1;
+        });
+      }, 1_000);
+    };
+
+    const clearCountdown = () => {
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+        setLeaveCountdown(null);
+        leaveViolationsRef.current += 1;
+        const n = leaveViolationsRef.current;
+        if (n >= 2 && !autoFailedRef.current) {
+          triggerAutoFail();
+        } else {
+          setViolationWarning(
+            `⚠️ Violation #${n}: You left the assessment window. ${
+              n >= 1
+                ? "Leave again and your assessment will be TERMINATED immediately."
+                : "FINAL WARNING."
+            }`
+          );
+          setTimeout(() => setViolationWarning(""), 9_000);
+        }
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") startCountdown();
+      else clearCountdown();
+    };
+
+    const onBlur = () => startCountdown();
+    const onFocus = () => clearCountdown();
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      clearInterval(livenessCheck);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
+    };
+  }, [step, triggerAutoFail]);
+
+  // ── Request screen share ─────────────────────────────────────────────────────
+  const requestScreenShare = useCallback(async () => {
+    setScreenShareError("");
+    setScreenShareStatus("idle");
+    try {
+      const stream = await (navigator.mediaDevices as any).getDisplayMedia({
+        video: { cursor: "always", displaySurface: "monitor" },
+        audio: false,
+      });
+
+      const track = stream.getVideoTracks()[0];
+      const surface = (track?.getSettings() as MediaTrackSettings & { displaySurface?: string })?.displaySurface;
+
+      if (surface && surface !== "monitor") {
+        stream.getTracks().forEach((t: MediaStreamTrack) => t.stop());
+        const what = surface === "browser" ? "a browser tab" : "an application window";
+        setScreenShareError(
+          `You shared ${what} instead of your entire screen. ` +
+          "Please click 'Share Screen & Continue', open the 'Entire Screen' tab in the picker, and select your monitor."
+        );
+        setScreenShareStatus("error");
+        return;
+      }
+
+      // Watch for the student stopping the share externally (clicking browser stop button)
+      track?.addEventListener("ended", () => {
+        if (step === "session" && !autoFailedRef.current) {
+          triggerAutoFail();
+        }
+      });
+
+      screenStreamRef.current = stream;
+      setScreenShareStatus("sharing");
+      setStep("intro");
+    } catch {
+      setScreenShareError("Screen sharing was denied or cancelled. It is required to take this assessment.");
+      setScreenShareStatus("error");
+    }
+  }, [step, triggerAutoFail]);
 
   // ── Playback PCM audio from model ────────────────────────────────────────────
   const enqueueAudio = useCallback((base64Pcm: string) => {
@@ -274,15 +455,11 @@ export default function VoiceAssessmentPlayer({
     isAISpeakingRef.current = true;
     setAvatarState("speaking");
 
-    // Snapshot the current play-version so we can discard this chunk if a
-    // barge-in/interruption happens before decodeAudioData finishes.
     const version = playVersionRef.current;
-
     const pcmBuf = base64ToArrayBuffer(base64Pcm);
     const wavBuf = pcmToWav(pcmBuf, 24000);
 
     ctx.decodeAudioData(wavBuf, (audioBuffer) => {
-      // Stale — an interruption occurred while we were decoding; discard.
       if (playVersionRef.current !== version) return;
 
       const now = ctx.currentTime;
@@ -297,7 +474,6 @@ export default function VoiceAssessmentPlayer({
 
       source.onended = () => {
         activeSourcesRef.current = activeSourcesRef.current.filter((s) => s !== source);
-        // Only switch to listening once all buffered audio has drained
         if (activeSourcesRef.current.length === 0 && playVersionRef.current === version) {
           isAISpeakingRef.current = false;
           setAvatarState((prev) => (prev === "speaking" ? "listening" : prev));
@@ -310,8 +486,6 @@ export default function VoiceAssessmentPlayer({
 
   // ── Parse incoming events from voice agent ───────────────────────────────────
   const handleEvent = useCallback((event: Record<string, unknown>) => {
-    // Server-side interruption: Gemini detected the student speaking and cut the
-    // model output — stop any locally-buffered AI audio immediately.
     if (event.interrupted === true) {
       stopAllAudio();
       return;
@@ -323,14 +497,11 @@ export default function VoiceAssessmentPlayer({
     for (const part of parts) {
       const p = part as Record<string, unknown>;
 
-      // PCM audio from model
       const inlineData = p?.inlineData as Record<string, unknown> | undefined;
       if (inlineData?.data && typeof inlineData.data === "string") {
-        console.log("[VAP] audio chunk received, size:", inlineData.data.length);
         enqueueAudio(inlineData.data);
       }
 
-      // Evaluation tool result — sent back when voice agent calls evaluate_voice_assessment
       const fnResp = p?.functionResponse as Record<string, unknown> | undefined;
       if (fnResp?.name === "evaluate_voice_assessment") {
         const response = fnResp.response as EvalResult | { error: string } | undefined;
@@ -342,7 +513,6 @@ export default function VoiceAssessmentPlayer({
           setAvatarState("idle");
           setMicActive(false);
 
-          // Persist result to backend
           if (assessmentData?.id && instituteId) {
             setSaveStatus("saving");
             instituteService.submitVoiceAssessmentResult(instituteId, assessmentData.id, {
@@ -376,17 +546,23 @@ export default function VoiceAssessmentPlayer({
         }
       }
     }
-
-  }, [enqueueAudio, stopAllAudio]);
+  }, [enqueueAudio, stopAllAudio, assessmentData, instituteId, onCompleted]);
 
   // ── Connect to voice agent ───────────────────────────────────────────────────
   const connect = useCallback(async () => {
     if (!assessmentData || !instituteId) return;
+
+    // Guard: screen share must still be active
+    const stream = screenStreamRef.current;
+    if (!stream || stream.getTracks().every((t) => t.readyState === "ended")) {
+      setScreenShareError("Screen share was stopped. Please restart the assessment and share your screen.");
+      setStep("screenshare");
+      return;
+    }
+
     setStep("connecting");
     setStatusText("Connecting to AI assessor…");
 
-    // Create the PLAYBACK AudioContext synchronously inside the user-gesture
-    // handler so the browser never auto-suspends it before audio arrives.
     const playCtx = new AudioContext();
     playCtxRef.current = playCtx;
     nextPlayTimeRef.current = playCtx.currentTime;
@@ -412,11 +588,10 @@ export default function VoiceAssessmentPlayer({
     ws.onopen = async () => {
       setStatusText("Setting up audio…");
 
-      // Request microphone
-      let stream: MediaStream;
+      let micStream: MediaStream;
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } });
-        streamRef.current = stream;
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } });
+        streamRef.current = micStream;
       } catch {
         setErrorMsg("Microphone access denied. Please allow microphone access and try again.");
         setStep("error");
@@ -424,17 +599,13 @@ export default function VoiceAssessmentPlayer({
         return;
       }
 
-      // Dedicated mic context at 16 kHz — separate from the playback context
-      // so mic capture never echoes through the speakers.
       const micCtx = new AudioContext({ sampleRate: 16000 });
       micCtxRef.current = micCtx;
 
-      const source = micCtx.createMediaStreamSource(stream);
+      const source = micCtx.createMediaStreamSource(micStream);
       const processor = micCtx.createScriptProcessor(2048, 1, 1);
       processorRef.current = processor;
 
-      // Frames of consecutive speech above threshold required to trigger barge-in.
-      // At 2048 samples / 16kHz = 128 ms per frame; 2 frames ≈ 256 ms.
       const BARGE_IN_THRESHOLD = 0.022;
       const BARGE_IN_FRAMES    = 2;
       let bargeInCount = 0;
@@ -442,16 +613,10 @@ export default function VoiceAssessmentPlayer({
       processor.onaudioprocess = (e: AudioProcessingEvent) => {
         const samples = e.inputBuffer.getChannelData(0);
 
-        // Stream PCM to the voice agent
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(float32ToInt16(samples));
         }
 
-        // ── Local barge-in VAD ─────────────────────────────────────────────
-        // When the AI is playing audio and the student starts speaking loudly
-        // enough, immediately stop all queued AI audio without waiting for the
-        // server round-trip. The server's own VAD will also interrupt the model
-        // and send an `interrupted` event to clean up any remaining buffers.
         if (isAISpeakingRef.current) {
           let sum = 0;
           for (let k = 0; k < samples.length; k++) sum += samples[k] * samples[k];
@@ -459,7 +624,7 @@ export default function VoiceAssessmentPlayer({
             bargeInCount++;
             if (bargeInCount >= BARGE_IN_FRAMES) {
               bargeInCount = 0;
-              stopAllAudioRef.current();   // stop via stable ref — closure-safe
+              stopAllAudioRef.current();
             }
           } else {
             bargeInCount = 0;
@@ -469,8 +634,6 @@ export default function VoiceAssessmentPlayer({
         }
       };
 
-      // Connect to a silent gain node (not destination) so onaudioprocess fires
-      // without routing mic audio to the speakers.
       const silence = micCtx.createGain();
       silence.gain.value = 0;
       source.connect(processor);
@@ -478,7 +641,6 @@ export default function VoiceAssessmentPlayer({
       silence.connect(micCtx.destination);
       setMicActive(true);
 
-      // Send assessment context to voice agent
       ws.send(JSON.stringify({
         type: "assessment_init",
         data: {
@@ -497,11 +659,8 @@ export default function VoiceAssessmentPlayer({
       if (typeof evt.data === "string") {
         try {
           const parsed = JSON.parse(evt.data);
-          console.log("[VAP] WS message received, type:", typeof evt.data, "keys:", Object.keys(parsed));
           handleEvent(parsed);
         } catch { /* ignore malformed */ }
-      } else {
-        console.log("[VAP] WS binary message, size:", (evt.data as ArrayBuffer).byteLength);
       }
     };
 
@@ -512,12 +671,12 @@ export default function VoiceAssessmentPlayer({
 
     ws.onclose = (e) => {
       setMicActive(false);
-      if (!hasResultRef.current && e.code !== 1000) {
+      if (!hasResultRef.current && e.code !== 1000 && !autoFailedRef.current) {
         setErrorMsg(`Connection closed (${e.code}). The session may have ended.`);
         setStep("error");
       }
     };
-  }, [assessmentData, instituteId, handleEvent, step]);
+  }, [assessmentData, instituteId, handleEvent]);
 
   if (!isOpen || !assessmentData) return null;
 
@@ -526,6 +685,37 @@ export default function VoiceAssessmentPlayer({
   // ─── Render ──────────────────────────────────────────────────────────────────
   const modal = (
     <div className="fixed inset-0 z-999999 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+
+      {/* ── Leave countdown overlay ── */}
+      {leaveCountdown !== null && step === "session" && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/95 px-4" style={{ zIndex: 10000000 }}>
+          <div className="bg-white dark:bg-gray-900 rounded-2xl p-8 w-full max-w-sm shadow-2xl text-center">
+            <div className="relative w-28 h-28 mx-auto mb-5">
+              <svg className="w-28 h-28 -rotate-90" viewBox="0 0 112 112">
+                <circle cx="56" cy="56" r="48" fill="none" stroke="#fee2e2" strokeWidth="8" />
+                <circle
+                  cx="56" cy="56" r="48" fill="none"
+                  stroke="#ef4444" strokeWidth="8" strokeLinecap="round"
+                  strokeDasharray={`${2 * Math.PI * 48}`}
+                  strokeDashoffset={`${2 * Math.PI * 48 * (1 - leaveCountdown / 10)}`}
+                  style={{ transition: "stroke-dashoffset 0.9s linear" }}
+                />
+              </svg>
+              <span className="absolute inset-0 flex items-center justify-center text-4xl font-black text-red-600 dark:text-red-400">
+                {leaveCountdown}
+              </span>
+            </div>
+            <p className="text-xl font-bold text-red-600 dark:text-red-400 mb-2">You Left the Assessment!</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+              Switching windows is <strong>not allowed</strong> during a voice assessment.<br />
+              Return immediately — your assessment will be{" "}
+              <span className="font-semibold text-red-500">automatically terminated and scored 0</span> in{" "}
+              <span className="font-black text-red-600">{leaveCountdown}</span> second{leaveCountdown !== 1 ? "s" : ""}.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div
         className="bg-white dark:bg-gray-950 rounded-3xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden"
         style={{ maxHeight: "92vh" }}
@@ -541,15 +731,26 @@ export default function VoiceAssessmentPlayer({
             </h2>
           </div>
 
-          {/* Connection status */}
-          <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-            {step === "session" ? (
-              <><FiWifi className="w-3.5 h-3.5 text-green-500" /><span className="text-green-600 dark:text-green-400">Live</span></>
-            ) : step === "connecting" ? (
-              <><FiLoader className="w-3.5 h-3.5 animate-spin" /><span>Connecting</span></>
-            ) : step === "error" ? (
+          {/* Connection / proctoring status */}
+          <div className="flex items-center gap-2 text-xs">
+            {step === "session" && (
+              <>
+                <span className="flex items-center gap-1 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse inline-block" />
+                  Live
+                </span>
+                <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse inline-block" />
+                  Screen Shared
+                </span>
+              </>
+            )}
+            {step === "connecting" && (
+              <><FiLoader className="w-3.5 h-3.5 animate-spin text-gray-400" /><span className="text-gray-500">Connecting</span></>
+            )}
+            {step === "error" && (
               <><FiWifiOff className="w-3.5 h-3.5 text-red-500" /><span className="text-red-500">Error</span></>
-            ) : null}
+            )}
           </div>
 
           <button
@@ -560,6 +761,63 @@ export default function VoiceAssessmentPlayer({
           </button>
         </div>
 
+        {/* ── Screen Share Gate ── */}
+        {step === "screenshare" && (
+          <div className="flex-1 flex flex-col items-center justify-center p-8 gap-6 text-center overflow-y-auto">
+            <div className="w-16 h-16 rounded-full bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center">
+              <FiMonitor className="w-8 h-8 text-blue-500" />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Screen Share Required</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                This voice assessment requires full-screen sharing for proctoring.
+              </p>
+            </div>
+
+            <div className="w-full max-w-sm text-left rounded-2xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/60 p-5 space-y-3">
+              <p className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Steps</p>
+              {[
+                { n: 1, text: 'Click "Share Screen & Continue" below' },
+                { n: 2, text: 'In the browser picker, select the "Entire Screen" or "Screen" tab — NOT a Window or Tab' },
+                { n: 3, text: "Click your monitor thumbnail, then click \"Share\"" },
+              ].map(({ n, text }) => (
+                <div key={n} className="flex items-start gap-2.5">
+                  <span className="w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                    {n}
+                  </span>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">{text}</p>
+                </div>
+              ))}
+              <p className="text-xs text-amber-600 dark:text-amber-400 font-medium pt-1">
+                ⚠ Stopping the share or switching apps during the assessment will result in an immediate 0 score.
+              </p>
+            </div>
+
+            {screenShareError && (
+              <div className="w-full max-w-sm rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300 text-left">
+                {screenShareError}
+              </div>
+            )}
+
+            <div className="flex gap-3 w-full max-w-sm">
+              <button
+                onClick={() => { disconnect(); onClose(); }}
+                className="flex-1 py-2.5 rounded-2xl border border-gray-200 dark:border-gray-700 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={requestScreenShare}
+                disabled={screenShareStatus === "sharing"}
+                className="flex-1 py-2.5 rounded-2xl text-sm font-bold text-white bg-blue-500 hover:bg-blue-600 disabled:opacity-50 transition-colors"
+              >
+                {screenShareStatus === "sharing" ? "Sharing…" : "Share Screen & Continue"}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── Intro ── */}
         {step === "intro" && (
           <div className="flex-1 flex flex-col items-center justify-center p-8 gap-6 text-center overflow-y-auto">
@@ -569,6 +827,12 @@ export default function VoiceAssessmentPlayer({
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                 {assessmentData.questions.length} question{assessmentData.questions.length !== 1 ? "s" : ""} · {totalMarks} total marks
               </p>
+            </div>
+
+            {/* Screen share confirmed badge */}
+            <div className="flex items-center gap-2 rounded-full bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 px-3 py-1.5 text-xs font-medium text-blue-700 dark:text-blue-300">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse inline-block" />
+              Screen sharing active — proctoring enabled
             </div>
 
             <div className="w-full max-w-sm text-left rounded-2xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/60 p-5 space-y-2.5">
@@ -583,6 +847,9 @@ export default function VoiceAssessmentPlayer({
                   <p className="text-xs text-gray-600 dark:text-gray-400">{text}</p>
                 </div>
               ))}
+              <p className="text-xs text-red-600 dark:text-red-400 font-medium pt-1">
+                🚫 Switching tabs/apps or stopping screen share triggers an automatic 0 score.
+              </p>
             </div>
 
             <button
@@ -611,6 +878,13 @@ export default function VoiceAssessmentPlayer({
         {step === "session" && (
           <div className="flex-1 flex flex-col items-center justify-center p-8 gap-6 text-center">
             <Avatar state={avatarState} />
+
+            {/* Violation warning banner */}
+            {violationWarning && (
+              <div className="w-full rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 text-sm text-amber-700 dark:text-amber-300 font-medium">
+                {violationWarning}
+              </div>
+            )}
 
             <div className="space-y-1">
               <p className="text-sm font-semibold text-gray-900 dark:text-white">
@@ -671,7 +945,6 @@ export default function VoiceAssessmentPlayer({
         {/* ── Results ── */}
         {step === "results" && evalResult && (
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
-            {/* Save status */}
             {saveStatus === "saving" && (
               <p className="text-xs text-center text-gray-400 animate-pulse">Saving results…</p>
             )}
@@ -682,7 +955,6 @@ export default function VoiceAssessmentPlayer({
               <p className="text-xs text-center text-amber-600 dark:text-amber-400">Results could not be saved (already attempted or network error)</p>
             )}
 
-            {/* Score banner */}
             <div className={`rounded-2xl border p-5 ${
               evalResult.passed
                 ? "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-900/20"
@@ -706,7 +978,6 @@ export default function VoiceAssessmentPlayer({
               </div>
             </div>
 
-            {/* Per-question breakdown */}
             <div className="space-y-3">
               {evalResult.results.map((r, i) => (
                 <div key={r.question_id} className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 p-4">
@@ -726,7 +997,7 @@ export default function VoiceAssessmentPlayer({
                   </div>
                   {r.student_answer && (
                     <p className="text-xs text-gray-500 dark:text-gray-400 italic mb-1.5">
-                      Your answer: "{r.student_answer}"
+                      Your answer: &quot;{r.student_answer}&quot;
                     </p>
                   )}
                   {r.feedback && (
@@ -747,6 +1018,30 @@ export default function VoiceAssessmentPlayer({
           </div>
         )}
 
+        {/* ── Auto-failed (cheating detected) ── */}
+        {step === "autofailed" && (
+          <div className="flex-1 flex flex-col items-center justify-center p-8 gap-6 text-center">
+            <div className="w-20 h-20 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="text-red-500">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-red-600 dark:text-red-400 mb-2">Assessment Terminated</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xs leading-relaxed">
+                A cheating violation was detected (screen share stopped or you switched away from this window).
+                Your assessment has been automatically scored <strong className="text-red-500">0 marks</strong>.
+              </p>
+            </div>
+            <button
+              onClick={() => { disconnect(); onClose(); }}
+              className="w-full max-w-xs py-2.5 rounded-2xl bg-red-500 text-white font-semibold hover:bg-red-600 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        )}
+
         {/* ── Error ── */}
         {step === "error" && (
           <div className="flex-1 flex flex-col items-center justify-center p-8 gap-5 text-center">
@@ -759,7 +1054,7 @@ export default function VoiceAssessmentPlayer({
             </div>
             <div className="flex gap-3">
               <button
-                onClick={() => { disconnect(); setStep("intro"); setErrorMsg(""); }}
+                onClick={() => { disconnect(); setStep("screenshare"); setErrorMsg(""); autoFailedRef.current = false; }}
                 className="px-5 py-2.5 rounded-xl text-sm font-medium text-white bg-purple-500 hover:bg-purple-600 transition-colors"
               >
                 Try Again

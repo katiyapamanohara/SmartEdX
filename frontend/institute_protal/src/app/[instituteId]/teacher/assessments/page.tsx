@@ -11,12 +11,14 @@ import {
 } from "@/services/instituteService";
 // CourseModule used only for Pick type — no runtime usage needed
 import CreateAssessmentModal from "./components/CreateAssessmentModal";
+import EditAssessmentModal, { EditEntry } from "./components/EditAssessmentModal";
 import VoiceAssessmentModal from "@/components/teacher/VoiceAssessmentModal";
 import {
   FiHelpCircle,
   FiClock,
   FiAward,
   FiEye,
+  FiEdit2,
   FiX,
   FiCheckCircle,
   FiChevronDown,
@@ -391,7 +393,7 @@ function StudentAttemptsModal({
 const OPTION_LETTERS_ROW = ["A", "B", "C", "D"];
 
 // ─── Quiz row ─────────────────────────────────────────────────────
-function QuizRow({ entry, onView, onViewAttempts }: { entry: QuizEntry; onView: () => void; onViewAttempts: () => void; instituteId: string }) {
+function QuizRow({ entry, onView, onViewAttempts, onEdit }: { entry: QuizEntry; onView: () => void; onViewAttempts: () => void; onEdit: () => void; instituteId: string }) {
   const [expanded, setExpanded] = useState(false);
   const quiz = entry.content.quizData;
   const questions: QuizQuestion[] = quiz?.questions ?? [];
@@ -448,6 +450,12 @@ function QuizRow({ entry, onView, onViewAttempts }: { entry: QuizEntry; onView: 
               {Object.keys(entry.content.studentAttempts || {}).length} student{Object.keys(entry.content.studentAttempts || {}).length !== 1 ? "s" : ""}
             </button>
           )}
+          <button
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors opacity-0 group-hover:opacity-100"
+          >
+            <FiEdit2 className="w-3.5 h-3.5" /> Edit
+          </button>
           <button
             onClick={(e) => { e.stopPropagation(); onView(); }}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors opacity-0 group-hover:opacity-100"
@@ -533,7 +541,7 @@ function QuizRow({ entry, onView, onViewAttempts }: { entry: QuizEntry; onView: 
 }
 
 // ─── Course group accordion ───────────────────────────────────────
-function CourseGroup({ course, quizzes, onViewQuiz, onViewAttempts, instituteId }: { course: Course; quizzes: QuizEntry[]; onViewQuiz: (e: QuizEntry) => void; onViewAttempts: (e: QuizEntry) => void; instituteId: string }) {
+function CourseGroup({ course, quizzes, onViewQuiz, onViewAttempts, onEditQuiz, instituteId }: { course: Course; quizzes: QuizEntry[]; onViewQuiz: (e: QuizEntry) => void; onViewAttempts: (e: QuizEntry) => void; onEditQuiz: (e: QuizEntry) => void; instituteId: string }) {
   const [open, setOpen] = useState(true);
   return (
     <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
@@ -573,6 +581,7 @@ function CourseGroup({ course, quizzes, onViewQuiz, onViewAttempts, instituteId 
               instituteId={instituteId}
               onView={() => onViewQuiz(entry)}
               onViewAttempts={() => onViewAttempts(entry)}
+              onEdit={() => onEditQuiz(entry)}
             />
           ))}
         </div>
@@ -591,6 +600,7 @@ export default function TeacherAssessmentsPage() {
   const [loading, setLoading] = useState(true);
   const [viewingQuiz, setViewingQuiz] = useState<QuizEntry | null>(null);
   const [viewingAttempts, setViewingAttempts] = useState<QuizEntry | null>(null);
+  const [editingEntry, setEditingEntry] = useState<EditEntry | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [voiceOpen, setVoiceOpen]   = useState(false);
 
@@ -629,6 +639,21 @@ export default function TeacherAssessmentsPage() {
       }
       return [...prev, { course, quizzes: [newEntry] }];
     });
+  };
+
+  const handleUpdated = (updated: ModuleContent) => {
+    setQuizzesByCourse((prev) =>
+      prev.map((g) => ({
+        ...g,
+        quizzes: g.quizzes.map((e) =>
+          e.content.id === updated.id ? { ...e, content: updated } : e
+        ),
+      }))
+    );
+    // Refresh edit modal entry if it's still open
+    setEditingEntry((prev) =>
+      prev && prev.content.id === updated.id ? { ...prev, content: updated } : prev
+    );
   };
 
   const totalQuizzes = quizzesByCourse.reduce((s, g) => s + g.quizzes.length, 0);
@@ -701,6 +726,7 @@ export default function TeacherAssessmentsPage() {
               instituteId={instituteId}
               onViewQuiz={setViewingQuiz}
               onViewAttempts={setViewingAttempts}
+              onEditQuiz={(entry) => setEditingEntry(entry as EditEntry)}
             />
           ))}
         </div>
@@ -725,6 +751,14 @@ export default function TeacherAssessmentsPage() {
         onCreated={handleCreated}
         instituteId={instituteId}
         courses={allCourses}
+      />
+
+      <EditAssessmentModal
+        isOpen={editingEntry !== null}
+        onClose={() => setEditingEntry(null)}
+        onUpdated={handleUpdated}
+        entry={editingEntry}
+        instituteId={instituteId}
       />
 
       <VoiceAssessmentModal

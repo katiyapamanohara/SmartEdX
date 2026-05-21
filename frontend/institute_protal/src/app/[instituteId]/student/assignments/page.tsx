@@ -275,6 +275,7 @@ type AssessmentItem = {
   voiceQuestions?: VoiceQuestion[];
   requireFaceId: boolean;
   maxAttempts: number;
+  requireScreenShare?: boolean;
   createdAt?: string;
 };
 
@@ -383,6 +384,8 @@ export default function StudentAssignmentsPage() {
           voiceQuestions: isVoice ? (content.quizData as any)?.voiceQuestions : undefined,
           requireFaceId: !!((content.quizData as any)?.requireFaceId),
           maxAttempts: (content.quizData as any)?.maxAttempts ?? 1,
+          // undefined = legacy assessment created before this field; VoiceModal treats undefined as true (proctored)
+          requireScreenShare: (content.quizData as any)?.requireScreenShare,
           createdAt: content.createdAt,
         };
       }),
@@ -593,6 +596,8 @@ export default function StudentAssignmentsPage() {
                 title: activeVoiceItem.title,
                 instructions: activeVoiceItem.description ?? "",
                 questions: activeVoiceItem.voiceQuestions ?? [],
+                // undefined = legacy (treated as true in VoiceModal); explicit false = no proctoring
+                requireScreenShare: activeVoiceItem.requireScreenShare,
               },
             }}
             onCompleted={(result) => {
