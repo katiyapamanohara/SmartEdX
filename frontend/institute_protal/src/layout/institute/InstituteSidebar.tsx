@@ -5,6 +5,7 @@ import Image from "next/image";
 import { usePathname, useParams } from "next/navigation";
 import { useSidebar } from "../../context/SidebarContext";
 import { instituteService, Institute } from "@/services/instituteService";
+import { useFeatures } from "@/context/InstituteFeatureContext";
 import {
   ChevronDownIcon,
   GridIcon,
@@ -12,6 +13,7 @@ import {
   HorizontaLDots,
   UserIcon,
   DollarLineIcon,
+  PieChartIcon,
 } from "../../icons/index";
 
 type NavItem = {
@@ -43,6 +45,11 @@ const navItems: NavItem[] = [
  
 
   {
+    icon: <PieChartIcon />,
+    name: "Performance",
+    path: "/institute/performance",
+  },
+  {
     icon: <DollarLineIcon />,
     name: "Finance",
     path: "/institute/finance",
@@ -52,13 +59,23 @@ const navItems: NavItem[] = [
 
 
 const InstituteSidebar: React.FC = () => {
-  const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
+  const { isExpanded, isMobileOpen, isHovered, setIsHovered, toggleMobileSidebar } = useSidebar();
+  const { hasFeature } = useFeatures();
+
+  const handleNavClick = () => {
+    if (isMobileOpen) {
+      toggleMobileSidebar();
+      setIsHovered(false);
+    }
+  };
   const pathname = usePathname();
   const params = useParams();
   const instituteId = params.instituteId as string;
 
   const [institute, setInstitute] = useState<Institute | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const aiChatEnabled = hasFeature("ai_tutor");
 
   useEffect(() => {
     const fetchInstitute = async () => {
@@ -119,6 +136,7 @@ const InstituteSidebar: React.FC = () => {
             nav.path && (
               <Link
                 href={nav.path ? `/${instituteId}${nav.path}` : "#"}
+                onClick={handleNavClick}
                 className={`menu-item group ${
                   isActive(`/${instituteId}${nav.path}`) ? "menu-item-active" : "menu-item-inactive"
                 }`}
@@ -156,6 +174,7 @@ const InstituteSidebar: React.FC = () => {
                   <li key={subItem.name}>
                     <Link
                       href={`/${instituteId}${subItem.path}`}
+                      onClick={handleNavClick}
                       className={`menu-dropdown-item ${
                         isActive(`/${instituteId}${subItem.path}`)
                           ? "menu-dropdown-item-active"
@@ -310,9 +329,31 @@ const InstituteSidebar: React.FC = () => {
                 )}
               </h2>
               {renderMenuItems(navItems, "main")}
+
+              {aiChatEnabled && (
+                <ul className="flex flex-col gap-4 mt-4">
+                  <li>
+                    <Link
+                      href={`/${instituteId}/institute/ai-chat`}
+                      onClick={handleNavClick}
+                      className={`menu-item group ${
+                        isActive(`/${instituteId}/institute/ai-chat`) ? "menu-item-active" : "menu-item-inactive"
+                      }`}
+                    >
+                      <span className={`${isActive(`/${instituteId}/institute/ai-chat`) ? "menu-item-icon-active" : "menu-item-icon-inactive"}`}>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 9.75a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375m-13.5 3.01c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.184-4.183a1.14 1.14 0 0 1 .778-.332 48.294 48.294 0 0 0 5.83-.498c1.585-.233 2.708-1.626 2.708-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
+                        </svg>
+                      </span>
+                      {(isExpanded || isHovered || isMobileOpen) && (
+                        <span className="menu-item-text">AI Assistant</span>
+                      )}
+                    </Link>
+                  </li>
+                </ul>
+              )}
             </div>
 
-           
           </div>
         </nav>
         {isExpanded || isHovered || isMobileOpen  ? null : null}

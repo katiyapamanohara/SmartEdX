@@ -63,6 +63,9 @@ class ADKSessionManager:
         is_sip: bool = False,
         call_id: Optional[str] = None,
         language: Optional[str] = None,
+        chat_id: Optional[str] = None,
+        course_id: Optional[str] = None,
+        user_role: str = "student",
     ):
         self.runner = runner
         self.session_service = session_service
@@ -73,6 +76,9 @@ class ADKSessionManager:
         self.is_sip = is_sip
         self.call_id = call_id
         self.language = language
+        self.chat_id = chat_id
+        self.course_id = course_id
+        self.user_role = user_role
 
         self.langfuse = get_langfuse()
         self.transcript_handler = TranscriptHandler(session_id, transcript_store, self.langfuse)
@@ -103,6 +109,27 @@ class ADKSessionManager:
             f"7) If needed, explain in {selected_language} that you can only continue in {selected_language}.\n"
         )
 
+    async def _load_chat_history(self) -> list[dict]:
+        """Load saved messages from the Qdrant chat collection via ai_core."""
+        from app.config import AI_CORE_URL
+        import httpx
+        url = f"{AI_CORE_URL.rstrip('/')}/chat-sessions/messages/load"
+        params = {
+            "institute_id": self.institute_id,
+            "course_id":    self.course_id or "",
+            "user_id":      self.user_id,
+            "role":         self.user_role,
+            "chat_id":      self.chat_id or "",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(url, params=params)
+                if resp.status_code == 200:
+                    return resp.json().get("messages", [])
+        except Exception as exc:
+            logger.warning(f"[ChatHistory] Failed to load for chat_id={self.chat_id}: {exc}")
+        return []
+
     async def initialize(self) -> LiveRequestQueue:
         """Create the ADK session, start the Core session, and send greeting.
 
@@ -121,6 +148,31 @@ class ADKSessionManager:
             )
 
         self.live_request_queue = LiveRequestQueue()
+
+        # If a chat_id was provided, load the persisted chat history from Qdrant
+        # and inject it so the agent has full context from the text chat session.
+        if self.chat_id and self.course_id:
+            prior_msgs = await self._load_chat_history()
+            if prior_msgs:
+                lines = []
+                for m in prior_msgs[-30:]:  # inject up to last 30 messages
+                    role = m.get("role", "")
+                    content = (m.get("content") or "")[:400]
+                    if content:
+                        label = "User" if role == "user" else "You"
+                        lines.append(f"{label}: {content}")
+                if lines:
+                    history_prompt = (
+                        "[CHAT SESSION HISTORY — this is the existing conversation context for this chat session. "
+                        "The user may be continuing a previous discussion.]\n"
+                        + "\n".join(lines)
+                        + "\n[Continue naturally from this context. Do not re-introduce yourself.]"
+                    )
+                    self.live_request_queue.send_content(
+                        types.Content(parts=[types.Part(text=history_prompt)], role="user")
+                    )
+                    self.has_prior_memory = True
+                    logger.info(f"[ChatHistory] Injected {len(lines)} messages for chat_id={self.chat_id}")
 
         # Inject prior conversation memory if this session_id has been seen before.
         # This gives the agent context on reconnect without any network I/O.

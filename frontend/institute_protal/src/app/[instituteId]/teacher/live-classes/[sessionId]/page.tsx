@@ -789,6 +789,7 @@ export default function TeacherClassroomPage() {
       isTeacher: true,
       title: "Live Class",
     });
+    ctx.expand();
     // Auto-minimize on unmount so PiP widget keeps session alive
     return () => { ctx.minimize(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -17,7 +17,7 @@ from google.adk.sessions import InMemorySessionService
 # Load environment variables BEFORE importing agent (needs config at import time)
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-from app.agent import get_runner_for_course, get_runner_for_institute, get_runner_for_teacher, search_knowledgebase  # noqa: E402
+from app.agent import get_runner_for_course, get_runner_for_institute, get_runner_for_institute_admin, get_runner_for_teacher, search_knowledgebase  # noqa: E402
 from app.config import (  # noqa: E402
     APP_NAME,
     COURSE_KB_ENABLED,
@@ -368,13 +368,24 @@ async def teacher_ws_endpoint(
     institute_id: str,
     teacher_id: str,
     session_id: str,
+    course_id: str = "",
+    user_name: str = "",
     language: Optional[str] = None,
+    chat_id: str = "",
 ) -> None:
-    """Teacher voice assistant — searches course materials in Qdrant."""
+    """Teacher voice assistant — searches course materials in Qdrant.
+
+    Query params:
+        course_id  – when provided, course-specific teacherAgentInstructions are fetched.
+        user_name  – teacher's display name; substituted into {teacher name} placeholders.
+        chat_id    – active chat session ID; history is loaded from Qdrant on connect.
+    """
     teacher_runner, _ = get_runner_for_teacher(
         institute_id=institute_id,
         teacher_id=teacher_id,
         session_service=session_service,
+        course_id=course_id,
+        user_name=user_name,
     )
     await websocket_endpoint(
         websocket=websocket,
@@ -385,6 +396,52 @@ async def teacher_ws_endpoint(
         transcript_store=transcript_store,
         runner=teacher_runner,
         language=language,
+        chat_id=chat_id or None,
+        course_id=course_id or None,
+        user_role="teacher",
+    )
+
+
+@app.websocket("/ws/institute-management/{institute_id}/{user_id}/{session_id}")
+async def institute_admin_ws_endpoint(
+    websocket: WebSocket,
+    institute_id: str,
+    user_id: str,
+    session_id: str,
+    institute_name: str = "",
+    user_name: str = "",
+    user_token: str = "",
+    language: Optional[str] = None,
+    chat_id: str = "",
+) -> None:
+    """Institute admin voice assistant — management tools (analytics, create course, invite lecturer).
+
+    Query params:
+        institute_name – human-readable institute name for the system prompt.
+        user_name      – admin's display name for the greeting.
+        user_token     – user JWT forwarded to write tools for proper auth.
+        chat_id        – active chat session ID.
+    """
+    admin_runner, _ = get_runner_for_institute_admin(
+        institute_id=institute_id,
+        user_id=user_id,
+        session_service=session_service,
+        user_name=user_name,
+        user_token=user_token,
+    )
+    await websocket_endpoint(
+        websocket=websocket,
+        institute_id=institute_id,
+        user_id=user_id,
+        session_id=session_id,
+        session_service=session_service,
+        transcript_store=transcript_store,
+        runner=admin_runner,
+        language=language,
+        greet=True,
+        chat_id=chat_id or None,
+        course_id=None,
+        user_role="teacher",
     )
 
 
@@ -396,15 +453,26 @@ async def course_qa_ws_endpoint(
     user_id: str,
     session_id: str,
     course_name: str = "",
+    role: str = "student",
+    user_name: str = "",
     language: Optional[str] = None,
     greet: bool = True,
+    chat_id: str = "",
 ) -> None:
-    """Course Q&A voice assistant — answers student questions from course content."""
+    """Course Q&A voice assistant — answers questions from course content.
+
+    Query params:
+        role      – "student" (default) or "teacher".
+        user_name – display name substituted into {student name}/{teacher name} placeholders.
+        chat_id   – active chat session ID; history is loaded from Qdrant on connect.
+    """
     course_runner, _ = get_runner_for_course(
         institute_id=institute_id,
         course_id=course_id,
         course_name=course_name or course_id,
         session_service=session_service,
+        role=role,
+        user_name=user_name,
     )
 
     await websocket_endpoint(
@@ -417,4 +485,7 @@ async def course_qa_ws_endpoint(
         runner=course_runner,
         language=language,
         greet=greet,
+        chat_id=chat_id or None,
+        course_id=course_id or None,
+        user_role=role,
     )

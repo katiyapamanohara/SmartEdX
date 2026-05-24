@@ -2,13 +2,35 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
 from agno.agent import Agent
 
+from agents.retry import run_with_retry
 from config import settings
+
+logger = logging.getLogger(__name__)
+
+
+def _fetch_student_agent_instructions(institute_id: str, course_id: str) -> str | None:
+    """Fetch studentAgentInstructions for a course from the institute service.
+
+    Returns the custom instructions string, or None if not set / on error.
+    """
+    try:
+        url = f"{settings.INSTITUTE_API_URL.rstrip('/')}/api/institutes/institutes/{institute_id}/courses/{course_id}/agent-config"
+        with httpx.Client(timeout=5) as client:
+            r = client.get(url)
+        if r.status_code == 404:
+            return None
+        r.raise_for_status()
+        return r.json().get("studentAgentInstructions") or None
+    except Exception as exc:
+        logger.warning(f"Failed to fetch student agent instructions for course {course_id}: {exc}")
+        return None
 
 
 # ─── Action tracker ───────────────────────────────────────────────────────────
@@ -205,6 +227,35 @@ def _make_student_tools(
     return get_my_courses, get_course_details, get_my_teachers, search_courses
 
 
+def _make_course_search_tool(institute_id: str, course_id: str):
+    """Return a search_course_material tool scoped to a specific course.
+
+    Searches Qdrant directly — same collection and embedding model used by the
+    voice agent, so both agents read the same indexed course documents.
+    """
+    from utils.qdrant_search import search_course_kb
+
+    def search_course_material(query: str) -> str:
+        """Search the course's uploaded documents and materials for relevant content.
+        Call this for ANY question about course topics, concepts, or content.
+        Args:
+            query: Specific topic or keyword from the student's question, e.g. 'photosynthesis'.
+                   Never use generic phrases like 'course content' or 'course material'.
+        """
+        results = search_course_kb(institute_id, course_id, query, limit=3)
+        if not results:
+            return f"No material found for '{query}' in the course documents. I can still explain this topic — just ask!"
+        parts = []
+        for res in results:
+            page = res.get("page")
+            content = res.get("content", "")
+            page_str = f" (Page {page})" if page else ""
+            parts.append(f"{content}{page_str}")
+        return "\n\n".join(parts)
+
+    return search_course_material
+
+
 # ─── Model factory ────────────────────────────────────────────────────────────
 
 
@@ -228,6 +279,7 @@ def _build_student_assistant(
     student_id: str,
     auth_token: str | None,
     file_content: str | None = None,
+    custom_instructions: str | None = None,
 ) -> Agent:
     ctx = student_context or {}
     student_name = ctx.get("student_name", "Student")
@@ -253,41 +305,69 @@ def _build_student_assistant(
         institute_id, student_id, auth_token
     )
 
-    return Agent(
-        model=_make_model(),
-        description=(
+    # Build tool list — add course content search when a course is in context
+    course_id_ctx = ctx.get("course_id") or (custom_instructions and ctx.get("course_id"))
+    all_tools: list = [get_courses, get_course_details, get_teachers, search_courses]
+    course_search_hint = ""
+    if course_id_ctx:
+        all_tools.append(_make_course_search_tool(institute_id, str(course_id_ctx)))
+        course_search_hint = "Call search_course_material for ANY question about course topics, concepts, or uploaded materials — use the specific subject as the query, never a generic phrase."
+
+    _tool_call_instructions = [
+        "Call get_my_courses when the student asks what courses they have, their schedule, or what they're enrolled in.",
+        "Call get_course_details when the student asks about a specific course's content, syllabus, or modules.",
+        "Call get_my_teachers when the student asks who their teacher is or wants to contact their teacher.",
+        "Call search_courses when the student wants to find courses or modules related to a topic.",
+    ]
+    if course_search_hint:
+        _tool_call_instructions.insert(0, course_search_hint)
+
+    if custom_instructions:
+        base_description = custom_instructions
+        instructions = _tool_call_instructions
+    else:
+        base_description = (
             "You are a friendly, encouraging AI learning companion for a SmartEdX student. "
             "Your mission is to help the student understand concepts, navigate their courses, "
             "resolve doubts, and guide them toward academic success. "
             "Always be patient, clear, and supportive — break down complex ideas into simple steps. "
             "Celebrate progress and keep the student motivated."
-            + context_note
-            + file_note
-        ),
-        instructions=[
-            # ── Live tool calls ──
-            "Call get_my_courses when the student asks what courses they have, their schedule, or what they're enrolled in.",
-            "Call get_course_details when the student asks about a specific course's content, syllabus, or modules.",
-            "Call get_my_teachers when the student asks who their teacher is or wants to contact their teacher.",
-            "Call search_courses when the student wants to find courses or modules related to a topic.",
-            # ── Direct generation — NO tool call ──
+        )
+        instructions = _tool_call_instructions + [
             "For concept explanations: use simple language, real-world analogies, and step-by-step breakdowns. "
             "Structure: 1) Simple definition, 2) Why it matters, 3) How it works, 4) Example.",
             "For study plans: create a realistic weekly plan with specific daily goals, review sessions, and practice tasks.",
-            "For practice questions: generate varied question types (MCQ, short answer, problem-solving) with answers.",
+            (
+                "For practice questions (MCQ): use this EXACT markdown structure for each question:\n"
+                "---\n"
+                "**Question N:** [question text]\n\n"
+                "- **A)** [option text]\n"
+                "- **B)** [option text]\n"
+                "- **C)** [option text]\n"
+                "- **D)** [option text]\n\n"
+                "> **Answer:** [correct option letter] — [brief explanation]\n"
+                "---\n"
+                "Always include the answer with a clear explanation immediately after each question. "
+                "Never separate questions from their answers."
+            ),
             "For essay/writing help: give structure, key points to cover, and example sentences. Never write the full essay for them.",
             "For uploaded documents: summarise key points, identify main concepts, and answer specific questions about the content.",
             "For math/science problems: solve step-by-step, explain each step, and point out the underlying concept.",
             "For exam preparation: create a revision checklist, highlight key formulas/concepts, and suggest practice strategies.",
-            # ── Behaviour ──
             "Always encourage the student — use phrases like 'Great question!', 'You're on the right track!', "
             "'Let's work through this together.'",
             "Never give direct answers to clearly assignment/exam questions — instead guide with hints and Socratic questions.",
             "After every tool call, explain the result clearly and suggest a useful next step for the student.",
             "If a topic is not in any course, still help — students may be learning independently.",
-            "Keep explanations concise but complete. Use bullet points, numbered steps, and code blocks where appropriate.",
-        ],
-        tools=[get_courses, get_course_details, get_teachers, search_courses],
+            "Always respond using clean markdown: use ## headings for major sections, **bold** for key terms, "
+            "bullet lists for enumerations, and > blockquotes for answers/highlights. Never write walls of plain text.",
+        ]
+
+    return Agent(
+        model=_make_model(),
+        description=(base_description + context_note + file_note),
+        instructions=instructions,
+        tools=all_tools,
         show_tool_calls=False,
     )
 
@@ -302,31 +382,33 @@ async def chat_with_student_assistant(
     student_id: str,
     auth_token: str | None,
     file_content: str | None = None,
+    course_id: str | None = None,
 ) -> str:
+    """Run the student assistant and return the reply string.
+
+    Retries up to 4× with exponential backoff on transient 503/429 errors.
     """
-    Run the student assistant with conversation history and live tool access.
-    Returns the assistant's reply string.
-    """
-    agent = _build_student_assistant(
-        student_context, institute_id, student_id, auth_token, file_content
-    )
+    custom_instructions: str | None = None
+    if course_id:
+        custom_instructions = _fetch_student_agent_instructions(institute_id, course_id)
 
     last_user_message = messages[-1]["content"] if messages else ""
 
     prior_turns: list[str] = []
     for msg in messages[:-1]:
-        label = "Student" if msg["role"] == "user" else "Assistant"
-        prior_turns.append(f"{label}: {msg['content']}")
+        role_label = "Student" if msg["role"] == "user" else "Assistant"
+        prior_turns.append(f"{role_label}: {msg['content']}")
 
-    if prior_turns:
-        prompt = (
-            "Conversation history:\n"
-            + "\n".join(prior_turns)
-            + "\n\nStudent (current message): "
-            + last_user_message
+    prompt = (
+        "Conversation history:\n" + "\n".join(prior_turns) + "\n\nStudent (current message): " + last_user_message
+        if prior_turns else last_user_message
+    )
+
+    async def _run() -> str:
+        agent = _build_student_assistant(
+            student_context, institute_id, student_id, auth_token, file_content, custom_instructions
         )
-    else:
-        prompt = last_user_message
+        result = await agent.arun(prompt)
+        return result.content if isinstance(result.content, str) else str(result.content)
 
-    result = await agent.arun(prompt)
-    return result.content if isinstance(result.content, str) else str(result.content)
+    return await run_with_retry(_run, label="student_assistant")

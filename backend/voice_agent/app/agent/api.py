@@ -11,6 +11,21 @@ from app.latency import latency
 logger = logging.getLogger(__name__)
 
 
+def fetch_course_agent_config(institute_id: str, course_id: str) -> Dict[str, Any]:
+    """Fetch agent instructions for a specific course from the institute service.
+
+    Returns a dict with keys: courseId, courseName, studentAgentInstructions, teacherAgentInstructions.
+    """
+    url = f"{INSTITUTE_SERVICE_URL}/institutes/{institute_id}/courses/{course_id}/agent-config"
+    with latency.measure("api_fetch_course_agent_config"):
+        response = requests.get(url, timeout=5)
+    if response.status_code == 404:
+        logger.warning(f"Course {course_id} agent-config not found (404), using defaults")
+        return {}
+    response.raise_for_status()
+    return response.json()
+
+
 def fetch_institute_config(institute_id: str) -> Dict[str, Any]:
     """Fetch voice agent configuration for an institute from the SmartEdX institute service.
 

@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 from agno.agent import Agent
 
+from agents.retry import run_with_retry
 from config import settings
 
 
@@ -17,7 +18,8 @@ from config import settings
 @dataclass
 class ActionTracker:
     """Collects side-effects produced by tools so the router can relay them to the UI."""
-    created_courses: list[dict] = field(default_factory=list)
+    created_courses:  list[dict] = field(default_factory=list)
+    invited_lecturers: list[dict] = field(default_factory=list)
 
 
 # ─── Live tool factory (closures capture institute_id + auth_token) ───────────
@@ -28,10 +30,6 @@ def _make_live_tools(
     auth_token: str | None,
     tracker: ActionTracker,
 ):
-    """
-    Return tool functions that call the institute API with the owner's auth token.
-    Closures let us keep Agno's simple function-tool interface without extra params.
-    """
     api_base = settings.INSTITUTE_API_URL.rstrip("/")
 
     def _headers() -> dict[str, str]:
@@ -70,7 +68,6 @@ def _make_live_tools(
             inactive_students = len(students) - len(active_students)
             ratio = len(students) / max(len(teachers), 1)
 
-            # Per-course summary (cap at 15 to stay within context)
             course_lines: list[str] = []
             for c in courses[:15]:
                 modules   = len(c.get("modules", []))
@@ -79,14 +76,14 @@ def _make_live_tools(
                     f"{t.get('firstName','')} {t.get('lastName','')}".strip()
                     if t else "Unassigned"
                 )
+                enrolled  = len(c.get("enrolledStudents", []))
                 course_lines.append(
                     f"  • {c.get('name','?')} "
                     f"[{c.get('code','?')}] "
                     f"Batch {c.get('batchNumber','?')} | "
-                    f"{modules} module(s) | Teacher: {tname}"
+                    f"{modules} module(s) | Teacher: {tname} | Students: {enrolled}"
                 )
 
-            # Batch distribution
             batches: dict[str, int] = {}
             for c in courses:
                 b = c.get("batchNumber", "Unknown")
@@ -113,6 +110,154 @@ def _make_live_tools(
             return f"Analytics fetch failed (HTTP {exc.response.status_code}): {exc.response.text}"
         except Exception as exc:
             return f"Analytics fetch error: {exc}"
+
+    # ── Tool: teacher performance ──────────────────────────────────────────
+
+    def get_teacher_performance() -> str:
+        """
+        Fetch detailed performance data for all teachers in the institute.
+        Returns each teacher's name, email, assigned courses, and student counts per course.
+        Use this when asked about teacher performance, workload, or which teacher handles which course.
+        """
+        try:
+            teachers = _get(f"/api/institutes/institutes/{institute_id}/users?role=teacher")
+            courses  = _get(f"/api/institutes/institutes/{institute_id}/courses")
+
+            # Build a map: teacher userId → courses
+            teacher_courses: dict[str, list[dict]] = {}
+            for c in courses:
+                t = c.get("assignedTeacher")
+                if t:
+                    tid = t.get("id") or t.get("userId") or ""
+                    teacher_courses.setdefault(tid, []).append(c)
+
+            if not teachers:
+                return "No teachers found in this institute."
+
+            lines = [f"🎓 TEACHER PERFORMANCE REPORT ({len(teachers)} teachers)", "─" * 44]
+            for teacher in teachers:
+                uid   = teacher.get("id") or teacher.get("userId") or ""
+                fname = teacher.get("firstName", "")
+                lname = teacher.get("lastName", "")
+                email = teacher.get("email", "N/A")
+                name  = f"{fname} {lname}".strip() or "Unknown"
+                t_courses = teacher_courses.get(uid, [])
+                total_students = sum(len(c.get("enrolledStudents", [])) for c in t_courses)
+
+                lines.append(f"\n👤 {name}  ({email})")
+                lines.append(f"   Courses taught : {len(t_courses)}  |  Total students: {total_students}")
+                if t_courses:
+                    for c in t_courses:
+                        enrolled = len(c.get("enrolledStudents", []))
+                        lines.append(
+                            f"   • {c.get('name','?')} [{c.get('code','?')}] "
+                            f"Batch {c.get('batchNumber','?')} — {enrolled} student(s)"
+                        )
+                else:
+                    lines.append("   • No courses assigned yet")
+
+            return "\n".join(lines)
+
+        except httpx.HTTPStatusError as exc:
+            return f"Teacher performance fetch failed (HTTP {exc.response.status_code}): {exc.response.text}"
+        except Exception as exc:
+            return f"Teacher performance error: {exc}"
+
+    # ── Tool: course enrollment details ───────────────────────────────────
+
+    def get_course_enrollment() -> str:
+        """
+        Fetch enrollment details for every course: course name, code, lecturer name,
+        and the number of students enrolled. Use when asked about course enrollment,
+        student distribution, or who teaches a specific course.
+        """
+        try:
+            courses = _get(f"/api/institutes/institutes/{institute_id}/courses")
+
+            if not courses:
+                return "No courses found in this institute."
+
+            lines = [f"📚 COURSE ENROLLMENT DETAILS ({len(courses)} courses)", "─" * 44]
+            for c in courses:
+                t       = c.get("assignedTeacher")
+                tname   = (
+                    f"{t.get('firstName','')} {t.get('lastName','')}".strip()
+                    if t else "Unassigned"
+                )
+                temail  = t.get("email", "") if t else ""
+                enrolled = len(c.get("enrolledStudents", []))
+                modules  = len(c.get("modules", []))
+
+                lines.append(
+                    f"\n📖 {c.get('name','?')} [{c.get('code','?')}]"
+                )
+                lines.append(f"   Batch    : {c.get('batchNumber', 'N/A')}")
+                lines.append(f"   Lecturer : {tname}" + (f" ({temail})" if temail else ""))
+                lines.append(f"   Students : {enrolled}")
+                lines.append(f"   Modules  : {modules}")
+
+            return "\n".join(lines)
+
+        except httpx.HTTPStatusError as exc:
+            return f"Course enrollment fetch failed (HTTP {exc.response.status_code}): {exc.response.text}"
+        except Exception as exc:
+            return f"Course enrollment error: {exc}"
+
+    # ── Tool: revenue analytics ───────────────────────────────────────────
+
+    def get_revenue_analytics() -> str:
+        """
+        Calculate estimated revenue for every course based on enrollment count and course pricing.
+        For fixed-price courses: enrolled students × price.
+        For monthly courses: enrolled students × monthly price (per month estimate).
+        Use when asked about revenue, income, earnings, or financial performance.
+        """
+        try:
+            institute = _get(f"/api/institutes/institutes/{institute_id}")
+            courses   = _get(f"/api/institutes/institutes/{institute_id}/courses")
+            currency  = institute.get("currency", "") if isinstance(institute, dict) else ""
+
+            if not courses:
+                return "No courses found — there is no revenue to report."
+
+            total = 0.0
+            lines = [f"💰 REVENUE ANALYTICS ({len(courses)} courses)", "─" * 44]
+
+            for c in courses:
+                enrolled     = len(c.get("enrolledStudents", []))
+                payment_type = c.get("paymentType", "fixed")
+                price        = float(c.get("price") or 0)
+                monthly      = float(c.get("monthlyPrice") or 0)
+
+                if payment_type == "monthly" and monthly:
+                    course_rev = enrolled * monthly
+                    pricing    = f"{currency}{monthly:.2f}/mo per student"
+                    note       = f"{currency}{course_rev:.2f}/mo"
+                elif price:
+                    course_rev = enrolled * price
+                    pricing    = f"{currency}{price:.2f} fixed"
+                    note       = f"{currency}{course_rev:.2f}"
+                else:
+                    course_rev = 0.0
+                    pricing    = "No price set"
+                    note       = "—"
+
+                total += course_rev
+                lines.append(
+                    f"\n📖 {c.get('name','?')} [{c.get('code','?')}]"
+                )
+                lines.append(f"   Students : {enrolled}")
+                lines.append(f"   Pricing  : {pricing}")
+                lines.append(f"   Revenue  : {note}")
+
+            lines.append("")
+            lines.append(f"{'─' * 44}")
+            lines.append(f"   TOTAL ESTIMATED REVENUE: {currency}{total:,.2f}")
+
+            return "\n".join(lines)
+
+        except Exception as exc:
+            return f"Revenue analytics error: {exc}"
 
     # ── Tool: create course ────────────────────────────────────────────────
 
@@ -171,17 +316,69 @@ def _make_live_tools(
                     f"{t.get('firstName','')} {t.get('lastName','')}".strip()
                     if t else "Unassigned"
                 )
+                enrolled = len(c.get("enrolledStudents", []))
                 lines.append(
                     f"• {c.get('name')} [{c.get('code')}]\n"
                     f"  Batch: {c.get('batchNumber')} | "
                     f"Modules: {len(c.get('modules',[]))} | "
-                    f"Teacher: {tname}"
+                    f"Teacher: {tname} | "
+                    f"Students: {enrolled}"
                 )
             return "\n".join(lines)
         except Exception as exc:
             return f"Failed to fetch courses: {exc}"
 
-    return get_institute_analytics, create_course, list_courses
+    # ── Tool: invite lecturer by email ─────────────────────────────────────
+
+    def invite_lecturer_by_email(
+        email: str,
+        first_name: str,
+        last_name: str,
+    ) -> str:
+        """
+        Invite (add) a new lecturer to the institute by their email address.
+        Requires: email (valid email), first_name, last_name.
+        A temporary account will be created with the role 'teacher'.
+        IMPORTANT: Always confirm the details with the user before calling this tool.
+        Do NOT use this tool to delete or remove any lecturer.
+        """
+        try:
+            payload = {
+                "email": email,
+                "firstName": first_name,
+                "lastName": last_name,
+                "role": "teacher",
+            }
+            user = _post(
+                f"/api/institutes/institutes/{institute_id}/users",
+                payload,
+            )
+            tracker.invited_lecturers.append(user)
+            return (
+                f"✅ Lecturer invited successfully!\n"
+                f"  Name  : {first_name} {last_name}\n"
+                f"  Email : {email}\n"
+                f"  Role  : Teacher\n"
+                f"  ID    : {user.get('id', 'N/A')}"
+            )
+        except httpx.HTTPStatusError as exc:
+            try:
+                detail = exc.response.json().get("message", exc.response.text)
+            except Exception:
+                detail = exc.response.text
+            return f"Failed to invite lecturer (HTTP {exc.response.status_code}): {detail}"
+        except Exception as exc:
+            return f"Lecturer invitation error: {exc}"
+
+    return (
+        get_institute_analytics,
+        get_teacher_performance,
+        get_course_enrollment,
+        get_revenue_analytics,
+        create_course,
+        list_courses,
+        invite_lecturer_by_email,
+    )
 
 
 # ─── Model factory ────────────────────────────────────────────────────────────
@@ -218,42 +415,57 @@ def _build_assistant(
         f"  Courses   : {ctx.get('course_count', 'unknown')}"
     )
 
-    get_analytics, create_course_tool, list_courses_tool = _make_live_tools(
-        institute_id, auth_token, tracker
-    )
+    (
+        get_analytics,
+        get_teacher_perf,
+        get_course_enroll,
+        get_revenue,
+        create_course_tool,
+        list_courses_tool,
+        invite_lecturer_tool,
+    ) = _make_live_tools(institute_id, auth_token, tracker)
 
     return Agent(
         model=_make_model(),
         description=(
-            "You are an intelligent AI assistant exclusively for the owner of a SmartEdX educational institute. "
-            "You help manage and grow the institute by fetching live analytics, creating courses, "
-            "drafting communications, and providing strategic insights. "
+            "You are an intelligent AI assistant exclusively for the owner/admin of a SmartEdX educational institute. "
+            "You help manage and grow the institute by fetching live analytics, teacher performance, "
+            "course enrollment data, creating courses, inviting lecturers, and providing strategic insights. "
             "Always be professional, concise, and action-oriented."
             + context_note
         ),
         instructions=[
-            # ── Live tool calls (use tools ONLY for these) ──
-            "Call get_institute_analytics when asked about metrics, performance, students, teachers, or course stats.",
+            # ── Live tool calls ──
+            "Call get_institute_analytics when asked about overall metrics, performance, students, teachers, or course stats.",
+            "Call get_teacher_performance when asked about teacher performance, workload, which teacher handles which course, or teacher details.",
+            "Call get_course_enrollment when asked about enrollment numbers, how many students are in a course, or who teaches which course.",
+            "Call get_revenue_analytics when asked about revenue, income, earnings, total revenue, financial performance, or how much the institute is making.",
             "Call list_courses when the owner wants to see their current courses.",
-            "Call create_course when the owner wants to create a course. You MUST collect all 4 fields first: "
-            "name, code (short identifier like 'CS101'), description, and batch_number. "
-            "If any field is missing, ask for it before calling the tool.",
-            # ── Generate directly — NO tool call needed ──
+            "Call create_course when the owner wants to create a course. Collect all 4 fields first: "
+            "name, code (e.g. 'CS101'), description, and batch_number. Ask for missing fields before calling.",
+            # ── Invite lecturer ──
+            "Call invite_lecturer_by_email ONLY when the owner explicitly asks to add or invite a lecturer. "
+            "You MUST confirm the lecturer's full name and email with the owner before calling this tool. "
+            "Do NOT delete lecturers or users — there is no delete tool and deletion is not supported via AI.",
+            # ── Generate directly ──
             "For report templates, announcements, course outlines, and general advice: "
-            "respond directly with well-formatted text. Do NOT call any tool for these.",
+            "respond directly with well-formatted markdown. Do NOT call any tool for these.",
             "When writing a report template use clear sections: Enrollment Summary, Academic Highlights, "
             "Staff & Operations, Next Period Goals. Include emoji headers and fill-in placeholders.",
-            "When drafting an announcement use: header, greeting, body, key points, sign-off.",
-            "When building a course outline use 4 modules with week ranges and bullet points.",
             # ── General ──
-            "After every tool call summarise the result clearly and friendly.",
+            "After every tool call summarise the result clearly and in a friendly tone.",
             "Never expose raw JSON or internal IDs — summarise naturally.",
             "If a live API call fails, explain what happened and suggest next steps.",
+            "Format all responses with clear markdown: use headers, bullet points, and bold for key data.",
         ],
         tools=[
             get_analytics,
+            get_teacher_perf,
+            get_course_enroll,
+            get_revenue,
             create_course_tool,
             list_courses_tool,
+            invite_lecturer_tool,
         ],
         show_tool_calls=False,
     )
@@ -269,14 +481,6 @@ async def chat_with_assistant(
     auth_token: str | None,
     tracker: ActionTracker,
 ) -> str:
-    """
-    Run the institute assistant with conversation history and live tool access.
-
-    Returns the assistant's reply string.
-    Side-effects (created courses, etc.) are recorded in `tracker`.
-    """
-    agent = _build_assistant(institute_context, institute_id, auth_token, tracker)
-
     last_user_message = messages[-1]["content"] if messages else ""
 
     prior_turns: list[str] = []
@@ -294,5 +498,9 @@ async def chat_with_assistant(
     else:
         prompt = last_user_message
 
-    result = await agent.arun(prompt)
-    return result.content if isinstance(result.content, str) else str(result.content)
+    async def _run() -> str:
+        agent = _build_assistant(institute_context, institute_id, auth_token, tracker)
+        result = await agent.arun(prompt)
+        return result.content if isinstance(result.content, str) else str(result.content)
+
+    return await run_with_retry(_run, label="institute_assistant")

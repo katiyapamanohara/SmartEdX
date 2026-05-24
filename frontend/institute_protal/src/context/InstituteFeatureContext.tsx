@@ -25,6 +25,7 @@ export function InstituteFeatureProvider({ children }: { children: ReactNode }) 
   useEffect(() => {
     if (!instituteId) return;
     let cancelled = false;
+
     const fetchFeatures = async () => {
       try {
         const data = await instituteService.getInstituteById(instituteId);
@@ -35,8 +36,19 @@ export function InstituteFeatureProvider({ children }: { children: ReactNode }) 
         if (!cancelled) setIsLoading(false);
       }
     };
+
     fetchFeatures();
-    return () => { cancelled = true; };
+
+    // Re-fetch when the browser tab regains focus so that changes made
+    // by the SaaS admin (e.g. enabling screen_share_proctoring) are picked
+    // up without requiring a full page reload.
+    const handleFocus = () => { fetchFeatures(); };
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", handleFocus);
+    };
   }, [instituteId]);
 
   const hasFeature = (feature: string) => enabledFeatures.includes(feature);

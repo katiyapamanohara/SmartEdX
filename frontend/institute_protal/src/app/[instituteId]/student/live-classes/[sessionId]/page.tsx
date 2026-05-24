@@ -284,6 +284,7 @@ export default function StudentClassroomPage() {
       isTeacher: false,
       title: "Live Class",
     });
+    ctx.expand();
     return () => { ctx.minimize(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, instituteId]);

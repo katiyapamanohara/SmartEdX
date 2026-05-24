@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { PieChartIcon, ArrowUpIcon, ArrowDownIcon } from "@/icons";
 import { instituteService, Course, StudentAssessmentGroup } from "@/services/instituteService";
 import { authService } from "@/services/authService";
+import { RelatedStudyMaterial } from "@/components/common/RelatedStudyMaterial";
 
 type CourseRow = {
   id: string;
@@ -25,13 +26,6 @@ type ExamRow = {
   status: string;
 };
 
-type KbResult = {
-  content: string;
-  page: number | null;
-  title: string;
-  score: number;
-};
-
 type WeakArea = {
   id: string;
   source: "exam" | "quiz-voice" | "quiz-mcq";
@@ -43,6 +37,9 @@ type WeakArea = {
   myAnswer?: string;
   correctAnswer?: string;
   feedback?: string;
+  // For unanswered / short-answer questions
+  questionType?: "mcq" | "short_answer" | "essay";
+  pendingReview?: boolean;
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -57,91 +54,6 @@ const EXAM_STATUS_COLORS: Record<string, string> = {
   scheduled: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
   draft: "bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400",
 };
-
-// ─── Inline sub-component: expandable related content ─────────────────────────
-function RelatedContent({
-  instituteId,
-  area,
-}: {
-  instituteId: string;
-  area: WeakArea;
-}) {
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<KbResult[] | null>(null);
-
-  const load = useCallback(async () => {
-    if (results !== null) return; // already fetched
-    setLoading(true);
-    try {
-      const data = await instituteService.searchCourseKB(
-        instituteId,
-        area.courseId,
-        area.questionText,
-      );
-      setResults(data);
-    } finally {
-      setLoading(false);
-    }
-  }, [instituteId, area.courseId, area.questionText, results]);
-
-  const toggle = () => {
-    if (!open && results === null) load();
-    setOpen((v) => !v);
-  };
-
-  return (
-    <div className="mt-2">
-      <button
-        onClick={toggle}
-        className="flex items-center gap-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
-      >
-        <span>{open ? "▾" : "▸"}</span>
-        {open ? "Hide" : "Show"} related study material
-      </button>
-
-      {open && (
-        <div className="mt-2 rounded-xl border border-blue-100 dark:border-blue-900/40 bg-blue-50/60 dark:bg-blue-500/[0.06] p-3 flex flex-col gap-2">
-          {loading && (
-            <div className="flex flex-col gap-2">
-              {[1, 2].map((i) => (
-                <div key={i} className="animate-pulse h-10 bg-blue-100 dark:bg-blue-900/20 rounded-lg" />
-              ))}
-            </div>
-          )}
-
-          {!loading && results !== null && results.length === 0 && (
-            <p className="text-xs text-gray-400 dark:text-gray-500 italic">
-              No course material found for this topic yet. Make sure PDFs / documents are uploaded for this course.
-            </p>
-          )}
-
-          {!loading &&
-            results !== null &&
-            results.map((r, i) => (
-              <div
-                key={i}
-                className="rounded-lg bg-white dark:bg-white/[0.04] border border-blue-100 dark:border-blue-900/30 p-3"
-              >
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 truncate">
-                    📄 {r.title || "Course Material"}
-                    {r.page ? ` · p.${r.page}` : ""}
-                  </span>
-                  <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
-                    {Math.round(r.score * 100)}% match
-                  </span>
-                </div>
-                <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed line-clamp-4">
-                  {r.content}
-                </p>
-              </div>
-            ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function StudentPerformancePage() {
@@ -163,6 +75,7 @@ export default function StudentPerformancePage() {
       setLoading(true);
       try {
         const userId = authService.getUserId();
+        console.log("[Performance] userId:", userId);
 
         const [assessmentGroups, exams, courses]: [StudentAssessmentGroup[], any[], Course[]] =
           await Promise.all([
@@ -170,6 +83,10 @@ export default function StudentPerformancePage() {
             instituteService.getStudentExams(instituteId),
             instituteService.getMyEnrolledCourses(instituteId),
           ]);
+
+        console.log("[Performance] assessmentGroups:", assessmentGroups);
+        console.log("[Performance] exams:", exams);
+        console.log("[Performance] courses:", courses);
 
         // ── Build per-course rows from quizzes ───────────────────────────────
         const courseMap = new Map<string, CourseRow>();
@@ -280,25 +197,77 @@ export default function StudentPerformancePage() {
         // ── Weak Areas Analysis ──────────────────────────────────────────────
         const areas: WeakArea[] = [];
 
-        // 1. Exam MCQ — wrong answers
+        // 1. Exam questions (MCQ wrong/unanswered, short_answer low score, essay pending)
         for (const exam of exams) {
-          if (!exam.myAttempt?.answers) continue;
+          const attempt = exam.myAttempt;
           const questions: any[] = exam.questions ?? [];
+          console.log(`[Performance] exam "${exam.title}" status=${exam.status} hasAttempt=${!!attempt} answersKeys=${attempt?.answers ? Object.keys(attempt.answers).length : 0} questionsCount=${questions.length} types=${[...new Set(questions.map((q:any)=>q.type))].join(",")} firstQHasCorrect=${questions[0]?.correctAnswer !== undefined}`);
+          if (!attempt) continue; // no submission yet
+
+          const answers: Record<string, any> = attempt.answers ?? {};
+          const essayGrades: Record<string, any> = (attempt as any).essayGrades ?? {};
+
           for (const q of questions) {
-            if (q.type !== "mcq" || q.correctAnswer === undefined) continue;
-            const myAnswerIdx = exam.myAttempt.answers[q.id];
-            if (myAnswerIdx === undefined || myAnswerIdx === q.correctAnswer) continue;
-            areas.push({
-              id: `exam-${exam.id}-${q.id}`,
-              source: "exam",
-              sourceTitle: exam.title,
-              courseName: exam.courseName ?? "—",
-              courseId: exam.courseId ?? "",
-              questionText: q.question,
-              scorePercent: 0,
-              myAnswer: q.options?.[myAnswerIdx] ?? `Option ${myAnswerIdx + 1}`,
-              correctAnswer: q.options?.[q.correctAnswer] ?? `Option ${q.correctAnswer + 1}`,
-            });
+            const qType: string = q.type ?? "mcq";
+
+            if (qType === "mcq") {
+              // Wrong answer OR no answer at all (both indicate a gap)
+              if (q.correctAnswer === undefined) continue;
+              const myAnswerRaw = answers[q.id];
+              const myAnswerIdx = myAnswerRaw !== undefined ? Number(myAnswerRaw) : null;
+              const isCorrect = myAnswerIdx !== null && myAnswerIdx === Number(q.correctAnswer);
+              if (isCorrect) continue;
+              areas.push({
+                id: `exam-${exam.id}-${q.id}`,
+                source: "exam",
+                sourceTitle: exam.title,
+                courseName: exam.courseName ?? "—",
+                courseId: exam.courseId ?? "",
+                questionText: q.question,
+                questionType: "mcq",
+                scorePercent: 0,
+                myAnswer: myAnswerIdx !== null
+                  ? (q.options?.[myAnswerIdx] ?? `Option ${myAnswerIdx + 1}`)
+                  : "Not answered",
+                correctAnswer: q.options?.[Number(q.correctAnswer)] ?? `Option ${Number(q.correctAnswer) + 1}`,
+              });
+
+            } else if (qType === "short_answer") {
+              // AI-graded: surface if score < 60% of available marks
+              const grade = essayGrades[q.id];
+              const pct = grade ? Math.round((grade.score / (q.marks || 1)) * 100) : 0;
+              if (pct >= 60) continue;
+              areas.push({
+                id: `exam-${exam.id}-${q.id}`,
+                source: "exam",
+                sourceTitle: exam.title,
+                courseName: exam.courseName ?? "—",
+                courseId: exam.courseId ?? "",
+                questionText: q.question,
+                questionType: "short_answer",
+                scorePercent: pct,
+                myAnswer: answers[q.id] ? String(answers[q.id]) : "Not answered",
+                feedback: grade?.feedback ?? undefined,
+              });
+
+            } else if (qType === "essay") {
+              // Pending teacher review — always surface so student knows it needs attention
+              const grade = essayGrades[q.id];
+              if (grade && Math.round((grade.score / (q.marks || 1)) * 100) >= 60) continue;
+              areas.push({
+                id: `exam-${exam.id}-${q.id}`,
+                source: "exam",
+                sourceTitle: exam.title,
+                courseName: exam.courseName ?? "—",
+                courseId: exam.courseId ?? "",
+                questionText: q.question,
+                questionType: "essay",
+                scorePercent: grade ? Math.round((grade.score / (q.marks || 1)) * 100) : 0,
+                myAnswer: answers[q.id] ? String(answers[q.id]) : "Not answered",
+                feedback: grade?.feedback,
+                pendingReview: !grade,
+              });
+            }
           }
         }
 
@@ -323,7 +292,7 @@ export default function StudentPerformancePage() {
           }
         }
 
-        // 3. MCQ quiz — wrong answers
+        // 3. MCQ quiz — wrong / unanswered answers
         for (const group of assessmentGroups) {
           for (const { content } of group.quizzes) {
             const attempt = userId && content.studentAttempts?.[userId];
@@ -331,8 +300,10 @@ export default function StudentPerformancePage() {
             const questions: any[] = content.quizData?.questions ?? [];
             for (const q of questions) {
               if (q.correctAnswer === undefined) continue;
-              const myAnswerIdx = attempt.answers[q.id];
-              if (myAnswerIdx === undefined || myAnswerIdx === q.correctAnswer) continue;
+              const myAnswerRaw = attempt.answers[q.id];
+              if (myAnswerRaw === undefined) continue;
+              const myAnswerIdx = Number(myAnswerRaw);
+              if (myAnswerIdx === Number(q.correctAnswer)) continue;
               areas.push({
                 id: `quiz-${content.id}-${q.id}`,
                 source: "quiz-mcq",
@@ -340,14 +311,16 @@ export default function StudentPerformancePage() {
                 courseName: group.course.name,
                 courseId: group.course.id,
                 questionText: q.question,
+                questionType: "mcq",
                 scorePercent: 0,
                 myAnswer: q.options?.[myAnswerIdx] ?? `Option ${myAnswerIdx + 1}`,
-                correctAnswer: q.options?.[q.correctAnswer] ?? `Option ${q.correctAnswer + 1}`,
+                correctAnswer: q.options?.[Number(q.correctAnswer)] ?? `Option ${Number(q.correctAnswer) + 1}`,
               });
             }
           }
         }
 
+        console.log("[Performance] weak areas found:", areas.length, areas);
         areas.sort((a, b) => a.scorePercent - b.scorePercent);
         setWeakAreas(areas);
       } finally {
@@ -393,11 +366,11 @@ export default function StudentPerformancePage() {
       </div>
 
       {/* Stat bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {stats.map((s) => (
           <div
             key={s.label}
-            className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/[0.03] p-5"
+            className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/3 p-5"
           >
             <span className="text-sm text-gray-500 dark:text-gray-400">{s.label}</span>
             <div className="flex items-center justify-between mt-1">
@@ -414,93 +387,164 @@ export default function StudentPerformancePage() {
         ))}
       </div>
 
-      {/* Weak Areas */}
-      {(loading || weakAreas.length > 0) && (
-        <div className="rounded-2xl border border-orange-200 dark:border-orange-800/50 bg-orange-50/50 dark:bg-orange-500/[0.05] overflow-hidden">
-          <div className="px-5 py-4 border-b border-orange-200 dark:border-orange-800/50 flex items-center gap-2">
-            <span className="text-lg">⚠️</span>
-            <div>
-              <h3 className="font-semibold text-gray-800 dark:text-white">Areas to Improve</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                Questions you got wrong — expand each to see related study material from your course
-              </p>
-            </div>
+      {/* Weak Areas — always shown once data has loaded (or while loading) */}
+      <div className="rounded-2xl border border-orange-200 dark:border-orange-800/50 bg-orange-50/50 dark:bg-orange-500/5 overflow-hidden">
+        <div className="px-5 py-4 border-b border-orange-200 dark:border-orange-800/50 flex items-center gap-2">
+          <span className="text-lg">⚠️</span>
+          <div>
+            <h3 className="font-semibold text-gray-800 dark:text-white">Areas to Improve</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              Questions you got wrong — expand each to see related study material from your course
+            </p>
           </div>
+        </div>
 
-          {loading ? (
-            <div className="p-5 flex flex-col gap-3">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="animate-pulse h-16 bg-orange-100 dark:bg-orange-900/20 rounded-xl" />
-              ))}
-            </div>
-          ) : (
-            <div className="divide-y divide-orange-100 dark:divide-orange-900/30">
-              {weakAreas.map((area) => (
-                <div key={area.id} className="px-5 py-4">
-                  {/* Source label */}
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-xs font-medium text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-500/15 px-2 py-0.5 rounded-full">
-                      {area.source === "exam"
-                        ? "Exam"
-                        : area.source === "quiz-voice"
-                        ? "Voice Quiz"
-                        : "Quiz"}
-                    </span>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                      {area.sourceTitle} · {area.courseName}
-                    </span>
-                    {area.source === "quiz-voice" && (
-                      <span className="ml-auto text-xs font-semibold text-red-600 dark:text-red-400">
+        {loading ? (
+          <div className="p-5 flex flex-col gap-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="animate-pulse h-24 bg-orange-100 dark:bg-orange-900/20 rounded-xl" />
+            ))}
+          </div>
+        ) : weakAreas.length === 0 ? (
+          <div className="px-5 py-10 flex flex-col items-center gap-2 text-center">
+            <span className="text-3xl">🎉</span>
+            <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">No weak areas found</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              Complete MCQ exams or quizzes and any wrong answers will appear here with study tips.
+            </p>
+          </div>
+        ) : (
+          <div className="p-4 flex flex-col gap-3">
+            {weakAreas.map((area, idx) => {
+              // Card accent colour by type
+              const borderColor =
+                area.pendingReview
+                  ? "border-l-amber-400 dark:border-l-amber-500"
+                  : area.source === "quiz-voice" || area.questionType === "short_answer"
+                  ? "border-l-orange-400 dark:border-l-orange-500"
+                  : "border-l-red-400 dark:border-l-red-500";
+
+              const isMcq =
+                area.questionType === "mcq" ||
+                (!area.questionType && area.source !== "quiz-voice");
+
+              return (
+                <div
+                  key={area.id}
+                  className={`rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 border-l-4 ${borderColor} overflow-hidden`}
+                >
+                  {/* ── Card header ── */}
+                  <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-2">
+                    {/* Left: index + pills */}
+                    <div className="flex items-center flex-wrap gap-2 min-w-0">
+                      <span className="text-xs font-bold text-gray-400 dark:text-gray-500 shrink-0">
+                        #{idx + 1}
+                      </span>
+                      <span className="text-xs font-medium text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-500/15 px-2 py-0.5 rounded-full shrink-0">
+                        {area.source === "exam" ? "Exam" : area.source === "quiz-voice" ? "Voice Quiz" : "Quiz"}
+                      </span>
+                      {area.questionType && area.questionType !== "mcq" && (
+                        <span className="text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-500/15 px-2 py-0.5 rounded-full shrink-0 capitalize">
+                          {area.questionType.replace("_", " ")}
+                        </span>
+                      )}
+                      {area.pendingReview && (
+                        <span className="text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-500/15 px-2 py-0.5 rounded-full shrink-0">
+                          ⏳ Pending review
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-400 dark:text-gray-500 truncate">
+                        {area.sourceTitle} · {area.courseName}
+                      </span>
+                    </div>
+                    {/* Right: score % for voice/short_answer */}
+                    {(area.source === "quiz-voice" || area.questionType === "short_answer") && (
+                      <span className="shrink-0 text-sm font-bold text-red-600 dark:text-red-400">
                         {area.scorePercent}%
                       </span>
                     )}
                   </div>
 
-                  {/* Question */}
-                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">
-                    {area.questionText}
-                  </p>
+                  {/* ── Question text ── */}
+                  <div className="px-4 pb-3">
+                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 leading-snug">
+                      {area.questionText}
+                    </p>
+                  </div>
 
-                  {/* MCQ answer comparison */}
-                  {(area.source === "exam" || area.source === "quiz-mcq") && (
-                    <div className="flex flex-wrap gap-3 text-xs mb-2">
-                      <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 px-2.5 py-1 rounded-lg">
-                        <span className="font-semibold">Your answer:</span>
-                        {area.myAnswer}
-                      </span>
-                      <span className="flex items-center gap-1.5 text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-500/10 px-2.5 py-1 rounded-lg">
-                        <span className="font-semibold">Correct:</span>
-                        {area.correctAnswer}
-                      </span>
+                  {/* ── Answer comparison (MCQ) ── */}
+                  {isMcq && area.correctAnswer && (
+                    <div className="mx-4 mb-3 grid grid-cols-2 gap-2 text-xs">
+                      <div className="flex flex-col gap-1 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 px-3 py-2">
+                        <span className="font-semibold text-red-500 dark:text-red-400 uppercase tracking-wide text-[10px]">
+                          Your answer
+                        </span>
+                        <span className="text-red-700 dark:text-red-300 font-medium">
+                          {area.myAnswer ?? "Not answered"}
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-1 rounded-lg bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20 px-3 py-2">
+                        <span className="font-semibold text-green-600 dark:text-green-400 uppercase tracking-wide text-[10px]">
+                          Correct answer
+                        </span>
+                        <span className="text-green-700 dark:text-green-300 font-medium">
+                          {area.correctAnswer}
+                        </span>
+                      </div>
                     </div>
                   )}
 
-                  {/* Voice feedback */}
-                  {area.source === "quiz-voice" && area.feedback && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 italic">
-                      {area.feedback}
-                    </p>
+                  {/* ── Short answer: student response ── */}
+                  {area.questionType === "short_answer" && area.myAnswer && area.myAnswer !== "Not answered" && (
+                    <div className="mx-4 mb-3 rounded-lg bg-gray-50 dark:bg-white/4 border border-gray-200 dark:border-gray-700 px-3 py-2 text-xs">
+                      <p className="font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px] mb-1">Your answer</p>
+                      <p className="text-gray-700 dark:text-gray-300">{area.myAnswer}</p>
+                    </div>
                   )}
 
-                  {/* Related content from Qdrant — lazy loaded on expand */}
+                  {/* ── AI / teacher feedback ── */}
+                  {area.feedback && (
+                    <div className="mx-4 mb-3 flex gap-2 rounded-lg bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/20 px-3 py-2">
+                      <span className="text-orange-400 shrink-0 mt-0.5">💬</span>
+                      <p className="text-xs text-gray-600 dark:text-gray-300 italic leading-relaxed">{area.feedback}</p>
+                    </div>
+                  )}
+
+                  {/* ── Essay pending ── */}
+                  {area.questionType === "essay" && area.pendingReview && (
+                    <div className="mx-4 mb-3 flex gap-2 items-center rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-3 py-2">
+                      <span className="text-amber-500 shrink-0">⏳</span>
+                      <p className="text-xs text-amber-700 dark:text-amber-300">
+                        Awaiting teacher grading — study the related material below to prepare.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* ── Study material expander ── */}
                   {area.courseId && (
-                    <RelatedContent instituteId={instituteId} area={area} />
+                    <div className="border-t border-gray-100 dark:border-gray-800 px-4 py-3">
+                      <RelatedStudyMaterial
+                        instituteId={instituteId}
+                        courseId={area.courseId}
+                        questionText={area.questionText}
+                      />
+                    </div>
                   )}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Course Performance Table */}
-      <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.03] overflow-hidden">
+      <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="font-semibold text-gray-800 dark:text-white">Course Performance</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 dark:bg-white/[0.02] text-gray-500 dark:text-gray-400">
+            <thead className="bg-gray-50 dark:bg-white/2 text-gray-500 dark:text-gray-400">
               <tr>
                 <th className="px-5 py-3 text-left font-medium">Course</th>
                 <th className="px-5 py-3 text-left font-medium">Avg Score</th>
@@ -530,7 +574,7 @@ export default function StudentPerformancePage() {
                 courseRows.map((row) => (
                   <tr
                     key={row.id}
-                    className="hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors"
+                    className="hover:bg-gray-50 dark:hover:bg-white/2 transition-colors"
                   >
                     <td className="px-5 py-4 text-gray-800 dark:text-gray-200 font-medium">
                       {row.course}
@@ -563,13 +607,13 @@ export default function StudentPerformancePage() {
 
       {/* Exams Table */}
       {(loading || examRows.length > 0) && (
-        <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.03] overflow-hidden">
+        <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
             <h3 className="font-semibold text-gray-800 dark:text-white">Exam Results</h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 dark:bg-white/[0.02] text-gray-500 dark:text-gray-400">
+              <thead className="bg-gray-50 dark:bg-white/2 text-gray-500 dark:text-gray-400">
                 <tr>
                   <th className="px-5 py-3 text-left font-medium">Exam</th>
                   <th className="px-5 py-3 text-left font-medium">Course</th>
@@ -594,7 +638,7 @@ export default function StudentPerformancePage() {
                   examRows.map((exam) => (
                     <tr
                       key={exam.id}
-                      className="hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors"
+                      className="hover:bg-gray-50 dark:hover:bg-white/2 transition-colors"
                     >
                       <td className="px-5 py-4 text-gray-800 dark:text-gray-200 font-medium">
                         {exam.title}
@@ -645,7 +689,7 @@ export default function StudentPerformancePage() {
 
       {/* Empty state */}
       {!loading && courseRows.length === 0 && examRows.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.03] px-6 py-8 text-center flex flex-col items-center gap-3">
+        <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 bg-white dark:bg-white/3 px-6 py-8 text-center flex flex-col items-center gap-3">
           <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
             <PieChartIcon className="w-6 h-6 text-gray-400" />
           </div>

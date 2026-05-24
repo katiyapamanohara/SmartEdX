@@ -30,11 +30,7 @@ export default function AuthLayout({
             Back to Home
           </Link>
 
-          <div className="hidden sm:flex items-center justify-center absolute left-1/2 -translate-x-1/2 pointer-events-none">
-            <span className="text-xl md:text-2xl font-bold tracking-tight text-gray-900 dark:text-white drop-shadow-sm">
-              SmartEdX
-            </span>
-          </div>
+          
 
           <div className="relative z-50 bg-white/50 dark:bg-gray-900/50 backdrop-blur-md p-1.5 rounded-full border border-gray-200 dark:border-gray-800">
             <ThemeTogglerTwo />

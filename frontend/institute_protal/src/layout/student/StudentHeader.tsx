@@ -3,7 +3,6 @@ import { ThemeToggleButton } from "@/components/common/ThemeToggleButton";
 import NotificationDropdown from "@/components/header/NotificationDropdown";
 import StudentUserDropdown from "@/components/header/StudentUserDropdown";
 import { useSidebar } from "@/context/SidebarContext";
-import Image from "next/image";
 import Link from "next/link";
 import React, { useState, useEffect, useRef } from "react";
 import { authService, User } from "@/services/authService";
@@ -20,7 +19,7 @@ const StudentHeader: React.FC = () => {
       setIsLoading(true);
       try {
         const userData = await authService.getProfile();
-        setUser(userData);
+        if (userData) setUser(userData);
       } finally {
         setIsLoading(false);
       }

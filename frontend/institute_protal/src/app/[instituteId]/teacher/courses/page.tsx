@@ -2,7 +2,151 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { instituteService, Course } from "@/services/instituteService";
-import { FiLayers, FiSearch, FiBookOpen } from "react-icons/fi";
+import { FiLayers, FiSearch, FiBookOpen, FiX, FiCpu } from "react-icons/fi";
+import { createPortal } from "react-dom";
+import { useFeatures } from "@/context/InstituteFeatureContext";
+
+const DEFAULT_STUDENT_INSTRUCTIONS =
+  "You are an AI tutor for this course.\n" +
+  "Your ONLY purpose is to help students understand and learn the content of this course.\n" +
+  "Rules:\n" +
+  "- Greetings and brief follow-ups: answer directly, no tool call.\n" +
+  "- ANY question about course topics, concepts, or materials: search course material IMMEDIATELY.\n" +
+  "- After search: answer in 1-2 sentences, cite the page if available.\n" +
+  "- If nothing is found: say so in one sentence and suggest the student ask their teacher.\n" +
+  "- OFF-TOPIC: redirect in one sentence back to the course.\n" +
+  "- Always be brief — 1 to 2 sentences per turn.";
+
+const DEFAULT_TEACHER_INSTRUCTIONS =
+  "You are an AI assistant for the teacher of this course.\n" +
+  "Your purpose is to help the teacher with lesson planning, content queries, and course material.\n" +
+  "Rules:\n" +
+  "- ANY question about course content or materials: search course material IMMEDIATELY.\n" +
+  "- Answer in 1-2 sentences, cite page numbers where available.\n" +
+  "- Help with curriculum planning, quiz creation ideas, and teaching strategies.\n" +
+  "- OFF-TOPIC: redirect in one sentence back to educational topics.";
+
+function AgentInstructionsModal({
+  course,
+  instituteId,
+  onClose,
+  onSaved,
+}: {
+  course: Course;
+  instituteId: string;
+  onClose: () => void;
+  onSaved: (updated: Course) => void;
+}) {
+  const [studentInstructions, setStudentInstructions] = useState(
+    course.studentAgentInstructions || DEFAULT_STUDENT_INSTRUCTIONS
+  );
+  const [teacherInstructions, setTeacherInstructions] = useState(
+    course.teacherAgentInstructions || DEFAULT_TEACHER_INSTRUCTIONS
+  );
+  const [saving, setSaving] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); return () => setMounted(false); }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const updated = await instituteService.updateCourse(instituteId, course.id, {
+        studentAgentInstructions: studentInstructions,
+        teacherAgentInstructions: teacherInstructions,
+      });
+      onSaved(updated);
+      onClose();
+    } catch (e) {
+      console.error("Failed to save agent instructions", e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm overflow-y-auto">
+      <div className="w-full max-w-xl rounded-2xl bg-white dark:bg-gray-800 p-6 shadow-xl my-8">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <FiCpu className="text-blue-500" />
+              AI Agent Instructions
+            </h2>
+            <p className="text-xs text-gray-400 mt-0.5">{course.name}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-300 transition-colors"
+          >
+            <FiX className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Student Agent Instructions
+            </label>
+            <textarea
+              rows={7}
+              value={studentInstructions}
+              onChange={(e) => setStudentInstructions(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-sm font-mono resize-y"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              How the AI behaves when students ask questions about this course.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Teacher Agent Instructions
+            </label>
+            <textarea
+              rows={7}
+              value={teacherInstructions}
+              onChange={(e) => setTeacherInstructions(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-sm font-mono resize-y"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              How the AI behaves when you (the teacher) query this course's content.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 mt-6">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-sm"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 text-sm font-semibold flex items-center gap-2"
+          >
+            {saving ? (
+              <>
+                <svg className="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Saving…
+              </>
+            ) : "Save Instructions"}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
 
 const GRADIENTS = [
   "from-violet-600 via-purple-500 to-indigo-400",
@@ -28,7 +172,17 @@ const SkeletonCard = () => (
   </div>
 );
 
-function CourseCard({ course, instituteId }: { course: Course; instituteId: string }) {
+function CourseCard({
+  course,
+  instituteId,
+  voiceAgentEnabled,
+  onEditAgent,
+}: {
+  course: Course;
+  instituteId: string;
+  voiceAgentEnabled: boolean;
+  onEditAgent: (course: Course) => void;
+}) {
   return (
     <div className="group bg-white dark:bg-gray-800 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col">
       {/* Banner */}
@@ -67,8 +221,8 @@ function CourseCard({ course, instituteId }: { course: Course; instituteId: stri
         )}
       </div>
 
-      {/* Action */}
-      <div className="px-5 pb-5">
+      {/* Actions */}
+      <div className="px-5 pb-5 flex flex-col gap-2">
         <a
           href={`/${instituteId}/teacher/courses/${course.id}/modules`}
           className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm"
@@ -76,6 +230,16 @@ function CourseCard({ course, instituteId }: { course: Course; instituteId: stri
           <FiLayers className="w-4 h-4" />
           Manage Content
         </a>
+        {voiceAgentEnabled && (
+          <button
+            type="button"
+            onClick={() => onEditAgent(course)}
+            className="flex items-center justify-center gap-2 w-full px-4 py-2.5 border border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-sm font-semibold rounded-xl transition-colors"
+          >
+            <FiCpu className="w-4 h-4" />
+            AI Agent Instructions
+          </button>
+        )}
       </div>
     </div>
   );
@@ -84,9 +248,12 @@ function CourseCard({ course, instituteId }: { course: Course; instituteId: stri
 export default function TeacherCoursesPage() {
   const params = useParams();
   const instituteId = params?.instituteId as string;
+  const { hasFeature } = useFeatures();
+  const voiceAgentEnabled = hasFeature("voice_agent");
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [agentCourse, setAgentCourse] = useState<Course | null>(null);
 
   useEffect(() => {
     if (!instituteId) return;
@@ -153,9 +320,32 @@ export default function TeacherCoursesPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {filtered.map((course) => (
-            <CourseCard key={course.id} course={course} instituteId={instituteId} />
+            <CourseCard
+              key={course.id}
+              course={course}
+              instituteId={instituteId}
+              voiceAgentEnabled={voiceAgentEnabled}
+              onEditAgent={setAgentCourse}
+            />
           ))}
         </div>
+      )}
+
+      {agentCourse && (
+        <AgentInstructionsModal
+          course={agentCourse}
+          instituteId={instituteId}
+          onClose={() => setAgentCourse(null)}
+          onSaved={(updated) =>
+            setCourses((prev) =>
+              prev.map((c) =>
+                c.id === updated.id
+                  ? { ...c, studentAgentInstructions: updated.studentAgentInstructions, teacherAgentInstructions: updated.teacherAgentInstructions }
+                  : c
+              )
+            )
+          }
+        />
       )}
     </div>
   );

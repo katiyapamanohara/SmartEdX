@@ -275,6 +275,7 @@ type AssessmentItem = {
   voiceQuestions?: VoiceQuestion[];
   requireFaceId: boolean;
   maxAttempts: number;
+  requireScreenShare?: boolean;
   createdAt?: string;
 };
 
@@ -288,6 +289,7 @@ export default function StudentAssignmentsPage() {
   const [attemptedIds, setAttemptedIds] = useState<Set<string>>(new Set());
   const [attemptScores, setAttemptScores] = useState<Record<string, number>>({});
   const [attemptCounts, setAttemptCounts] = useState<Record<string, number>>({});
+  const [disqualifiedIds, setDisqualifiedIds] = useState<Set<string>>(new Set());
   const [voicePlayerOpen, setVoicePlayerOpen] = useState(false);
   const [activeVoiceItem, setActiveVoiceItem] = useState<AssessmentItem | null>(null);
   const [evalResult, setEvalResult] = useState<EvalResult | null>(null);
@@ -334,19 +336,26 @@ export default function StudentAssignmentsPage() {
           const attempted = new Set<string>();
           const scores: Record<string, number> = {};
           const counts: Record<string, number> = {};
+          const disqualified = new Set<string>();
           for (const g of data) {
             for (const q of g.quizzes) {
               const attempts = q.content.studentAttempts || {};
               if (attempts[userId]) {
+                const a = attempts[userId];
                 attempted.add(q.content.id);
-                scores[q.content.id] = attempts[userId].score ?? 0;
-                counts[q.content.id] = attempts[userId].attemptCount ?? 1;
+                scores[q.content.id] = a.score ?? 0;
+                counts[q.content.id] = a.attemptCount ?? 1;
+                // Mark disqualified if cheating was detected (quiz: integrityViolated, exam: autoFailed)
+                if (a.integrityViolated || a.autoFailed) {
+                  disqualified.add(q.content.id);
+                }
               }
             }
           }
           setAttemptedIds(attempted);
           setAttemptScores(scores);
           setAttemptCounts(counts);
+          setDisqualifiedIds(disqualified);
         }
       } catch (e) {
         console.error(e);
@@ -383,6 +392,8 @@ export default function StudentAssignmentsPage() {
           voiceQuestions: isVoice ? (content.quizData as any)?.voiceQuestions : undefined,
           requireFaceId: !!((content.quizData as any)?.requireFaceId),
           maxAttempts: (content.quizData as any)?.maxAttempts ?? 1,
+          // undefined = legacy assessment created before this field; VoiceModal treats undefined as true (proctored)
+          requireScreenShare: (content.quizData as any)?.requireScreenShare,
           createdAt: content.createdAt,
         };
       }),
@@ -495,22 +506,32 @@ export default function StudentAssignmentsPage() {
                   const used = attemptCounts[item.id] ?? 0;
                   const max = item.maxAttempts;
                   const hasAttempted = attemptedIds.has(item.id);
+                  const isDisqualified = disqualifiedIds.has(item.id);
                   const attemptsLeft = max - used;
-                  const canRetry = hasAttempted && attemptsLeft > 0;
+                  const canRetry = hasAttempted && attemptsLeft > 0 && !isDisqualified;
 
                   if (item.type === "voice") {
                     return (
                       <div className="flex items-center gap-2 flex-wrap justify-end">
                         {hasAttempted && (
-                          <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                            (attemptScores[item.id] ?? 0) >= (item.passingScore || 50)
-                              ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400"
-                              : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
-                          }`}>
-                            {(attemptScores[item.id] ?? 0) >= (item.passingScore || 50) ? "Passed" : "Failed"} · {attemptScores[item.id] ?? 0}%
-                          </span>
+                          isDisqualified ? (
+                            <span className="rounded-full px-2 py-1 text-xs font-semibold bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400 flex items-center gap-1">
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="shrink-0">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                              </svg>
+                              Disqualified
+                            </span>
+                          ) : (
+                            <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                              (attemptScores[item.id] ?? 0) >= (item.passingScore || 50)
+                                ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400"
+                                : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
+                            }`}>
+                              {(attemptScores[item.id] ?? 0) >= (item.passingScore || 50) ? "Passed" : "Failed"} · {attemptScores[item.id] ?? 0}%
+                            </span>
+                          )
                         )}
-                        {max > 1 && (
+                        {max > 1 && !isDisqualified && (
                           <span className="text-xs text-gray-400 dark:text-gray-500">
                             {used}/{max} attempts
                           </span>
@@ -533,23 +554,32 @@ export default function StudentAssignmentsPage() {
                   return (
                     <div className="flex items-center gap-2 flex-wrap justify-end">
                       {hasAttempted && (
-                        <>
-                          <span className={`rounded-full px-2 py-1 text-xs font-medium ${
-                            (attemptScores[item.id] ?? 0) >= item.passingScore
-                              ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400"
-                              : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
-                          }`}>
-                            {(attemptScores[item.id] ?? 0) >= item.passingScore ? "Passed" : "Failed"} · {attemptScores[item.id] ?? 0}%
+                        isDisqualified ? (
+                          <span className="rounded-full px-2 py-1 text-xs font-semibold bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400 flex items-center gap-1">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="shrink-0">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                            </svg>
+                            Disqualified
                           </span>
-                          <Link
-                            href={`/${instituteId}/student/assignments/${item.id}`}
-                            className="rounded-lg border border-gray-200 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
-                          >
-                            View Review
-                          </Link>
-                        </>
+                        ) : (
+                          <>
+                            <span className={`rounded-full px-2 py-1 text-xs font-medium ${
+                              (attemptScores[item.id] ?? 0) >= item.passingScore
+                                ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400"
+                                : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
+                            }`}>
+                              {(attemptScores[item.id] ?? 0) >= item.passingScore ? "Passed" : "Failed"} · {attemptScores[item.id] ?? 0}%
+                            </span>
+                            <Link
+                              href={`/${instituteId}/student/assignments/${item.id}`}
+                              className="rounded-lg border border-gray-200 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                            >
+                              View Review
+                            </Link>
+                          </>
+                        )
                       )}
-                      {max > 1 && hasAttempted && (
+                      {max > 1 && hasAttempted && !isDisqualified && (
                         <span className="text-xs text-gray-400 dark:text-gray-500">
                           {used}/{max} attempts
                         </span>
@@ -593,6 +623,8 @@ export default function StudentAssignmentsPage() {
                 title: activeVoiceItem.title,
                 instructions: activeVoiceItem.description ?? "",
                 questions: activeVoiceItem.voiceQuestions ?? [],
+                // undefined = legacy (treated as true in VoiceModal); explicit false = no proctoring
+                requireScreenShare: activeVoiceItem.requireScreenShare,
               },
             }}
             onCompleted={(result) => {

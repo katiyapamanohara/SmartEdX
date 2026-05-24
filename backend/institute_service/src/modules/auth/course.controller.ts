@@ -101,6 +101,8 @@ export class CourseController {
     body: {
       score: number;
       answers?: Record<string, number>;
+      violations?: { type: string; timestamp: string; detail?: string }[];
+      integrityViolated?: boolean;
       voiceResult?: {
         totalScore: number;
         totalMarks: number;
@@ -127,6 +129,29 @@ export class CourseController {
       body.score,
       body.answers,
       body.voiceResult,
+      body.violations,
+      body.integrityViolated,
+    );
+  }
+
+  @Post('student-assessments/:contentId/violation')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Report a real-time integrity violation during an active assessment' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiParam({ name: 'contentId', description: 'Quiz Content ID' })
+  async reportAssessmentViolation(
+    @Param('id') instituteId: string,
+    @Param('contentId') contentId: string,
+    @CurrentUser('userId') userId: string,
+    @Body() body: { type: string; timestamp: string; detail?: string },
+  ) {
+    return this.courseService.reportQuizViolation(
+      instituteId,
+      contentId,
+      userId,
+      body.type,
+      body.timestamp,
+      body.detail,
     );
   }
 
@@ -351,6 +376,18 @@ export class CourseController {
       userId,
       body,
     );
+  }
+
+  @Get(':courseId/agent-config')
+  @Public()
+  @ApiOperation({ summary: 'Get AI agent configuration for a course (voice + chat instructions)' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  @ApiParam({ name: 'courseId', description: 'Course ID' })
+  async getCourseAgentConfig(
+    @Param('id') instituteId: string,
+    @Param('courseId') courseId: string,
+  ) {
+    return this.courseService.getCourseAgentConfig(instituteId, courseId);
   }
 
   @Get(':courseId/for-teacher')

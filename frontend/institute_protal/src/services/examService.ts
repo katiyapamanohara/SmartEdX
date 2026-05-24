@@ -41,9 +41,7 @@ export interface Exam {
   totalMarks: number;
   questionCount: number;
   questions: ExamQuestion[];
-  requireFaceId: boolean;
   requireScreenShare: boolean;
-  enableLiveFaceCheck: boolean;
   autoFailOnCheat: boolean;
   maxAttempts: number;
   createdByUserId: string;
@@ -62,9 +60,7 @@ export interface CreateExamPayload {
   scheduledAt?: string;
   durationMinutes: number;
   passingScore: number;
-  requireFaceId?: boolean;
   requireScreenShare?: boolean;
-  enableLiveFaceCheck?: boolean;
   autoFailOnCheat?: boolean;
   maxAttempts?: number;
   questions: ExamQuestion[];
@@ -153,10 +149,28 @@ class ExamService {
     return res.json();
   }
 
+  /** Persist a client-side auto-fail (e.g. 10-second leave-window countdown expired) */
+  async forceAutoFail(
+    instituteId: string,
+    examId: string,
+    reason: string,
+  ): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.base(instituteId)}/${examId}/force-auto-fail`, {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify({ reason }),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
   async reportIntegrityFlag(
     instituteId: string,
     examId: string,
-    type: "tab_switch" | "face_absent" | "multiple_faces" | "face_verify_failed" | "camera_disabled" | "fullscreen_exit" | "screen_share_disabled" | "live_face_mismatch" | "suspicious_screen" | "copy_attempt"
+    type: "tab_switch" | "fullscreen_exit" | "screen_share_disabled" | "suspicious_screen" | "copy_attempt"
   ): Promise<{ autoFailed?: boolean }> {
     try {
       const res = await fetch(`${this.base(instituteId)}/${examId}/integrity-flag`, {
@@ -169,24 +183,6 @@ class ExamService {
       // fire-and-forget — never block the student
     }
     return {};
-  }
-
-  async liveFaceCheck(
-    instituteId: string,
-    examId: string,
-    imageB64: string,
-  ): Promise<{ verified: boolean; distance: number; threshold: number; autoFailed: boolean } | null> {
-    try {
-      const res = await fetch(`${this.base(instituteId)}/${examId}/live-face-check`, {
-        method: "POST",
-        headers: this.headers(),
-        body: JSON.stringify({ image_b64: imageB64 }),
-      });
-      if (!res.ok) return null;
-      return res.json();
-    } catch {
-      return null;
-    }
   }
 
   async screenCheck(
@@ -228,23 +224,6 @@ class ExamService {
       body: JSON.stringify({ userId }),
     });
     return res.ok;
-  }
-
-  async verifyFace(imageB64: string): Promise<{ verified: boolean; distance: number; threshold: number } | null> {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-    const token = authService.getToken();
-    if (!token) return null;
-    try {
-      const res = await fetch(`${apiUrl}/api/institutes/auth/me/face/verify`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ image_b64: imageB64 }),
-      });
-      if (!res.ok) return null;
-      return res.json();
-    } catch {
-      return null;
-    }
   }
 
 }

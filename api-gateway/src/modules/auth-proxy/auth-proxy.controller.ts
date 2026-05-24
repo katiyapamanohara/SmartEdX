@@ -64,6 +64,17 @@ export class AuthProxyController {
     );
   }
 
+  @Get('me')
+  @ApiOperation({ summary: 'Get current user (proxied to SaaS service)' })
+  async getMe(@Headers() headers: any) {
+    return this.authProxyService.forwardRequest(
+      'auth/me',
+      'GET',
+      null,
+      headers,
+    );
+  }
+
   @Get('profile')
   @ApiOperation({ summary: 'Get user profile (proxied to SaaS service)' })
   async getProfile(@Headers() headers: any) {

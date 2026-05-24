@@ -8,6 +8,7 @@ interface LiveSession {
   id: string;
   title: string;
   description?: string;
+  courseId?: string;
   courseName?: string;
   teacherName?: string;
   status: "scheduled" | "live" | "ended";
@@ -47,6 +48,11 @@ function StatusBadge({ status }: { status: LiveSession["status"] }) {
   );
 }
 
+interface Course {
+  id: string;
+  name: string;
+}
+
 function ScheduleModal({
   instituteId,
   onCreated,
@@ -59,11 +65,30 @@ function ScheduleModal({
   const [form, setForm] = useState({
     title: "",
     description: "",
-    courseName: "",
+    courseId: "",
     scheduledAt: new Date(Date.now() + 30 * 60 * 1000).toISOString().slice(0, 16),
   });
+  const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingCourses, setLoadingCourses] = useState(true);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const fetchCourses = async () => {
+      setLoadingCourses(true);
+      try {
+        const res = await fetch(`${API}/api/institutes/institutes/${instituteId}/courses/my-courses`, {
+          headers: authHeaders(),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setCourses(Array.isArray(data) ? data : []);
+        }
+      } catch { /* ignore */ }
+      setLoadingCourses(false);
+    };
+    fetchCourses();
+  }, [instituteId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,7 +102,7 @@ function ScheduleModal({
         body: JSON.stringify({
           title: form.title.trim(),
           description: form.description.trim() || undefined,
-          courseName: form.courseName.trim() || undefined,
+          courseId: form.courseId || undefined,
           scheduledAt: new Date(form.scheduledAt).toISOString(),
         }),
       });
@@ -114,12 +139,24 @@ function ScheduleModal({
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course (optional)</label>
-            <input
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-              value={form.courseName}
-              onChange={(e) => setForm((f) => ({ ...f, courseName: e.target.value }))}
-              placeholder="e.g. Mathematics 101"
-            />
+            {loadingCourses ? (
+              <div className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-sm">
+                Loading courses...
+              </div>
+            ) : (
+              <select
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                value={form.courseId}
+                onChange={(e) => setForm((f) => ({ ...f, courseId: e.target.value }))}
+              >
+                <option value="">-- Open to all students --</option>
+                {courses.map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description (optional)</label>
@@ -162,6 +199,152 @@ function ScheduleModal({
   );
 }
 
+function EditModal({
+  instituteId,
+  session,
+  onUpdated,
+  onClose,
+}: {
+  instituteId: string;
+  session: LiveSession;
+  onUpdated: () => void;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState({
+    title: session.title,
+    description: session.description || "",
+    courseId: session.courseId || "",
+    scheduledAt: session.scheduledAt ? new Date(session.scheduledAt).toISOString().slice(0, 16) : "",
+  });
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loadingCourses, setLoadingCourses] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const fetchCourses = async () => {
+      setLoadingCourses(true);
+      try {
+        const res = await fetch(`${API}/api/institutes/institutes/${instituteId}/courses/my-courses`, {
+          headers: authHeaders(),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setCourses(Array.isArray(data) ? data : []);
+        }
+      } catch { /* ignore */ }
+      setLoadingCourses(false);
+    };
+    fetchCourses();
+  }, [instituteId]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.title.trim()) { setError("Title is required"); return; }
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`${API}/api/institutes/institutes/${instituteId}/live-classes/${session.id}`, {
+        method: "PATCH",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          title: form.title.trim(),
+          description: form.description.trim() || undefined,
+          courseId: form.courseId || undefined,
+          scheduledAt: form.scheduledAt ? new Date(form.scheduledAt).toISOString() : undefined,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).message || "Failed to update session");
+      onUpdated();
+      onClose();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">Edit Live Class</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
+        </div>
+        {error && (
+          <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">{error}</div>
+        )}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title *</label>
+            <input
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              value={form.title}
+              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course (optional)</label>
+            {loadingCourses ? (
+              <div className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-sm">
+                Loading courses...
+              </div>
+            ) : (
+              <select
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                value={form.courseId}
+                onChange={(e) => setForm((f) => ({ ...f, courseId: e.target.value }))}
+              >
+                <option value="">-- Open to all students --</option>
+                {courses.map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description (optional)</label>
+            <textarea
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+              rows={2}
+              value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Scheduled At</label>
+            <input
+              type="datetime-local"
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              value={form.scheduledAt}
+              onChange={(e) => setForm((f) => ({ ...f, scheduledAt: e.target.value }))}
+            />
+          </div>
+          <div className="flex gap-3 mt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors disabled:opacity-60"
+            >
+              {loading ? "Saving…" : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function TeacherLiveClassesPage() {
   const { instituteId } = useParams<{ instituteId: string }>();
   const router = useRouter();
@@ -170,6 +353,7 @@ export default function TeacherLiveClassesPage() {
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editingSession, setEditingSession] = useState<LiveSession | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
 
   const fetchSessions = useCallback(async () => {
@@ -229,6 +413,15 @@ export default function TeacherLiveClassesPage() {
           instituteId={instituteId}
           onCreated={fetchSessions}
           onClose={() => setShowModal(false)}
+        />
+      )}
+
+      {editingSession && (
+        <EditModal
+          instituteId={instituteId}
+          session={editingSession}
+          onUpdated={fetchSessions}
+          onClose={() => setEditingSession(null)}
         />
       )}
 
@@ -346,13 +539,21 @@ export default function TeacherLiveClassesPage() {
                   </button>
                 )}
                 {s.status === "scheduled" && (
-                  <button
-                    onClick={() => handleDelete(s.id)}
-                    disabled={deleting === s.id}
-                    className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-60"
-                  >
-                    {deleting === s.id ? "…" : "Delete"}
-                  </button>
+                  <>
+                    <button
+                      onClick={() => setEditingSession(s)}
+                      className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(s.id)}
+                      disabled={deleting === s.id}
+                      className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-60"
+                    >
+                      {deleting === s.id ? "…" : "Delete"}
+                    </button>
+                  </>
                 )}
               </div>
             </div>

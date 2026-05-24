@@ -71,6 +71,21 @@ export class ExamController {
     return this.examService.getForStudent(instituteId, userId);
   }
 
+  // ── Integrity ─────────────────────────────────────────────────────────────
+  // IMPORTANT: all static-segment routes (/integrity-flags, etc.) MUST be
+  // declared before the wildcard /:examId route, otherwise NestJS matches
+  // "integrity-flags" as an examId and these endpoints become unreachable.
+
+  @Get('integrity-flags')
+  @ApiOperation({ summary: 'Teacher: get all integrity flags across my exams' })
+  @ApiParam({ name: 'id', description: 'Institute ID' })
+  getIntegrityFlags(
+    @Param('id') instituteId: string,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.examService.getIntegrityFlagsForTeacher(instituteId, userId);
+  }
+
   @Get(':examId')
   @ApiOperation({ summary: 'Get a single exam by ID' })
   getOne(@Param('id') instituteId: string, @Param('examId') examId: string) {
@@ -100,16 +115,25 @@ export class ExamController {
     return this.examService.remove(instituteId, examId, userId, role);
   }
 
-  // ── Integrity ─────────────────────────────────────────────────────────────
-
-  @Get('integrity-flags')
-  @ApiOperation({ summary: 'Teacher: get all integrity flags across my exams' })
+  @Post(':examId/force-auto-fail')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Student: persist a client-side auto-fail to the backend (e.g. 10-second countdown expired)',
+  })
   @ApiParam({ name: 'id', description: 'Institute ID' })
-  getIntegrityFlags(
+  @ApiParam({ name: 'examId', description: 'Exam ID' })
+  forceAutoFail(
     @Param('id') instituteId: string,
+    @Param('examId') examId: string,
     @CurrentUser('userId') userId: string,
+    @Body() body: { reason?: string },
   ) {
-    return this.examService.getIntegrityFlagsForTeacher(instituteId, userId);
+    return this.examService.forceAutoFail(
+      instituteId,
+      examId,
+      userId,
+      body.reason ?? 'Student left the exam window',
+    );
   }
 
   @Post(':examId/integrity-flag')
@@ -175,29 +199,6 @@ export class ExamController {
       studentId,
       teacherUserId,
       body,
-    );
-  }
-
-  // ── Live face check ───────────────────────────────────────────────────────
-
-  @Post(':examId/live-face-check')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Student: periodic live face recognition check during exam',
-  })
-  @ApiParam({ name: 'id', description: 'Institute ID' })
-  @ApiParam({ name: 'examId', description: 'Exam ID' })
-  liveFaceCheck(
-    @Param('id') instituteId: string,
-    @Param('examId') examId: string,
-    @CurrentUser('userId') userId: string,
-    @Body() body: { image_b64: string },
-  ) {
-    return this.examService.liveFaceCheck(
-      instituteId,
-      examId,
-      userId,
-      body.image_b64,
     );
   }
 

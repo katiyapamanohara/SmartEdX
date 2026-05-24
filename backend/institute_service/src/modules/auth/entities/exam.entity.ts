@@ -15,13 +15,8 @@ export type ExamStatus = 'draft' | 'scheduled' | 'active' | 'completed';
 
 export type IntegrityViolationType =
   | 'tab_switch'
-  | 'face_absent'
-  | 'multiple_faces'
-  | 'face_verify_failed'
-  | 'camera_disabled'
   | 'fullscreen_exit'
   | 'screen_share_disabled'
-  | 'live_face_mismatch'
   | 'suspicious_screen'
   | 'copy_attempt';
 
@@ -119,17 +114,9 @@ export class Exam {
   @Column({ default: 50 })
   passingScore: number;
 
-  /** Whether students must verify their identity via face recognition before starting */
-  @Column({ default: false })
-  requireFaceId: boolean;
-
   /** Whether students must share their screen during the exam */
   @Column({ default: false })
   requireScreenShare: boolean;
-
-  /** Whether to run live face recognition checks (via face_recognition_server) every 60 s during exam */
-  @Column({ default: false })
-  enableLiveFaceCheck: boolean;
 
   /** Auto-fail student when high-severity violations reach the threshold (3) */
   @Column({ default: false })

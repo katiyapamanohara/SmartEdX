@@ -29,6 +29,8 @@ export interface Course {
     profilePicture?: string;
   };
   modules?: CourseModule[];
+  studentAgentInstructions?: string | null;
+  teacherAgentInstructions?: string | null;
 }
 
 export interface CourseModule {
@@ -962,6 +964,22 @@ class InstituteService {
     try {
       const response = await fetch(
         `${this.apiUrl}/api/institutes/institutes/${instituteId}/exams/my`,
+        { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } },
+      );
+      if (!response.ok) return [];
+      return await response.json();
+    } catch {
+      return [];
+    }
+  }
+
+  /** Institute admin: get ALL exams across every teacher in the institute */
+  async getAllInstituteExams(instituteId: string): Promise<any[]> {
+    const token = authService.getToken();
+    if (!token) return [];
+    try {
+      const response = await fetch(
+        `${this.apiUrl}/api/institutes/institutes/${instituteId}/exams/institute`,
         { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } },
       );
       if (!response.ok) return [];

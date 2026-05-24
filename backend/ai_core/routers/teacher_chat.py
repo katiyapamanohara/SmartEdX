@@ -55,6 +55,7 @@ async def teacher_chat(
     teacher_id: str = Form(...),
     context: str = Form("{}"),
     auth_token: str = Form(""),
+    course_id: str = Form(""),
     file: UploadFile | None = File(None),
 ):
     """
@@ -101,6 +102,9 @@ async def teacher_chat(
             )
 
     # ── Run agent ─────────────────────────────────────────────────────────────
+    # course_id may come as a top-level form field or embedded in context JSON
+    effective_course_id = course_id or context_dict.get("course_id") or None
+
     try:
         tracker = TeacherActionTracker()
 
@@ -112,6 +116,7 @@ async def teacher_chat(
             auth_token=auth_token or None,
             tracker=tracker,
             file_content=file_content,
+            course_id=effective_course_id,
         )
 
         actions: list[dict] = [

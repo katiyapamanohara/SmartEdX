@@ -8,6 +8,7 @@ import { ExamRepository } from '../../infra/database/repositories/exam.repositor
 import { CourseRepository } from '../../infra/database/repositories/course.repository';
 import { StudentRepository } from '../../infra/database/repositories/student.repository';
 import { InstituteUserRepository } from '../../infra/database/repositories/institute-user.repository';
+import { ModuleContentRepository } from '../../infra/database/repositories/module-content.repository';
 import { FaceRecClient } from '../../infra/http/face-rec.client';
 import { AiCoreClient } from '../../infra/http/ai-core.client';
 import { NotificationGateway } from './notification.gateway';
@@ -28,15 +29,10 @@ const HIGH_VIOLATION_THRESHOLD = 3;
 
 const SEVERITY_MAP: Record<IntegrityViolationType, IntegrityFlag['severity']> =
   {
-    face_absent: 'high',
-    face_verify_failed: 'high',
-    multiple_faces: 'high',
-    live_face_mismatch: 'high',
     screen_share_disabled: 'high',
     suspicious_screen: 'high',
     copy_attempt: 'high',
     tab_switch: 'high',
-    camera_disabled: 'medium',
     fullscreen_exit: 'medium',
   };
 
@@ -50,6 +46,7 @@ export class ExamService {
     private readonly faceRecClient: FaceRecClient,
     private readonly aiCoreClient: AiCoreClient,
     private readonly notificationGateway: NotificationGateway,
+    private readonly moduleContentRepository: ModuleContentRepository,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -73,9 +70,13 @@ export class ExamService {
     const attempt = userId
       ? (exam.studentAttempts?.[userId] ?? null)
       : undefined;
-    // Strip correct answers + sample answers for active exams (student safety)
+    // Strip correct answers + sample answers for active exams (student safety),
+    // but only when the student has NOT yet submitted — after submission they
+    // need correctAnswer to power the "Areas to Improve" feedback on the
+    // performance page.
+    const hasSubmitted = attempt !== null && attempt !== undefined;
     const questions =
-      status === 'active' && userId
+      status === 'active' && userId && !hasSubmitted
         ? exam.questions.map(
             ({ correctAnswer: _c, explanation: _e, sampleAnswer: _s, ...q }) =>
               q,
@@ -94,9 +95,7 @@ export class ExamService {
       status,
       passingScore: exam.passingScore,
       maxAttempts: exam.maxAttempts ?? 1,
-      requireFaceId: exam.requireFaceId ?? false,
       requireScreenShare: exam.requireScreenShare ?? false,
-      enableLiveFaceCheck: exam.enableLiveFaceCheck ?? false,
       autoFailOnCheat: exam.autoFailOnCheat ?? false,
       totalMarks,
       questionCount: exam.questions.length,
@@ -152,9 +151,7 @@ export class ExamService {
       durationMinutes: dto.durationMinutes,
       passingScore: dto.passingScore,
       maxAttempts: dto.maxAttempts ?? 1,
-      requireFaceId: dto.requireFaceId ?? false,
       requireScreenShare: dto.requireScreenShare ?? false,
-      enableLiveFaceCheck: dto.enableLiveFaceCheck ?? false,
       autoFailOnCheat: dto.autoFailOnCheat ?? false,
       questions: dto.questions as any,
       status,
@@ -194,9 +191,7 @@ export class ExamService {
     if (dto.questions !== undefined) patch.questions = dto.questions as any;
     if (dto.status !== undefined) patch.status = dto.status as ExamStatus;
     if (dto.courseId !== undefined) patch.courseId = dto.courseId;
-    if (dto.requireFaceId !== undefined) patch.requireFaceId = dto.requireFaceId;
     if (dto.requireScreenShare !== undefined) patch.requireScreenShare = dto.requireScreenShare;
-    if (dto.enableLiveFaceCheck !== undefined) patch.enableLiveFaceCheck = dto.enableLiveFaceCheck;
     if (dto.autoFailOnCheat !== undefined) patch.autoFailOnCheat = dto.autoFailOnCheat;
 
     // Auto-set status when scheduledAt is provided
@@ -298,6 +293,13 @@ export class ExamService {
       throw new BadRequestException('Exam is not currently active');
     }
 
+    // Cheating-detected failures are permanent — no re-attempts ever.
+    if ((prevAttempt as any)?.autoFailed) {
+      throw new BadRequestException(
+        'You have been disqualified from this exam due to integrity violations. Re-attempts are not permitted.',
+      );
+    }
+
     if (usedAttempts >= maxAttempts) {
       throw new BadRequestException(
         `Maximum attempts (${maxAttempts}) reached for this exam`,
@@ -345,7 +347,13 @@ export class ExamService {
     const percentage = Math.round((score / totalMarks) * 100);
     const passed = !hasPendingEssay && percentage >= exam.passingScore;
 
-    const attempt: ExamAttempt & { attemptCount: number } = {
+    // Resolve student name so it appears in the teacher's essay grader
+    const studentUser = await this.instituteUserRepository.findById(userId);
+    const studentName = studentUser
+      ? [studentUser.firstName, studentUser.lastName].filter(Boolean).join(' ') || studentUser.email
+      : undefined;
+
+    const attempt: ExamAttempt & { attemptCount: number; studentName?: string } = {
       answers: dto.answers,
       score,
       totalMarks,
@@ -353,6 +361,7 @@ export class ExamService {
       submittedAt: new Date().toISOString(),
       pendingEssayReview: hasPendingEssay,
       attemptCount: usedAttempts + 1,
+      ...(studentName ? { studentName } : {}),
       ...(Object.keys(shortAnswerGrades).length > 0 && {
         essayGrades: shortAnswerGrades,
       }),
@@ -473,62 +482,65 @@ export class ExamService {
 
     // Auto-fail check: count high-severity flags for this student
     let autoFailed = false;
-    if (exam.autoFailOnCheat) {
-      const highCount = userFlags.filter((f) => f.severity === 'high').length;
-      if (highCount >= HIGH_VIOLATION_THRESHOLD) {
-        const prevAttempt = exam.studentAttempts?.[userId];
-        // Only auto-fail if not already failed or submitted
-        if (!prevAttempt?.autoFailed) {
-          const totalMarks = exam.questions.reduce((s, q) => s + q.marks, 0);
-          const autoFailAttempt: ExamAttempt & { attemptCount: number; autoFailed: boolean } = {
-            answers: prevAttempt?.answers ?? {},
-            score: 0,
-            totalMarks,
-            passed: false,
-            submittedAt: new Date().toISOString(),
-            pendingEssayReview: false,
+    const highCount = userFlags.filter((f) => f.severity === 'high').length;
+
+    if (exam.autoFailOnCheat && highCount >= HIGH_VIOLATION_THRESHOLD) {
+      const prevAttempt = exam.studentAttempts?.[userId];
+      // Only auto-fail if not already failed or submitted
+      if (!prevAttempt?.autoFailed) {
+        const totalMarks = exam.questions.reduce((s, q) => s + q.marks, 0);
+        const autoFailAttempt: ExamAttempt & { attemptCount: number; autoFailed: boolean } = {
+          answers: prevAttempt?.answers ?? {},
+          score: 0,
+          totalMarks,
+          passed: false,
+          submittedAt: new Date().toISOString(),
+          pendingEssayReview: false,
+          autoFailed: true,
+          attemptCount: (prevAttempt?.attemptCount ?? 0) + 1,
+        };
+        const updatedAttempts = {
+          ...(exam.studentAttempts ?? {}),
+          [userId]: autoFailAttempt,
+        };
+        await this.examRepository.update(examId, {
+          integrityFlags: updatedFlags,
+          studentAttempts: updatedAttempts,
+        } as any);
+
+        // Notify teacher: student was auto-failed
+        this.notificationGateway.emitNotification(exam.createdByUserId, {
+          type: 'cheat_alert',
+          title: 'Student Auto-Failed — Cheating Detected',
+          body: `${studentName} was automatically failed in "${exam.title}" after ${highCount} high-severity violations.`,
+          metadata: {
+            examId,
+            examTitle: exam.title,
+            studentId: userId,
+            studentName,
+            studentEmail: studentUser?.email ?? '',
+            violationType: type,
+            severity: flag.severity,
+            totalHighFlags: highCount,
+            allFlags: userFlags,
             autoFailed: true,
-            attemptCount: (prevAttempt?.attemptCount ?? 0) + 1,
-          };
-          const updatedAttempts = {
-            ...(exam.studentAttempts ?? {}),
-            [userId]: autoFailAttempt,
-          };
-          await this.examRepository.update(examId, {
-            integrityFlags: updatedFlags,
-            studentAttempts: updatedAttempts,
-          } as any);
-
-          // Notify teacher: student was auto-failed
-          this.notificationGateway.emitNotification(exam.createdByUserId, {
-            type: 'cheat_alert',
-            title: 'Student Auto-Failed — Cheating Detected',
-            body: `${studentName} was automatically failed in "${exam.title}" after repeated violations.`,
-            metadata: {
-              examId,
-              examTitle: exam.title,
-              studentId: userId,
-              studentName,
-              studentEmail: studentUser?.email ?? '',
-              violationType: type,
-              severity: flag.severity,
-              totalHighFlags: userFlags.filter((f) => f.severity === 'high').length,
-              allFlags: userFlags,
-              autoFailed: true,
-              timestamp: flag.timestamp,
-            },
             timestamp: flag.timestamp,
-          });
+          },
+          timestamp: flag.timestamp,
+        });
 
-          return { success: true, flag, autoFailed: true };
-        }
+        return { success: true, flag, autoFailed: true };
       }
-    } else if (flag.severity === 'high') {
-      // autoFailOnCheat disabled — alert teacher in real time with full student details
+    }
+
+    // Always notify teacher for every high-severity violation in real time,
+    // regardless of autoFailOnCheat setting or whether threshold is met.
+    if (flag.severity === 'high') {
+      const isAutoFailed = autoFailed;
       this.notificationGateway.emitNotification(exam.createdByUserId, {
         type: 'cheat_alert',
-        title: 'Cheating Detected',
-        body: `${studentName} triggered a ${flag.severity}-severity violation (${type}) in "${exam.title}".`,
+        title: isAutoFailed ? 'Student Auto-Failed — Cheating Detected' : 'Cheating Violation Detected',
+        body: `${studentName} triggered a high-severity violation (${type}) in "${exam.title}". Total high flags: ${highCount}.`,
         metadata: {
           examId,
           examTitle: exam.title,
@@ -537,9 +549,9 @@ export class ExamService {
           studentEmail: studentUser?.email ?? '',
           violationType: type,
           severity: flag.severity,
-          totalHighFlags: userFlags.filter((f) => f.severity === 'high').length,
+          totalHighFlags: highCount,
           allFlags: userFlags,
-          autoFailed: false,
+          autoFailed: isAutoFailed,
           timestamp: flag.timestamp,
         },
         timestamp: flag.timestamp,
@@ -552,50 +564,73 @@ export class ExamService {
     return { success: true, flag, autoFailed };
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Live face check (continuous recognition via face_recognition_server)
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ── Force auto-fail (client-side termination: 10s countdown expired) ────────
 
-  async liveFaceCheck(
+  async forceAutoFail(
     instituteId: string,
     examId: string,
     userId: string,
-    imageB64: string,
-  ) {
-    const exam = await this.examRepository.findByIdWithRelations(
-      examId,
-      instituteId,
-    );
+    reason: string,
+  ): Promise<{ success: boolean }> {
+    const exam = await this.examRepository.findByIdWithRelations(examId, instituteId);
     if (!exam) throw new NotFoundException('Exam not found');
-    if (!exam.enableLiveFaceCheck) {
-      return { verified: true, distance: 0, threshold: 0.5, autoFailed: false };
+
+    const prevAttempt = exam.studentAttempts?.[userId];
+    // No-op if already auto-failed or the student already submitted normally
+    if (prevAttempt?.autoFailed) return { success: true };
+    if (prevAttempt && prevAttempt.submittedAt && !prevAttempt.autoFailed) {
+      // Already has a real submission — don't overwrite with auto-fail
+      return { success: true };
     }
 
-    const student = await this.studentRepository.findOne({ where: { userId } });
-    if (!student?.faceDescriptor) {
-      // No descriptor enrolled — flag camera_disabled as warning, don't hard-fail
-      return { verified: false, distance: 1, threshold: 0.5, autoFailed: false, noDescriptor: true };
-    }
+    const totalMarks = exam.questions.reduce((s, q) => s + q.marks, 0);
+    const autoFailAttempt: ExamAttempt & { attemptCount: number; autoFailed: boolean; autoFailReason: string } = {
+      answers: prevAttempt?.answers ?? {},
+      score: 0,
+      totalMarks,
+      passed: false,
+      submittedAt: new Date().toISOString(),
+      pendingEssayReview: false,
+      autoFailed: true,
+      autoFailReason: reason,
+      attemptCount: (prevAttempt?.attemptCount ?? 0) + 1,
+    };
 
-    let verifyResult: { verified: boolean; distance: number; threshold: number };
-    try {
-      verifyResult = await this.faceRecClient.verifyImage(student.faceDescriptor, imageB64);
-    } catch {
-      return { verified: false, distance: 1, threshold: 0.5, autoFailed: false };
-    }
+    await this.examRepository.update(examId, {
+      studentAttempts: {
+        ...(exam.studentAttempts ?? {}),
+        [userId]: autoFailAttempt,
+      },
+    } as any);
 
-    if (!verifyResult.verified) {
-      // Report live_face_mismatch and check auto-fail
-      const result = await this.reportIntegrityFlag(
-        instituteId,
+    // Resolve student name for the notification
+    const studentUser = await this.instituteUserRepository.findById(userId);
+    const studentName = studentUser
+      ? [studentUser.firstName, studentUser.lastName].filter(Boolean).join(' ') || studentUser.email
+      : userId;
+
+    this.notificationGateway.emitNotification(exam.createdByUserId, {
+      type: 'cheat_alert',
+      title: 'Student Exam Terminated',
+      body: `${studentName}'s exam was terminated in "${exam.title}". Reason: ${reason}`,
+      metadata: {
         examId,
-        userId,
-        'live_face_mismatch',
-      );
-      return { ...verifyResult, autoFailed: result.autoFailed ?? false };
-    }
+        examTitle: exam.title,
+        studentId: userId,
+        studentName,
+        studentEmail: studentUser?.email ?? '',
+        violationType: 'tab_switch',
+        severity: 'high',
+        totalHighFlags: (exam.integrityFlags?.[userId] ?? []).filter((f) => f.severity === 'high').length,
+        allFlags: exam.integrityFlags?.[userId] ?? [],
+        autoFailed: true,
+        autoFailReason: reason,
+        timestamp: autoFailAttempt.submittedAt,
+      },
+      timestamp: autoFailAttempt.submittedAt,
+    });
 
-    return { ...verifyResult, autoFailed: false };
+    return { success: true };
   }
 
   // ── Screen content analysis ────────────────────────────────────────────────
@@ -652,11 +687,13 @@ export class ExamService {
     instituteId: string,
     teacherUserId: string,
   ) {
+    // Exam-type integrity flags only — assessments/quizzes are excluded
     const exams = await this.examRepository.findByCreator(
       teacherUserId,
       instituteId,
     );
 
+    // Collect all student userIds so we can batch-resolve display names
     const userIdSet = new Set<string>();
     for (const exam of exams) {
       for (const uid of Object.keys(exam.integrityFlags ?? {}))
@@ -667,10 +704,10 @@ export class ExamService {
     for (const uid of userIdSet) {
       const user = await this.instituteUserRepository.findById(uid);
       if (user) {
-        const name =
-          [user.firstName, user.lastName].filter(Boolean).join(' ') ||
-          user.email;
-        nameMap.set(uid, name);
+        nameMap.set(
+          uid,
+          [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email,
+        );
       }
     }
 
@@ -684,6 +721,7 @@ export class ExamService {
       severity: string;
       timestamp: string;
       reviewed: boolean;
+      detail?: string;
     }[] = [];
 
     for (const exam of exams) {
@@ -699,6 +737,7 @@ export class ExamService {
             severity: flag.severity,
             timestamp: flag.timestamp,
             reviewed: flag.reviewed,
+            detail: (flag as any).detail,
           });
         }
       }

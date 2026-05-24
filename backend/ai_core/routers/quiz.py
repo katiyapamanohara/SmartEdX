@@ -5,7 +5,7 @@ from typing import Literal, Optional
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from agents.quiz_generator import _is_rate_limit_error  # noqa: WPS450
+from agents.quiz_generator import _is_rate_limit_error  # noqa: WPS450  # also covers 503
 from agents.quiz_generator import (
     MCQQuestionOut,
     QuizOut,
@@ -17,6 +17,30 @@ from agents.quiz_generator import (
 from utils.document_extractor import extract_text
 
 router = APIRouter(prefix="/api/quiz", tags=["quiz"])
+
+_503_SIGNALS = ("503", "unavailable", "high demand", "service unavailable")
+
+
+def _raise_ai_http_error(exc: Exception) -> None:
+    """Convert Gemini/OpenAI errors to meaningful HTTP responses.
+
+    - 503 UNAVAILABLE / high demand  → HTTP 503 with Retry-After hint
+    - 429 rate-limit / quota         → HTTP 429
+    - Anything else                  → HTTP 500
+    """
+    msg = str(exc).lower()
+    if any(sig in msg for sig in _503_SIGNALS):
+        raise HTTPException(
+            status_code=503,
+            detail="The AI service is temporarily unavailable due to high demand. Please try again in a moment.",
+            headers={"Retry-After": "15"},
+        )
+    if _is_rate_limit_error(exc):
+        raise HTTPException(
+            status_code=429,
+            detail="The AI service is temporarily rate-limited. Please wait a moment and try again.",
+        )
+    raise HTTPException(status_code=500, detail=f"AI generation failed: {exc}")
 
 SUPPORTED_TYPES = {
     "application/pdf",
@@ -61,12 +85,7 @@ async def generate_from_text(body: GenerateFromTextRequest):
             body.question_type,
         )
     except Exception as e:
-        if _is_rate_limit_error(e):
-            raise HTTPException(
-                status_code=429,
-                detail="The AI service is temporarily rate-limited. Please wait a moment and try again.",
-            )
-        raise HTTPException(status_code=500, detail=f"AI generation failed: {e}")
+        _raise_ai_http_error(e)
 
     return GenerateUnifiedResponse(questions=result.questions)
 
@@ -109,12 +128,7 @@ async def generate_from_file(
     try:
         result: UnifiedQuizOut = await generate_questions(text, num_questions, difficulty, question_type)
     except Exception as e:
-        if _is_rate_limit_error(e):
-            raise HTTPException(
-                status_code=429,
-                detail="The AI service is temporarily rate-limited. Please wait a moment and try again.",
-            )
-        raise HTTPException(status_code=500, detail=f"AI generation failed: {e}")
+        _raise_ai_http_error(e)
 
     return GenerateUnifiedResponse(questions=result.questions)
 
@@ -156,11 +170,6 @@ async def generate(
     try:
         result: QuizOut = await generate_quiz(text, num_questions, difficulty)
     except Exception as e:
-        if _is_rate_limit_error(e):
-            raise HTTPException(
-                status_code=429,
-                detail="The AI service is temporarily rate-limited. Please wait a moment and try again.",
-            )
-        raise HTTPException(status_code=500, detail=f"AI generation failed: {e}")
+        _raise_ai_http_error(e)
 
     return GenerateResponse(questions=result.questions)

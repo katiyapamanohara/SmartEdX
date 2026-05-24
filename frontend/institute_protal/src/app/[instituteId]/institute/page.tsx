@@ -104,7 +104,7 @@ function AlertBanner({ alerts }: { alerts: TeacherAlert[] }) {
         </div>
         <div className="space-y-2">
           {alerts.map((a, i) => (
-            <div key={i} className="flex items-center justify-between gap-4 rounded-xl bg-white dark:bg-red-900/20 border border-red-100 dark:border-red-800 px-4 py-3">
+            <div key={i} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white dark:bg-red-900/20 border border-red-100 dark:border-red-800 px-4 py-3">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-gray-800 dark:text-white truncate">{a.teacherName}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{a.courseName} · {a.studentCount} students</p>
