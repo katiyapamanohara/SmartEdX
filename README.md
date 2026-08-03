@@ -1,6 +1,3 @@
-# SmartEdX
-
-
 
 An AI-powered educational platform built as a scalable multi-tenant SaaS system. SmartEdX enables institutes to manage courses, deliver live and recorded learning, run AI-generated assessments, and proctor exams using facial recognition — all from a single deployment.
 
